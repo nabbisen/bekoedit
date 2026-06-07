@@ -218,3 +218,30 @@ fn recent_workspaces_dedupe_and_survive_corrupt_files() {
     std::fs::write(&file, "{ corrupt").unwrap();
     assert_eq!(RecentWorkspaces::load(&file), RecentWorkspaces::default());
 }
+
+// --- settings (RFC-022) ---
+
+#[test]
+fn user_settings_round_trip_and_defaults() {
+    let dir = temp_workspace();
+    let path = dir.path().join("settings.json");
+    let s = crate::settings::UserSettings {
+        autosave_debounce_ms: 800,
+        extra_ignored_dirs: vec!["drafts".into()],
+        ..Default::default()
+    };
+    s.save(&path).unwrap();
+    let loaded = crate::settings::UserSettings::load(&path);
+    assert_eq!(loaded.autosave_debounce_ms, 800);
+    assert_eq!(loaded.extra_ignored_dirs, vec!["drafts"]);
+    assert!(loaded.prefer_trash, "prefer_trash defaults to true");
+}
+
+#[test]
+fn user_settings_corrupt_file_yields_defaults() {
+    let dir = temp_workspace();
+    let path = dir.path().join("bad-settings.json");
+    std::fs::write(&path, "{ not json }").unwrap();
+    let loaded = crate::settings::UserSettings::load(&path);
+    assert_eq!(loaded, crate::settings::UserSettings::default());
+}

@@ -1,0 +1,22 @@
+{
+  "name": "bekoedit-editor-bundle",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6",
+    "@codemirror/lang-markdown": "^6",
+    "@codemirror/language": "^6",
+    "@codemirror/language-data": "^6",
+    "@codemirror/search": "^6",
+    "@codemirror/state": "^6",
+    "@codemirror/view": "^6",
+    "codemirror": "^6"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25"
+  }
+}

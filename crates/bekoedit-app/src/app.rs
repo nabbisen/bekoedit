@@ -1,38 +1,49 @@
-//! Root application component (RFC-010 shell, RFC-019 mode switching).
-//!
-//! Layout: start screen until a workspace is open, then the main shell
-//! (explorer sidebar / editor header / active mode surface / status bar).
-//! Mode switching never mutates the document: each surface is a projection
-//! of the same canonical text (RFC-019).
+//! Root application component (RFC-010/019/020/022).
 
 use dioxus::prelude::*;
+use serde::Deserialize;
 
 use bekoedit_core::AppState;
 use bekoedit_ui_contract::EditorMode;
 
 use crate::components::{
-    conflict_banner::ConflictBanner, editor_header::EditorHeader, explorer::Explorer,
-    form_mode::FormMode, preview_mode::PreviewMode, start_screen::StartScreen,
-    status_bar::StatusBar, text_mode::TextMode,
+    conflict_banner::ConflictBanner,
+    editor_header::EditorHeader,
+    explorer::Explorer,
+    form_mode::FormMode,
+    preview_mode::PreviewMode,
+    settings_screen::SettingsScreen,
+    start_screen::StartScreen,
+    status_bar::StatusBar,
+    text_mode::TextMode,
+    toast::{Toast, ToastLayer},
 };
 use crate::i18n::{Lang, tr};
+use crate::settings::AppSettings;
 use crate::state::{create_app_state, now_ms};
 
 const STYLE: Asset = asset!("/assets/style.css");
-
-/// Autosave polling cadence; cheap because `autosave_tick` is a no-op
-/// until the debounce deadline passes.
+const SHORTCUTS_JS: Asset = asset!("/assets/shortcuts.js");
 const TICK_MS: u64 = 500;
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum AppMsg {
+    Shortcut { key: String },
+}
 
 #[component]
 pub fn App() -> Element {
-    let state = use_context_provider(|| Signal::new(create_app_state()));
-    use_context_provider(|| Signal::new(Lang::default()));
-    use_context_provider(|| Signal::new(EditorMode::Form));
+    let settings = AppSettings::load();
 
-    // Background autosave + external-change polling (RFC-007/008). The
-    // interval also drives conflict detection so external edits surface
-    // without waiting for a save attempt.
+    let state = use_context_provider(|| Signal::new(create_app_state()));
+    use_context_provider(|| Signal::new(settings.lang));
+    use_context_provider(|| Signal::new(settings.default_mode));
+    use_context_provider(|| Signal::new(false_val())); // explorer collapsed
+    use_context_provider(|| Signal::new(false_val())); // settings screen open
+    use_context_provider(|| Signal::new(Vec::<Toast>::new()));
+
+    // Background autosave + external-change poll.
     use_future(move || {
         let mut state: Signal<AppState> = state;
         async move {
@@ -47,11 +58,40 @@ pub fn App() -> Element {
         }
     });
 
+    // Global keyboard shortcuts via eval relay.
+    let mut mode_signal = use_context::<Signal<EditorMode>>();
+    let mut app_state: Signal<AppState> = state;
+    use_coroutine(move |_: UnboundedReceiver<()>| async move {
+        let relay_js = r#"
+            window.__bk_shortcut_relay = (msg) => dioxus.send(msg);
+            (async () => { while(true) { await new Promise(r => setTimeout(r, 86_400_000)); } })();
+        "#;
+        let mut relay = document::eval(relay_js);
+        while let Ok(raw) = relay.recv().await {
+            if let Ok(AppMsg::Shortcut { key }) = serde_json::from_value(raw) {
+                match key.as_str() {
+                    "save" => {
+                        let _ = app_state.write().save_now(now_ms());
+                    }
+                    "mode_text" => mode_signal.set(EditorMode::Text),
+                    "mode_form" => mode_signal.set(EditorMode::Form),
+                    "mode_preview" => mode_signal.set(EditorMode::Preview),
+                    _ => {}
+                }
+            }
+        }
+    });
+
     let workspace_open = state.read().workspace.is_some();
+    let settings_open = *use_context::<Signal<bool>>().read();
 
     rsx! {
         document::Link { rel: "stylesheet", href: STYLE }
-        if workspace_open {
+        document::Script { src: SHORTCUTS_JS }
+        ToastLayer {}
+        if settings_open {
+            SettingsScreen {}
+        } else if workspace_open {
             MainShell {}
         } else {
             StartScreen {}
@@ -59,24 +99,29 @@ pub fn App() -> Element {
     }
 }
 
+fn false_val() -> bool {
+    false
+}
+
 #[component]
 fn MainShell() -> Element {
     let state = use_context::<Signal<AppState>>();
     let lang = *use_context::<Signal<Lang>>().read();
     let mode = *use_context::<Signal<EditorMode>>().read();
+    let collapsed = *use_context::<Signal<bool>>().read();
     let has_document = state.read().session.is_some();
 
     rsx! {
         div { class: "shell",
-            Explorer {}
+            if !collapsed { Explorer {} }
             main { class: "editor-pane",
                 EditorHeader {}
                 ConflictBanner {}
                 div { class: "surface",
                     if has_document {
                         match mode {
-                            EditorMode::Text => rsx! { TextMode {} },
-                            EditorMode::Form => rsx! { FormMode {} },
+                            EditorMode::Text    => rsx! { TextMode {} },
+                            EditorMode::Form    => rsx! { FormMode {} },
                             EditorMode::Preview => rsx! { PreviewMode {} },
                         }
                     } else {

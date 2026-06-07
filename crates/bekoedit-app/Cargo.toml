@@ -17,5 +17,7 @@ bekoedit-fs = { path = "../bekoedit-fs" }
 bekoedit-markdown = { path = "../bekoedit-markdown" }
 bekoedit-ui-contract = { path = "../bekoedit-ui-contract" }
 dioxus = { version = "0.7", features = ["desktop"] }
+serde_json = { workspace = true }
+dirs = "6"
 tokio = { version = "1", features = ["time"] }
 serde = { workspace = true }

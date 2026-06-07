@@ -1,73 +1,73 @@
 # bekoedit RFC Index
 
 Governance: [`done/000-rfc-lifecycle-policy.md`](done/000-rfc-lifecycle-policy.md).
-Folder = state: `proposed/` (accepted direction, not fully implemented),
-`done/` (implemented; status names the shipping version), `archive/`
-(superseded/withdrawn). `appendices/` holds the shared glossary
-(APPENDIX-A) and dependency map (APPENDIX-B).
+Folder = state. `appendices/` holds the glossary (APPENDIX-A) and
+dependency map (APPENDIX-B).
 
 ## Numbering namespaces (documented deviation)
 
-Two documents carry the number 000. They live in different namespaces:
+Two documents carry the number 000:
 
-- **`NNN`** (bare) — meta/governance documents about the RFC process
-  itself, e.g. `000-rfc-lifecycle-policy.md`.
-- **`RFC-NNN`** — product RFCs, e.g.
-  `RFC-000-project-charter-and-architectural-invariants.md`.
+- **`NNN`** (bare) — meta/governance (e.g. `000-rfc-lifecycle-policy.md`).
+- **`RFC-NNN`** — product RFCs (e.g. `RFC-000-project-charter-and-architectural-invariants.md`).
 
-This was resolved during the 2026-06-07 review rather than renumbering 41
-cross-referenced documents.
+Resolved 2026-06-07 rather than renumbering the cross-referenced corpus.
 
-## Review resolutions (2026-06-07)
+## 2026-06-07 review resolutions
 
-1. **Split Mode** (external design §16 vs RFC-010): deferred post-MVP;
-   `EditorMode` stays `{Text, Form, Preview}`. Resolution note added to
-   RFC-010.
-2. **Form command set** (RFC-018 vs external design §23.11): RFC-018
-   amended to include `ReplaceListItemText{item_ordinal,text}` and
-   `DeleteBlock`; `ToggleTaskChecked` keyed by `item_ordinal`.
-   `SetLinkTarget` remains specified but ships post-v0.1.0.
-3. **Requirements Open Question 10**: MVP keeps a single open document.
-4. External design §36's provisional RFC numbering is superseded by the
-   roadmap; the roadmap and this index are authoritative.
+1. **Split Mode** — deferred post-MVP; `EditorMode = {Text, Form, Preview}`.
+   Resolution note in RFC-010.
+2. **RFC-018 command set** — amended: `ReplaceListItemText`, `DeleteBlock`
+   added; `ToggleTaskChecked` keyed by `item_ordinal`. `SetLinkTarget` deferred.
+3. **Open Question 10** — single open document for MVP.
+4. External design §36 numbering superseded by the roadmap.
 
-## Implemented in v0.1.0 (`done/`)
+---
+
+## Implemented — v0.2.0 (`done/`)
 
 | RFC | Title | Notes |
 |-----|-------|-------|
-| 000 (meta) | RFC lifecycle policy | adopted as written |
-| RFC-000 | Project charter & architectural invariants | invariants restated normatively in `ARCHITECTURE.md` |
-| RFC-001 | Repository, toolchain & CI foundation | workspace, edition 2024, fmt/clippy/test CI, 3-OS matrix |
-| RFC-003 | Workspace model & recent workspaces | |
-| RFC-004 | Native file explorer & file tree index | watching is polling-based via RFC-008 checks, see RFC-005 note |
-| RFC-006 | Document session & canonical source model | |
-| RFC-007 | Save, autosave, atomic write & recovery | recovery restore UI minimal (snapshots listed via store API) |
-| RFC-008 | Dirty state, conflict detection & resolution | |
-| RFC-009 | Application state store & command/event model | |
-| RFC-013 | Markdown parser index & source range mapping | |
-| RFC-014 | Block identity, revision scope & projection validity | |
-| RFC-015 | SourcePatch engine & source-preserving mutation | |
-| RFC-016 | Form Mode MVP surface & safe editable blocks | |
-| RFC-017 | Raw Markdown Islands | |
-| RFC-018 | JS form adapter & semantic edit commands | as amended; `SetLinkTarget` deferred |
-| RFC-019 | Mode switching & projection synchronization | |
+| RFC-011 | Text Mode with CodeMirror 6 | CM6 bundle (assets/editor-bundle.js); eval-relay pattern for bidirectional bridge |
+| RFC-020 | Command palette & keyboard shortcuts | Global shortcuts.js relay: Ctrl+S save, Ctrl+1/2/3 mode, Ctrl+B explorer |
+| RFC-021 | Accessibility baseline & interaction contracts | role=tree/treeitem, role=tablist/tab, ARIA live regions, :focus-visible |
+| RFC-022 | Settings, preferences & local configuration | AppSettings + UserSettings persisted atomically; settings screen |
+| RFC-023 | Error surfaces, status bar & user feedback | Toast layer (Info/Success/Warning/Error, 4 s auto-dismiss); ARIA status/alert |
 
-## Proposed — MVP polish (`proposed/`)
+## Implemented — v0.1.0 (`done/`)
 
-| RFC | Title | v0.1.0 status |
-|-----|-------|---------------|
-| RFC-002 | Runtime architecture & WebView boundary | partially implemented: contract crate ships; in-process Dioxus shell uses it as the typed boundary; JSON bridge hardening continues |
-| RFC-005 | File operations & external file watching | ops implemented; native watcher pending (polling detection in place) |
-| RFC-010 | Main shell layout & navigation UX | core layout shipped; outline panel & polish pending |
-| RFC-011 | Text Mode with CodeMirror 6 | snapshot contract shipped behind an interim surface; CM6 adapter pending |
-| RFC-012 | Preview Mode | sanitized rendering shipped; scroll-sync & theming pending |
-| RFC-020 | Command palette & keyboard shortcuts | |
-| RFC-021 | Accessibility baseline | |
-| RFC-022 | Settings & local configuration | recents persistence shipped; settings UI pending |
-| RFC-023 | Error surfaces & status bar | status bar shipped; toast/error panel pending |
-| RFC-024 | Packaging & unsigned distribution UX | release workflow sketched |
-| RFC-025 | Release CI smoke tests | |
-| RFC-026 | MVP acceptance & beta readiness | |
+| RFC | Title |
+|-----|-------|
+| 000 (meta) | RFC lifecycle policy |
+| RFC-000 | Project charter & architectural invariants |
+| RFC-001 | Repository, toolchain & CI foundation |
+| RFC-003 | Workspace model & recent workspaces |
+| RFC-004 | Native file explorer & file tree index |
+| RFC-006 | Document session & canonical source model |
+| RFC-007 | Save, autosave, atomic write & recovery |
+| RFC-008 | Dirty state, conflict detection & resolution |
+| RFC-009 | Application state store & command/event model |
+| RFC-013 | Markdown parser index & source range mapping |
+| RFC-014 | Block identity, revision scope & projection validity |
+| RFC-015 | SourcePatch engine & source-preserving mutation |
+| RFC-016 | Form Mode MVP surface & safe editable blocks |
+| RFC-017 | Raw Markdown Islands |
+| RFC-018 | JS form adapter & semantic edit commands (amended) |
+| RFC-019 | Mode switching & projection synchronization |
+
+---
+
+## Proposed — remaining MVP (`proposed/`)
+
+| RFC | Title | Notes |
+|-----|-------|-------|
+| RFC-002 | Runtime architecture & WebView boundary | Contract crate ships; in-process eval relay adopted; JSON hardening ongoing |
+| RFC-005 | File operations & external file watching | File ops implemented; native fs watcher (inotify/FSEvents/ReadDirectoryChanges) pending |
+| RFC-010 | Main shell layout & navigation UX | Core layout ships; outline panel, split-pane resize, outline tab deferred |
+| RFC-012 | Preview Mode | Sanitized rendering ships; scroll-sync deferred |
+| RFC-024 | Packaging & unsigned distribution UX | Release workflow sketched in .github/workflows/release.yml |
+| RFC-025 | Release CI smoke tests | CI matrix (lint/test/build) ships; smoke-test suite pending |
+| RFC-026 | MVP acceptance, quality gates & beta readiness | Acceptance matrix being filled as RFCs land |
 
 ## Proposed — post-MVP (`proposed/`, deferred)
 

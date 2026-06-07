@@ -1,10 +1,10 @@
-# RFC-011: Text Mode with CodeMirror 6
+# RFC-020: Command Palette and Keyboard Shortcut System
 
 **Project:** bekoedit  
-**Status:** Proposed  
+**Status:** Implemented (v0.2.0, 2026-06-07)  
 **Track:** MVP Critical  
-**Milestone:** M3  
-**Priority:** Critical  
+**Milestone:** M6  
+**Priority:** High  
 **Date:** 2026-06-07  
 **Related documents:** `bekoedit-requirements-definition.md`, `bekoedit-external-design.md`, `bekoedit-rfc-roadmap.md`
 
@@ -12,34 +12,33 @@
 
 ## 1. Summary
 
-Defines raw Markdown editing using CodeMirror 6 inside the WebView, with Rust-owned canonical synchronization.
+Defines command discovery, keyboard shortcuts, and command routing for efficient non-pointer operation.
 
 ---
 
 ## 2. Motivation
 
-- Text Mode is the safest and most essential editing mode.
-- CodeMirror 6 is lightweight and modular compared to Monaco.
-- Raw editing must remain first-class even after Form Mode exists.
+- Markdown editors are productivity tools.
+- Accessible-by-default design requires keyboard-accessible commands.
 
 ---
 
 ## 3. Goals
 
-- Embed CodeMirror 6 as the Text Mode editor.
-- Provide Markdown syntax highlighting and basic editing commands.
-- Synchronize text changes into Rust document sessions.
-- Preserve raw Markdown exactly as user edits it.
-- Support cursor, selection, line/column, and dirty status updates.
+- Create a command registry for user-facing actions.
+- Provide command palette search.
+- Define default keyboard shortcuts.
+- Route commands through the same AppCommand model as UI buttons.
+- Support shortcut conflict detection.
 
 ---
 
 ## 4. Non-Goals
 
-- Use Monaco in MVP.
-- Implement VS Code-level language services.
-- Implement collaborative cursors.
-- Let CodeMirror save files directly.
+- Implement user scripting.
+- Expose plugin commands.
+- Implement complex Vim/Emacs modes in MVP.
+- Implement OS-global hotkeys.
 
 ---
 
@@ -59,41 +58,38 @@ All RFCs in this package inherit the following invariants unless explicitly amen
 
 ## 6. User-Facing Design
 
-- Text Mode shows raw Markdown with syntax highlighting.
-- The editor header shows file name and save state.
-- Common shortcuts work: save, find in file, undo/redo, select all, toggle preview/mode.
-- Line and column are shown in status bar.
+- Command palette opens with a shortcut such as Ctrl/Cmd+K.
+- Commands include Open Workspace, Save, Toggle Mode, Focus Explorer, Focus Editor, Focus Outline, New File, Rename File, Delete File, Find in File.
+- Palette results show command name and shortcut.
 
 ---
 
 ## 7. Data Model / Contracts
 
 ```rust
-struct TextChange {
-    from_utf16: JsTextOffset,
-    to_utf16: JsTextOffset,
-    inserted_text: String,
-    client_doc_version: u64,
+struct CommandDescriptor {
+    id: CommandId,
+    title: String,
+    category: CommandCategory,
+    default_shortcut: Option<Shortcut>,
+    enabled_when: CommandEnablementRule,
 }
 
-struct TextModeProjection {
-    document_id: DocumentId,
-    revision: u64,
-    text: String,
-    language: EditorLanguage,
+struct CommandInvocation {
+    command_id: CommandId,
+    source: CommandSource,
 }
 ```
 
-For MVP, Text Mode may send batched changes or whole-document snapshots after debounce if diff integration is not yet stable. The Rust core still owns the canonical text after accepting the update.
+Commands are declarative descriptors plus handlers that emit AppCommand values.
 
 ---
 
 ## 8. Internal Design Notes
 
-- Define conversion between JS editor offsets and Rust string positions carefully.
-- Prefer CodeMirror transaction metadata for compact changes.
-- Reject stale client versions and request full refresh.
-- Keep CodeMirror undo stack local to Text Mode where possible, but reset when Rust sends incompatible document replacement.
+- Keep command registry in Rust or shared schema so UI cannot invent privileged commands.
+- Disable commands when state makes them invalid.
+- Announce command execution failures in status/notification surfaces.
 
 ---
 
@@ -167,10 +163,10 @@ Recommended source-preservation cases:
 
 ## 14. Acceptance Criteria
 
-- User can edit raw Markdown in CodeMirror.
-- Text changes update Rust canonical text and dirty state.
-- Mode switching away from Text Mode uses the latest accepted canonical text.
-- Multibyte text edits do not corrupt UTF-8.
+- Major actions are available by keyboard.
+- Command palette filters commands by text.
+- Disabled commands do not execute.
+- Shortcut conflicts are documented or rejected.
 
 ---
 

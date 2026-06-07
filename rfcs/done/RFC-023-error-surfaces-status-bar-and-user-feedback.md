@@ -1,7 +1,7 @@
 # RFC-023: Error Surfaces, Status Bar, and User Feedback
 
 **Project:** bekoedit  
-**Status:** Proposed  
+**Status:** Implemented (v0.2.0, 2026-06-07)  
 **Track:** MVP Critical  
 **Milestone:** M6  
 **Priority:** High  
