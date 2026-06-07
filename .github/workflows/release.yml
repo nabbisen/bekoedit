@@ -1,0 +1,60 @@
+name: Release
+
+# RFC-024/025: version-appended source+binary archives on tag push.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build release archive (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install WebView deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev
+      - run: cargo test
+      - run: cargo build -p bekoedit-app --release
+      - name: Package (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NAME="bekoedit-${VERSION}-${{ matrix.target }}"
+          mkdir -p "stage/${NAME}"
+          cp target/release/bekoedit "stage/${NAME}/"
+          cp README.md LICENSE NOTICE CHANGELOG.md "stage/${NAME}/"
+          tar -C stage -czf "${NAME}.tar.gz" "${NAME}"
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart("v")
+          $name = "bekoedit-$version-${{ matrix.target }}"
+          New-Item -ItemType Directory -Path "stage/$name" | Out-Null
+          Copy-Item target/release/bekoedit.exe "stage/$name/"
+          Copy-Item README.md,LICENSE,NOTICE,CHANGELOG.md "stage/$name/"
+          Compress-Archive -Path "stage/$name" -DestinationPath "$name.zip"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            bekoedit-*.tar.gz
+            bekoedit-*.zip

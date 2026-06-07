@@ -1,0 +1,13 @@
+[package]
+name = "bekoedit-markdown"
+description = "Markdown parser index, block identity, raw islands, source patch engine, and form-edit resolution for bekoedit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+pulldown-cmark = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }

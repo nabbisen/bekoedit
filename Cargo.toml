@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/bekoedit-markdown",
+    "crates/bekoedit-fs",
+    "crates/bekoedit-core",
+    "crates/bekoedit-ui-contract",
+    "crates/bekoedit-app",
+]
+# GUI crate is excluded from default builds so core logic stays testable headlessly.
+default-members = [
+    "crates/bekoedit-markdown",
+    "crates/bekoedit-fs",
+    "crates/bekoedit-core",
+    "crates/bekoedit-ui-contract",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+authors = ["nabbisen"]
+repository = "https://github.com/nabbisen/bekoedit"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
+tempfile = "3"

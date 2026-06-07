@@ -1,0 +1,165 @@
+/* bekoedit — application styles (external design §16 layout regions) */
+
+:root {
+  --bg: #fbfaf8;
+  --panel: #f1efe9;
+  --ink: #2b2a27;
+  --muted: #8a857a;
+  --line: #ddd8cc;
+  --accent: #2f6f5f;
+  --accent-ink: #ffffff;
+  --danger: #a4452f;
+  --island-bg: #fff8e7;
+  --island-line: #e7d9a8;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+button {
+  font: inherit;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.danger { color: var(--danger); }
+button.mode.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+input[type="text"], textarea, select {
+  font: inherit;
+  color: inherit;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: #fff;
+}
+input[type="text"]:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.error { color: var(--danger); }
+.muted { color: var(--muted); }
+
+/* --- start screen (§18) --- */
+.start-screen { max-width: 560px; margin: 12vh auto; padding: 0 24px; }
+.start-screen h1 { margin-bottom: 0; }
+.start-screen .tagline { margin-top: 4px; color: var(--muted); }
+.open-row { display: flex; gap: 8px; margin: 16px 0; }
+.open-row input { flex: 1; }
+.recents { list-style: none; padding: 0; display: grid; gap: 6px; }
+.recents button { width: 100%; display: flex; justify-content: space-between; gap: 12px; }
+.recent-path { color: var(--muted); font-size: 0.85em; }
+
+/* --- shell layout (§16) --- */
+.shell { display: flex; height: 100vh; }
+.explorer {
+  width: 250px;
+  min-width: 250px;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  padding: 12px;
+  overflow-y: auto;
+}
+.workspace-name { font-size: 0.95em; margin: 0 0 10px; }
+.new-file-row { display: flex; gap: 6px; margin-bottom: 10px; }
+.new-file-row input { width: 100%; min-width: 0; }
+.tree { list-style: none; margin: 0; padding: 0; }
+.tree li { padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+.tree li:hover { background: #e7e3d8; }
+.tree li.selected { background: #ddewd8; background: #e0e8df; }
+.tree li.dir { color: var(--muted); font-weight: 600; }
+.node-actions { display: grid; gap: 6px; margin-top: 10px; }
+
+.editor-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.editor-header {
+  display: flex; align-items: center; gap: 16px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+.doc-name { font-weight: 600; }
+.dirty-dot { color: var(--accent); margin-left: 6px; font-size: 0.7em; }
+.mode-switch { display: flex; gap: 4px; }
+.header-actions { margin-left: auto; display: flex; gap: 8px; }
+
+.surface { flex: 1; overflow-y: auto; }
+.empty-hint { color: var(--muted); text-align: center; margin-top: 18vh; }
+
+/* --- text mode (RFC-011) --- */
+.text-mode {
+  width: 100%; height: 100%;
+  border: none; border-radius: 0; resize: none;
+  padding: 18px 22px;
+  font-family: var(--mono);
+  font-size: 0.95em;
+  line-height: 1.6;
+}
+
+/* --- form mode (RFC-016) --- */
+.form-mode { max-width: 780px; margin: 0 auto; padding: 18px 22px 60px; }
+.form-block { position: relative; padding: 6px 34px 6px 0; }
+.form-block .block-delete {
+  position: absolute; top: 8px; right: 0;
+  width: 24px; height: 24px; padding: 0;
+  color: var(--muted); border: none; background: transparent;
+  opacity: 0; transition: opacity 0.15s;
+}
+.form-block:hover .block-delete { opacity: 1; }
+.block-delete:hover { color: var(--danger); }
+.block-row { display: flex; gap: 8px; align-items: center; }
+.heading-input { flex: 1; font-weight: 700; }
+.heading-input.level-1 { font-size: 1.6em; }
+.heading-input.level-2 { font-size: 1.35em; }
+.heading-input.level-3 { font-size: 1.15em; }
+.paragraph-input { width: 100%; min-height: 64px; line-height: 1.6; resize: vertical; }
+.list { list-style: none; padding-left: 10px; display: grid; gap: 6px; margin: 4px 0; }
+.list li { display: flex; gap: 8px; align-items: center; }
+.list li input[type="text"] { flex: 1; }
+.code-block { display: grid; gap: 6px; }
+.code-block label { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 0.85em; }
+.code-lang { width: 140px; font-family: var(--mono); }
+.code-input { width: 100%; min-height: 90px; font-family: var(--mono); font-size: 0.9em; resize: vertical; }
+
+/* --- raw markdown islands (RFC-017) --- */
+.raw-island { background: var(--island-bg); border: 1px solid var(--island-line); border-radius: 8px; padding: 8px; }
+.island-header { display: flex; gap: 10px; align-items: baseline; margin-bottom: 6px; }
+.island-label { font-weight: 600; font-size: 0.85em; }
+.island-hint { color: var(--muted); font-size: 0.8em; }
+.island-input { width: 100%; min-height: 70px; font-family: var(--mono); font-size: 0.9em; background: #fffdf4; resize: vertical; }
+
+/* --- preview (RFC-012) --- */
+.preview { max-width: 780px; margin: 0 auto; padding: 18px 22px 60px; line-height: 1.65; }
+.preview pre { background: var(--panel); padding: 10px 12px; border-radius: 8px; overflow-x: auto; }
+.preview code { font-family: var(--mono); font-size: 0.92em; }
+.preview blockquote { border-left: 3px solid var(--line); margin-left: 0; padding-left: 14px; color: var(--muted); }
+.preview table { border-collapse: collapse; }
+.preview th, .preview td { border: 1px solid var(--line); padding: 4px 10px; }
+
+/* --- conflict banner (RFC-008) --- */
+.conflict-banner {
+  background: #fdeeea; border-bottom: 1px solid #efc4b8;
+  padding: 10px 14px;
+}
+.conflict-banner p { margin: 0 0 8px; font-weight: 600; color: var(--danger); }
+.conflict-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* --- status bar (RFC-023) --- */
+.status-bar {
+  display: flex; gap: 16px; align-items: center;
+  border-top: 1px solid var(--line);
+  background: #fff;
+  padding: 5px 14px;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.save-state.save-failed, .save-state.save-conflict { color: var(--danger); font-weight: 600; }
+.save-state.save-saved { color: var(--accent); }

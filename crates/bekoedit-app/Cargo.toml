@@ -1,0 +1,21 @@
+[package]
+name = "bekoedit-app"
+description = "bekoedit desktop application shell (Dioxus Desktop + OS-native WebView)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "bekoedit"
+path = "src/main.rs"
+
+[dependencies]
+bekoedit-core = { path = "../bekoedit-core" }
+bekoedit-fs = { path = "../bekoedit-fs" }
+bekoedit-markdown = { path = "../bekoedit-markdown" }
+bekoedit-ui-contract = { path = "../bekoedit-ui-contract" }
+dioxus = { version = "0.7", features = ["desktop"] }
+tokio = { version = "1", features = ["time"] }
+serde = { workspace = true }
