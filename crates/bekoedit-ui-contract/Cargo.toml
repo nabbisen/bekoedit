@@ -1,15 +1,16 @@
 [package]
-name = "bekoedit-ui-contract"
+name        = "bekoedit-ui-contract"
 description = "Versioned, serializable command and event payloads crossing the WebView boundary in bekoedit"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-authors.workspace = true
-repository.workspace = true
+version.workspace       = true
+edition.workspace       = true
+license.workspace       = true
+authors.workspace       = true
+repository.workspace    = true
 
 [dependencies]
-bekoedit-markdown = { path = "../bekoedit-markdown" }
-bekoedit-core = { path = "../bekoedit-core" }
-bekoedit-fs = { path = "../bekoedit-fs" }
-serde = { workspace = true }
-serde_json = { workspace = true }
+bekoedit-core               = { workspace = true }
+bekoedit-fs                 = { workspace = true }
+bekoedit-markdown           = { workspace = true }
+
+serde                       = { workspace = true }
+serde_json                  = { workspace = true }

@@ -1,26 +1,28 @@
 [package]
-name = "bekoedit-app"
+name        = "bekoedit"
 description = "bekoedit desktop application shell (Dioxus Desktop + OS-native WebView)"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-authors.workspace = true
-repository.workspace = true
+version.workspace       = true
+edition.workspace       = true
+license.workspace       = true
+authors.workspace       = true
+repository.workspace    = true
 
 [[bin]]
 name = "bekoedit"
 path = "src/main.rs"
 
 [dependencies]
-rfd = { version = "0.17", default-features = false, features = ["xdg-portal", "pollster"] }
-dioxus-swdir-tree = { version = "0.7", default-features = true }
-bekoedit-core = { path = "../bekoedit-core" }
-bekoedit-fs = { path = "../bekoedit-fs" }
-bekoedit-markdown = { path = "../bekoedit-markdown" }
-bekoedit-ui-contract = { path = "../bekoedit-ui-contract" }
-dioxus = { version = "0.7", features = ["desktop"] }
-serde_json = { workspace = true }
-dirs = "6"
-tokio = { version = "1", features = ["time"] }
-serde = { workspace = true }
-tempfile = { workspace = true }
+bekoedit-core               = { workspace = true }
+bekoedit-fs                 = { workspace = true }
+bekoedit-markdown           = { workspace = true }
+bekoedit-ui-contract        = { workspace = true }
+
+dioxus                      = { workspace = true, features = ["desktop"] }
+dioxus-swdir-tree           = { workspace = true }
+rfd                         = { workspace = true }
+dirs                        = { workspace = true }
+
+serde                       = { workspace = true }
+serde_json                  = { workspace = true }
+tempfile                    = { workspace = true }
+tokio                       = { workspace = true, features = ["time"] }

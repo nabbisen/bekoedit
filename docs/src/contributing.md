@@ -1,6 +1,6 @@
 # Contributing
 
-See [CONTRIBUTING.md](../../CONTRIBUTING.md) in the repository root for the
+See [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) in the repository root for the
 full developer guide covering prerequisites, build instructions, test
 requirements, code quality gates, commit conventions, and the RFC process.
 

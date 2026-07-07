@@ -1,17 +1,18 @@
 [package]
-name = "bekoedit-core"
+name        = "bekoedit-core"
 description = "Document sessions, canonical source model, save lifecycle, and conflict detection for bekoedit"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-authors.workspace = true
-repository.workspace = true
+version.workspace       = true
+edition.workspace       = true
+license.workspace       = true
+authors.workspace       = true
+repository.workspace    = true
 
 [dependencies]
-bekoedit-markdown = { path = "../bekoedit-markdown" }
-bekoedit-fs = { path = "../bekoedit-fs" }
-serde = { workspace = true }
-thiserror = { workspace = true }
+bekoedit-fs                 = { workspace = true }
+bekoedit-markdown           = { workspace = true }
+
+serde                       = { workspace = true }
+thiserror                   = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
+tempfile                    = { workspace = true }

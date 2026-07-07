@@ -1,19 +1,20 @@
 [package]
-name = "bekoedit-fs"
+name        = "bekoedit-fs"
 description = "Workspace scoping, file tree index, safe file operations, atomic save, and recovery snapshots for bekoedit"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-authors.workspace = true
-repository.workspace = true
+version.workspace       = true
+edition.workspace       = true
+license.workspace       = true
+authors.workspace       = true
+repository.workspace    = true
 
 [dependencies]
-serde = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
-trash = "5"
-dirs = "6"
-notify = "8"
+dirs                        = { workspace = true }
+notify                      = { workspace = true }
+trash                       = { workspace = true }
+
+serde                       = { workspace = true }
+serde_json                  = { workspace = true }
+thiserror                   = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
+tempfile                    = { workspace = true }

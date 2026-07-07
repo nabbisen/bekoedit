@@ -85,6 +85,7 @@ For MVP, `canonical_source_required`, `visual_editing_is_projection`, and `raw_i
 ## 8. Internal Design Notes
 
 - Create an `ARCHITECTURE.md` or equivalent document that repeats the invariants in this RFC.
+    - 0.11.4 CHANGELOG: Moved to `docs/src/architectural-invariants.md`.
 - Add invariant checks to review templates and PR descriptions.
 - Do not accept features that require rich-text state to become durable state.
 

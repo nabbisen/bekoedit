@@ -1,7 +1,10 @@
 # bekoedit
 
+[![License](https://img.shields.io/github/license/nabbisen/bekoedit)](LICENSE)
+[![crates.io](https://img.shields.io/crates/v/bekoedit?label=rust)](https://crates.io/crates/bekoedit)
+[![Rust Documentation](https://docs.rs/bekoedit/badge.svg?version=latest)](https://docs.rs/bekoedit)
+[![Dependency Status](https://deps.rs/crate/bekoedit/latest/status.svg)](https://deps.rs/crate/bekoedit)
 [![CI](https://github.com/nabbisen/bekoedit/actions/workflows/ci.yml/badge.svg)](https://github.com/nabbisen/bekoedit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 **A source-preserving Markdown editor. Edit visually — your raw Markdown
 stays canonical, byte for byte.**
@@ -123,7 +126,7 @@ preservation, atomic save, conflict detection, and dirty-document protection.
 [Editing Modes](docs/src/editing-modes.md) ·
 [Source Preservation](docs/src/source-preservation.md) ·
 [Architecture](docs/src/architecture.md) ·
-[Contributing](CONTRIBUTING.md) ·
+[Contributing](.github/CONTRIBUTING.md) ·
 [Distribution](docs/src/distribution.md)
 
 ---
