@@ -324,3 +324,8 @@ code.math-inline { background: #f0f0f8; border: 1px solid #ddd; border-radius: 3
 pre.math-block { background: #f0f0f8; border: 1px solid #ddd; border-radius: 6px;
   padding: 10px 14px; overflow-x: auto; }
 pre.math-block code { font-style: italic; color: #444; }
+
+/* --- template selector (RFC-037 UI) --- */
+.template-select { font-size: 0.82em; padding: 3px 6px; border-radius: 5px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+  max-width: 140px; }

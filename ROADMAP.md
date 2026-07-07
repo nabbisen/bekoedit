@@ -35,6 +35,12 @@ templates, extension policy, plugin system, sync/collaboration.
 
 **v1.0.0 requires explicit maintainer sign-off on the acceptance checklist.**
 
+## Shipped — v0.7.0 (2026-06-07)
+v1.0.0 preparation: word/char count, template selector UI, RFC-002 bridge
+hardening, headless smoke test, CONTRIBUTING.md, docs completion, acceptance
+checklist evidence log. All automated checks green; IME manual verification
+pending.
+
 ## Shipped — v0.6.0 (2026-06-07)
 Math/footnote extension policy (RFC-038), local document history, RFC-032 performance evaluation (3.57 ms/reparse — threshold not approached), store.rs split (all files ≤300 ELOC).
 

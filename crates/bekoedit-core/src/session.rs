@@ -134,4 +134,10 @@ impl DocumentSession {
     pub fn preview_html(&self) -> String {
         render_preview_html(&self.canonical_text)
     }
+    /// Returns `(word_count, char_count)` for the current canonical text.
+    pub fn word_char_count(&self) -> (usize, usize) {
+        let words = self.canonical_text.split_whitespace().count();
+        let chars = self.canonical_text.chars().count();
+        (words, chars)
+    }
 }

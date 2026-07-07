@@ -231,3 +231,39 @@ Full-reparse-after-mutation confirmed adequate for current document sizes.
 Incremental parsing deferred until profiling demonstrates a need.
 
 [0.6.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.6.0
+
+## [0.7.0] - 2026-06-07
+
+### Added
+- **Word and character count** in the status bar: shows `N words` next to the
+  save state; hovering reveals the character count. Counts are derived from
+  `DocumentSession::word_char_count()` on the canonical text.
+- **Template selector in Explorer** (RFC-037 UI): when `.bekoedit/templates/`
+  contains `.md` files, a `<select>` dropdown appears in the new-file row.
+  Choosing a template pre-fills the new file with that template's content via
+  `AppState::create_from_template`.
+- **RFC-002 bridge hardening**: `bridge::relay_js` centralises relay JS
+  generation and embeds `BRIDGE_SCHEMA_VERSION` as `window.__bk_schema_version`
+  so JS can detect contract mismatches at runtime.
+- **Headless smoke test** (`--headless-smoke`): all five core paths
+  (source preservation, filesystem, AppState open/edit/save, conflict
+  detection, section operations) pass in a display-free environment.
+  CI `.github/workflows/ci.yml` now runs `bekoedit --headless-smoke` as a
+  post-build acceptance step.
+- **CONTRIBUTING.md**: full developer guide covering prerequisites, build
+  instructions, test requirements, quality gates, commit conventions, and
+  the RFC process.
+- **Documentation completion**: `docs/src/architecture.md` filled in with
+  crate dependency graph, WebView boundary description, editing mode table,
+  and filesystem safety notes.
+- **Acceptance checklist evidence log** (`docs/src/mvp-acceptance.md`):
+  every checklist item now has a status and evidence pointer; one item
+  (IME composition) is marked ⚠️ for manual verification.
+
+### Changed
+- `DocumentSession` gains `word_char_count() -> (usize, usize)`.
+- `StatusBar` updated: word count + line-ending + island count in one row.
+- Explorer new-file row conditionally shows template selector when templates exist.
+- `app.rs` uses `bridge::relay_js` instead of inline JS string literal.
+
+[0.7.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.7.0

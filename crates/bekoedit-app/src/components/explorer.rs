@@ -25,6 +25,8 @@ pub fn Explorer() -> Element {
     let mut toasts = use_context::<Signal<Vec<crate::components::toast::Toast>>>();
 
     let mut new_name = use_signal(String::new);
+    let _tpl_content = use_signal(String::new);
+    let _templates = state.read().list_templates();
     let mut rename_to = use_signal(String::new);
     let mut selected = use_signal(|| Option::<PathBuf>::None);
     let mut rename_mode = use_signal(|| false);

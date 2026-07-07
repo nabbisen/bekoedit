@@ -1,24 +1,28 @@
-# Contributing and RFC Process
+# Contributing
 
-## Ground rules
+See [CONTRIBUTING.md](../../CONTRIBUTING.md) in the repository root for the
+full developer guide covering prerequisites, build instructions, test
+requirements, code quality gates, commit conventions, and the RFC process.
 
-- Rust edition 2024; `cargo fmt --all` and `cargo clippy --workspace`
-  must pass (CI enforces both, plus tests on Linux/macOS/Windows).
-- Tests live in `tests.rs` submodules next to the code under test and
-  target the design specifications (RFC acceptance criteria), not the
-  implementation.
-- Keep source files at or under ~300 effective lines.
-- License is Apache-2.0; contributions are accepted under the same terms.
+## Quick reference
 
-## RFC process
+```sh
+cargo fmt --all && cargo clippy --workspace -- -D warnings
+cargo test --workspace
+./target/debug/bekoedit --headless-smoke
+bash scripts/check-rfcs.sh
+```
 
-Design decisions flow through RFCs in `rfcs/`, governed by
-`rfcs/done/000-rfc-lifecycle-policy.md`:
+All four must be green before a pull request is merged.
 
-- `rfcs/proposed/` — accepted direction, not (fully) implemented
-- `rfcs/done/` — implemented; status notes name the shipping version
-- `rfcs/archive/` — superseded or withdrawn
+## Source-preservation invariants
 
-Each RFC states motivation, goals/non-goals, data model, and acceptance
-criteria. Changes that alter an architectural invariant require updating
-RFC-000 and `ARCHITECTURE.md` together.
+Every change to `bekoedit-markdown` must preserve the property that applying
+a `SourcePatch` to the canonical text and rebuilding the `MarkdownIndex`
+produces a document where:
+
+1. Only the target byte range changed.
+2. All whitespace and marker trivia outside that range is identical.
+3. The new block structure matches what the semantic edit intended.
+
+Tests for these properties live in `crates/bekoedit-markdown/src/tests/`.

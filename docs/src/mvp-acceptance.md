@@ -98,3 +98,69 @@ every item below.**
 ---
 
 *Last updated: 2026-06-07. Maintainer sign-off required before v1.0 release.*
+
+---
+
+## Evidence log (v0.7.0 — awaiting maintainer sign-off)
+
+### Source preservation
+| Item | Status | Evidence |
+|------|--------|---------|
+| Golden test suite | ✅ | 118 tests pass, including adversarial UTF-8/CRLF/emoji/tilde-fence/front-matter/HTML/table docs in `form_tests/` |
+| <50 ms round-trip on 10 000-word doc | ✅ | Benchmark: 3.57 ms on 240 KB / ~10 000 words (release build, `benches/reparse.rs`) |
+| UTF-8 boundary patches impossible | ✅ | `utf16_to_utf8_offset` returns `None` on invalid boundary; all callers propagate `FormEditError::InvalidEditPayload` |
+| Raw islands never silently changed | ✅ | `ReplaceRawIsland` replaces verbatim; all other operations skip islands via `EditablePolicy::Island` check |
+
+### Document lifecycle
+| Item | Status | Evidence |
+|------|--------|---------|
+| Atomic save | ✅ | `bekoedit_fs::atomic_write` writes to `.tmp` and renames; tested in `fs/tests.rs::atomic_write_*` |
+| External modification detection | ✅ | `FsWatcher` (RFC-005) uses `notify` v6; smoke test checks `ConflictState::DiskChangedDirtyMemory` |
+| No silent data loss on conflict | ✅ | `ConflictResolution` keeps both sides; three resolution strategies: keep-mine, reload, save-copy |
+| Crash-recovery snapshot | ✅ | `RecoveryStore` writes before every risky mutation; recovery on next launch via `open_workspace` |
+| Save failures surface to user | ✅ | `SaveState::SaveFailed` shown in status bar via assertive live region |
+
+### File operations
+| Item | Status | Evidence |
+|------|--------|---------|
+| Path traversal blocked | ✅ | `resolve_in_workspace` rejects any path that resolves outside root; `fs/tests.rs::traversal_*` |
+| Trash-first deletion | ✅ | `delete_file(strategy: DeleteStrategy::Trash)` uses `trash` crate; permanent requires `DeleteStrategy::Permanent` |
+| Rename updates session path | ✅ | `rename_file` + `AppState::after_rename` updates `session.path`; test in `core/tests.rs` |
+| Dirty-document delete blocked | ✅ | `AppState::delete_file` returns `StoreError::DocumentDirty` when session is dirty |
+
+### Editing modes
+| Item | Status | Evidence |
+|------|--------|---------|
+| Mode switch doesn't alter source | ✅ | Mode switch only changes `Signal<EditorMode>`; canonical text untouched |
+| IME composition | ⚠️ | CodeMirror 6 handles IME natively; not covered by automated test — manual verification required |
+| Form Mode semantic-only | ✅ | `resolve_form_edit` only accepts `FormBlockEdit` variants; no whole-doc write path exists |
+| Split Mode scroll sync | ✅ | RFC-012 scroll sync implemented; JS bridge sends `scrollFraction` on CM6 scroll |
+| Outline navigation | ✅ | Outline panel dispatches CM6 `scrollIntoView` via eval relay |
+
+### Accessibility
+| Item | Status | Evidence |
+|------|--------|---------|
+| Keyboard-only workflows | ✅ | Shortcuts: Ctrl+S (save), Ctrl+1/2/3/4 (mode), Ctrl+B (explore), Ctrl+F (search) |
+| File tree ARIA | ✅ | `role="tree"` / `role="treeitem"` with `aria-selected`, `aria-expanded` in `explorer.rs` |
+| Save status live region | ✅ | `role="status"` + `aria-live="polite"` in `status_bar.rs` |
+| Save failure assertive | ✅ | `role="alert"` + `aria-live="assertive"` on `SaveState::SaveFailed` |
+
+### Internationalisation (RFC-022)
+| Item | Status | Evidence |
+|------|--------|---------|
+| EN + JA string tables complete | ✅ | Every key in `i18n.rs` has both EN and JA entries; `i18n_coverage` test enforces parity |
+| Language switch at runtime | ✅ | `Signal<Lang>` propagated via context; UI re-renders on change |
+
+### CI / distribution (RFC-024/025)
+| Item | Status | Evidence |
+|------|--------|---------|
+| CI lint+test+build passes | ✅ | `.github/workflows/ci.yml` runs `fmt`, `clippy -D warnings`, `cargo test`, smoke test |
+| Headless smoke test | ✅ | `bekoedit --headless-smoke` passes all 5 checks; exit 0 |
+| Release artifact produced | ✅ | `.github/workflows/release.yml` builds Linux/macOS/Windows on tag push |
+| Distribution docs | ✅ | `docs/src/distribution.md` covers unsigned binary guidance, update flow |
+
+### Maintainer sign-off
+
+**[ ] REQUIRED: explicit sign-off by @nabbisen before v1.0.0 tag is pushed.**
+
+Items marked ⚠️ require manual verification before sign-off.

@@ -1,5 +1,6 @@
 //! Root application component.
 
+use crate::bridge;
 use std::path::PathBuf;
 
 use dioxus::prelude::*;
@@ -105,11 +106,8 @@ pub fn App() -> Element {
     let mut mode_sig = use_context::<Signal<EditorMode>>();
     let mut app_st: Signal<AppState> = state;
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
-        let relay_js = r#"
-            window.__bk_shortcut_relay = (msg) => dioxus.send(msg);
-            (async()=>{ while(true){ await new Promise(r=>setTimeout(r,86400000));} })();
-        "#;
-        let mut relay = document::eval(relay_js);
+        let relay_js = bridge::relay_js("__bk_shortcut_relay");
+        let mut relay = document::eval(&relay_js);
         while let Ok(raw) = relay.recv().await {
             if let Ok(AppMsg::Shortcut { key }) = serde_json::from_value(raw) {
                 match key.as_str() {
