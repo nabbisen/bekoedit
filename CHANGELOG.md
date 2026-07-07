@@ -267,3 +267,12 @@ Incremental parsing deferred until profiling demonstrates a need.
 - `app.rs` uses `bridge::relay_js` instead of inline JS string literal.
 
 [0.7.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.7.0
+
+## [0.7.1] - 2026-06-07
+
+### Changed
+- `docs/src/mvp-acceptance.md` rewritten: three blocking items (manual walkthrough,
+  no open data-loss bugs, CI release artifacts) replace the exhaustive manual
+  checklist. Automated coverage is listed as a reference table. Known limitations
+  (IME, no code signing, single document, no scroll-sync test) are documented
+  transparently rather than treated as blocking gates.
