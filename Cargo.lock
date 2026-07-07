@@ -173,7 +173,7 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "bekoedit"
-version = "0.11.4"
+version = "0.11.5"
 dependencies = [
  "bekoedit-core",
  "bekoedit-fs",
@@ -191,7 +191,7 @@ dependencies = [
 
 [[package]]
 name = "bekoedit-core"
-version = "0.11.4"
+version = "0.11.5"
 dependencies = [
  "bekoedit-fs",
  "bekoedit-markdown",
@@ -202,7 +202,7 @@ dependencies = [
 
 [[package]]
 name = "bekoedit-fs"
-version = "0.11.4"
+version = "0.11.5"
 dependencies = [
  "dirs",
  "notify",
@@ -215,7 +215,7 @@ dependencies = [
 
 [[package]]
 name = "bekoedit-markdown"
-version = "0.11.4"
+version = "0.11.5"
 dependencies = [
  "pulldown-cmark",
  "serde",
@@ -224,7 +224,7 @@ dependencies = [
 
 [[package]]
 name = "bekoedit-ui-contract"
-version = "0.11.4"
+version = "0.11.5"
 dependencies = [
  "bekoedit-core",
  "bekoedit-fs",

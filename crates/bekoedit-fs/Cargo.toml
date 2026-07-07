@@ -1,6 +1,7 @@
 [package]
 name        = "bekoedit-fs"
-description = "Workspace scoping, file tree index, safe file operations, atomic save, and recovery snapshots for bekoedit"
+description = "Workspace scoping, file tree index, safe file operations, atomic save, and recovery snapshots for bekoedit."
+readme      = "README.md"
 version.workspace       = true
 edition.workspace       = true
 license.workspace       = true
