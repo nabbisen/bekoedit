@@ -276,3 +276,31 @@ Incremental parsing deferred until profiling demonstrates a need.
   checklist. Automated coverage is listed as a reference table. Known limitations
   (IME, no code signing, single document, no scroll-sync test) are documented
   transparently rather than treated as blocking gates.
+
+## [0.7.2] - 2026-06-07
+
+### Added
+- **Adversarial golden document test suite** (8 tests): one Markdown file
+  containing every tricky pattern from the MVP acceptance checklist —
+  CRLF throughout, Japanese + emoji in headings, tilde fences, non-1
+  ordered lists, reference links, front matter, raw HTML, and GFM tables.
+  Each test edits exactly one block and asserts that every byte outside
+  the patched range is unchanged.
+- **i18n coverage test** (`i18n_all_keys_have_both_languages`): iterates
+  every known UI key and asserts EN and JA translations both exist.
+  Missing translations are reported as test failures, not runtime
+  fallback strings.
+- **Dirty-document delete blocked**: `AppState::delete_path` now returns
+  `StoreError::DocumentDirty` (new variant) when the target is the open
+  dirty document. Tests: `delete_dirty_document_returns_document_dirty`
+  and `delete_clean_document_succeeds`.
+- **Full detailed acceptance checklist** restored in
+  `docs/src/mvp-acceptance.md`: every item has a status (✅ / ⚠️) and
+  a precise evidence pointer. One item (IME composition) remains ⚠️
+  pending manual verification on the release candidate.
+
+### Changed
+- `StoreError` gains a `DocumentDirty` variant (distinct from
+  `ConflictPending`) for clearer UI error messaging.
+
+[0.7.2]: https://github.com/nabbisen/bekoedit/releases/tag/v0.7.2

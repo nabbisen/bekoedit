@@ -35,6 +35,8 @@ pub enum StoreError {
     FileOp(#[from] FileOpError),
     #[error("the file changed on disk; resolve the conflict first")]
     ConflictPending,
+    #[error("document has unsaved changes; save or discard before this operation")]
+    DocumentDirty,
     #[error("save failed: {0}")]
     SaveFailed(String),
 }

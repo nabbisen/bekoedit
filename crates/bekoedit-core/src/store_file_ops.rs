@@ -44,7 +44,7 @@ impl AppState {
             && session.path == root.join(target)
             && session.dirty
         {
-            return Err(StoreError::ConflictPending);
+            return Err(StoreError::DocumentDirty);
         }
         bekoedit_fs::delete_path(&root, target, strategy)?;
         if let Some(session) = &self.session

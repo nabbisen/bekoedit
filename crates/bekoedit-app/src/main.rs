@@ -15,3 +15,6 @@ fn main() {
     }
     dioxus::launch(app::App);
 }
+
+#[cfg(test)]
+mod tests;
