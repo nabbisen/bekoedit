@@ -34,3 +34,4 @@ fn workspace_with_doc(content: &str) -> (tempfile::TempDir, AppState) {
 mod delete_tests;
 mod persistence_tests;
 mod session_tests;
+mod untitled_tests;

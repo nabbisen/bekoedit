@@ -526,3 +526,40 @@ accessible but not in the way.
   still available via "•••" or tree events).
 
 [0.11.1]: https://github.com/nabbisen/bekoedit/releases/tag/v0.11.1
+
+## [0.11.2] - 2026-06-09
+
+### Testing review
+
+Reviewed the project against the Dioxus 0.7 testing guide (component SSR
+testing, hook testing, Playwright E2E). Decision: **do not adopt any of
+them** — each would add complexity disproportionate to its value for a
+Desktop WebView app whose correctness lives in pure-logic crates:
+
+- Component SSR testing: our components are thin context-driven plumbing
+  that delegate to already-tested core logic; SSR-diffing HTML strings is
+  brittle and needs new dependencies.
+- Hook testing: bekoedit defines no custom hooks (the one in use,
+  `use_scan_driver`, belongs to dioxus-swdir-tree).
+- Playwright E2E: targets `dx serve` (web); bekoedit is Desktop. The
+  `--headless-smoke` binary already covers the integration path.
+
+Testing stays concentrated where correctness matters: the markdown, fs,
+and core crates (no new dev-dependencies; `tempfile` remains the only one).
+
+### Added
+- `tests/untitled_tests.rs` (7 tests) covering the v0.10/v0.11 AppState
+  lifecycle methods: `new_untitled()`, `save_as()`, `close_workspace()`.
+  Plain Rust unit tests, no UI harness.
+- Test count: 131 → 133.
+
+### Fixed
+- **"New File → Save As" silently wrote nothing for an empty document.**
+  `DocumentSession::new_untitled()` created the session with `dirty: false`
+  while `AppState::new_untitled()` set `save_state = Dirty`. On Save As,
+  `save_now()` hit its `if !session.dirty { return Ok(()) }` early-return
+  and skipped the write. The session is now created with `dirty: true`
+  (a new in-memory document genuinely has unsaved state), so Save As always
+  persists it. Caught by `save_as_writes_to_disk_and_clears_untitled`.
+
+[0.11.2]: https://github.com/nabbisen/bekoedit/releases/tag/v0.11.2

@@ -87,7 +87,7 @@ impl DocumentSession {
             path,
             line_ending: LineEnding::Lf,
             revision: 1,
-            dirty: false,
+            dirty: true,
             is_untitled: true,
             disk_fingerprint: None,
             index,
