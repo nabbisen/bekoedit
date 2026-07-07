@@ -122,8 +122,7 @@ fn classify(
         Tag::CodeBlock(kind) => classify_code(builder, kind, start, end),
         Tag::HtmlBlock => PendingBlock::new(BlockKind::HtmlBlock, start, end)
             .island(RawIslandType::HtmlBlock, "HTML block"),
-        Tag::Table(_) => PendingBlock::new(BlockKind::Table, start, end)
-            .island(RawIslandType::ComplexTable, "table"),
+        Tag::Table(_) => classify_table(subtree, start, end),
         Tag::FootnoteDefinition(_) => PendingBlock::new(BlockKind::Unknown, start, end)
             .island(RawIslandType::UnknownExtension, "footnote definition"),
         _ => PendingBlock::new(BlockKind::Unknown, start, end)
@@ -296,4 +295,24 @@ pub(crate) fn trim_trailing_newlines(text: &str, mut end: usize) -> usize {
         end -= 1;
     }
     end
+}
+
+/// Classifies a GFM table as `SimpleTable` (all cells plain text,
+/// form-editable) or `ComplexTable` raw island (RFC-027).
+fn classify_table(subtree: &[Ev], start: usize, end: usize) -> PendingBlock {
+    // If any cell contains inline markup events, demote to ComplexTable island.
+    let is_simple = subtree.iter().all(|(ev, _)| {
+        !matches!(
+            ev,
+            Event::Start(Tag::Emphasis | Tag::Strong | Tag::Strikethrough)
+                | Event::Code(_)
+                | Event::InlineHtml(_)
+        )
+    });
+    if is_simple {
+        PendingBlock::new(crate::block::BlockKind::SimpleTable, start, end)
+    } else {
+        PendingBlock::new(crate::block::BlockKind::ComplexTable, start, end)
+            .island(RawIslandType::ComplexTable, "complex table")
+    }
 }

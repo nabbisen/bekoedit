@@ -112,3 +112,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   panel visibility (explorer collapsed and settings open remain separate).
 
 [0.3.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.3.0
+
+## [0.4.0] - 2026-06-07
+
+### Added
+- **Inline formatting toolbar** (RFC-030): Bold, Italic, Code buttons appear above
+  paragraph, blockquote, and heading fields in Form Mode. `onmousedown
+  preventDefault` keeps textarea focus while JS reads `selectionStart/End` via
+  a relay eval. A new `FormBlockEdit::ToggleInline` variant with UTF-16→UTF-8
+  conversion wraps or unwraps markers in a single minimal source patch.
+- **Simple GFM table editing** (RFC-027): Tables where all cells contain plain
+  text are now classified as `BlockKind::SimpleTable` (form-editable) rather
+  than `ComplexTable` raw islands. Form Mode renders them as interactive cell
+  grids with per-cell inputs and an "+ Row" button. `FormBlockEdit::
+  ReplaceTableCell` and `AddTableRow` apply minimal source patches, regenerating
+  only the table block. Tables with inline formatting remain `ComplexTable` islands.
+- **Image cards in Form Mode** (RFC-028): Image blocks render as a preview card
+  with editable alt-text and path fields. `FormBlockEdit::ReplaceImage` rewrites
+  only the `![alt](src)` markers.
+- **Workspace full-text search** (RFC-033): `bekoedit_fs::search_workspace`
+  scans all Markdown files under the workspace root, ranking exact-case matches
+  above case-insensitive matches. A `SearchPanel` component (🔍 button) shows
+  results with file path, line number, and a snippet; clicking a result opens the
+  document.
+- **HTML export** (RFC-035): `AppState::export_html` writes a self-contained
+  HTML file (with inline CSS) to any path. The "Export HTML" button in the header
+  exports alongside the current document.
+- `bekoedit_markdown::utf16_to_utf8_offset` — public helper function for
+  safe UTF-16 → UTF-8 position conversion; used by the inline toolbar bridge.
+
+### Changed
+- `form/resolve.rs` split into sub-modules: `inline_fmt`, `tables`, `images`.
+- `form_tests.rs` split into `form_tests/basic_tests`, `inline_tests`, `table_tests`.
+- `form_mode.rs` split into `form_mode/inline_toolbar`, `block_view`.
+- `FormBlockDisplay` gains `Table { headers, rows, col_count }` and `Image { alt, src }` variants.
+- `BlockKind` gains `SimpleTable` (form-editable) and `ComplexTable` (raw island)
+  replacing the old single `Table` variant.
+
+### Architecture decisions (RFC-031/032)
+- **RFC-031**: Lexical not adopted. Custom projection approach (Form Mode as semantic
+  patches against canonical Markdown) is retained as the correct fit for
+  bekoedit's source-preservation invariants.
+- **RFC-032**: Full-reparse-after-mutation confirmed adequate for current document
+  sizes. Incremental parsing deferred until profiling demonstrates a need.
+
+[0.4.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.4.0

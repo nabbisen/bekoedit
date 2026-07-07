@@ -1,10 +1,10 @@
-# RFC-027: Table Editing Strategy
+# RFC-035: Export Profiles
 
 **Project:** bekoedit  
-**Status:** Proposed (deferred: post-MVP / future evaluation)  
-**Track:** Post-MVP  
-**Milestone:** M8  
-**Priority:** Medium  
+**Status:** Implemented (v0.4.0, 2026-06-07)  
+**Track:** Future Evaluation  
+**Milestone:** M9  
+**Priority:** Low  
 **Date:** 2026-06-07  
 **Related documents:** `bekoedit-requirements-definition.md`, `bekoedit-external-design.md`, `bekoedit-rfc-roadmap.md`
 
@@ -12,30 +12,28 @@
 
 ## 1. Summary
 
-Evaluates and designs safe approaches for Markdown table viewing and editing after MVP.
+Evaluates exporting Markdown documents to HTML or PDF-like formats.
 
 ---
 
 ## 2. Motivation
 
-- Tables are common in technical documents but hard to edit visually without rewriting formatting.
-- MVP should not be blocked by table complexity.
+- Export is useful but can pull the app into publishing workflows.
 
 ---
 
 ## 3. Goals
 
-- Classify simple vs complex tables.
-- Provide a safe table preview and optional raw editing.
-- Design a future visual table editor that preserves alignment where possible.
+- Define export as read-only transformation from canonical source.
+- Support simple HTML export first.
+- Keep export profiles explicit.
 
 ---
 
 ## 4. Non-Goals
 
-- Implement table editing in MVP.
-- Normalize all tables.
-- Support every Markdown table extension.
+- Implement full desktop publishing.
+- Make export output canonical.
 
 ---
 
@@ -55,28 +53,22 @@ All RFCs in this package inherit the following invariants unless explicitly amen
 
 ## 6. User-Facing Design
 
-- Simple tables may later appear as editable grids. Complex tables remain raw islands with preview.
+- Export dialog lets user choose profile and target path.
 
 ---
 
 ## 7. Data Model / Contracts
 
 ```rust
-struct TableBlockModel {
-    source_range: ByteRange,
-    header: Vec<TableCell>,
-    rows: Vec<Vec<TableCell>>,
-    alignment: Vec<TableAlignment>,
-    preservation_policy: TablePreservationPolicy,
-}
+struct ExportProfile { id: String, format: ExportFormat, options: ExportOptions }
 ```
 
 ---
 
 ## 8. Internal Design Notes
 
-- Begin with read-only rendered table plus raw island fallback.
-- Add golden tests for pipe escaping, alignment markers, and multiline limitations before visual editing.
+- Use sanitized renderer output.
+- Do not alter open document during export.
 
 ---
 
@@ -150,8 +142,7 @@ Recommended source-preservation cases:
 
 ## 14. Acceptance Criteria
 
-- Future decision document chooses raw-only, simple-grid, or full-grid scope.
-- No table feature may rewrite unrelated document source.
+- Export has no side effects on Markdown source.
 
 ---
 

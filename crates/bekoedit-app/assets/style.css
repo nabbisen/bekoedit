@@ -250,3 +250,41 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .outline-h2 .outline-btn { font-weight: 600; }
 .outline-h3 .outline-btn { font-size: 0.84em; }
 .outline-h4, .outline-h5, .outline-h6 { .outline-btn { font-size: 0.82em; color: var(--muted); } }
+
+/* --- inline formatting toolbar (RFC-030) --- */
+.inline-toolbar { display: flex; gap: 4px; margin-bottom: 4px; }
+.inline-fmt-btn {
+  padding: 2px 8px; font-size: 0.85em; border: 1px solid var(--line);
+  background: #fff; border-radius: 4px; cursor: pointer; line-height: 1.4;
+}
+.inline-fmt-btn:hover { border-color: var(--accent); }
+
+/* --- table form (RFC-027) --- */
+.table-block { overflow-x: auto; }
+.table-block table { border-collapse: collapse; width: 100%; }
+.table-block th, .table-block td { border: 1px solid var(--line); padding: 2px 4px; min-width: 80px; }
+.table-block th { background: var(--panel); }
+.table-cell-input { width: 100%; border: none; background: transparent; padding: 2px 4px; font: inherit; }
+.table-cell-input:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+.table-add-row { margin-top: 6px; font-size: 0.85em; }
+
+/* --- image card (RFC-028) --- */
+.image-card { display: flex; flex-direction: column; gap: 8px; }
+.image-preview { max-width: 100%; max-height: 200px; object-fit: contain;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+
+/* --- search panel (RFC-033) --- */
+.search-panel { width: 280px; min-width: 220px; border-left: 1px solid var(--line);
+  background: var(--panel); padding: 12px 10px; overflow-y: auto; display: flex;
+  flex-direction: column; gap: 8px; }
+.search-row { display: flex; gap: 6px; align-items: center; }
+.search-input { flex: 1; }
+.search-results { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px; }
+.search-match-btn { width: 100%; text-align: left; border: none; background: transparent;
+  padding: 4px 6px; border-radius: 4px; cursor: pointer; display: grid;
+  grid-template-rows: auto auto; font-size: 0.82em; }
+.search-match-btn:hover { background: #e7e3d8; }
+.match-file { font-weight: 600; color: var(--accent); }
+.match-line { color: var(--muted); font-size: 0.9em; }
+.match-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-match.exact .match-file::after { content: " ✓"; font-size: 0.75em; color: var(--accent); }

@@ -1,10 +1,10 @@
-# RFC-035: Export Profiles
+# RFC-028: Image and Asset Management
 
 **Project:** bekoedit  
-**Status:** Proposed (deferred: post-MVP / future evaluation)  
-**Track:** Future Evaluation  
-**Milestone:** M9  
-**Priority:** Low  
+**Status:** Implemented (v0.4.0, 2026-06-07)  
+**Track:** Post-MVP  
+**Milestone:** M8  
+**Priority:** Medium  
 **Date:** 2026-06-07  
 **Related documents:** `bekoedit-requirements-definition.md`, `bekoedit-external-design.md`, `bekoedit-rfc-roadmap.md`
 
@@ -12,28 +12,30 @@
 
 ## 1. Summary
 
-Evaluates exporting Markdown documents to HTML or PDF-like formats.
+Designs handling for Markdown images and local assets, including preview, relative paths, and safe insertion.
 
 ---
 
 ## 2. Motivation
 
-- Export is useful but can pull the app into publishing workflows.
+- Markdown documents often reference local images.
+- Asset management can easily become a file-management feature beyond the editor core.
 
 ---
 
 ## 3. Goals
 
-- Define export as read-only transformation from canonical source.
-- Support simple HTML export first.
-- Keep export profiles explicit.
+- Preview local images referenced by Markdown.
+- Support safe image insertion by relative path.
+- Avoid moving or copying assets unexpectedly.
 
 ---
 
 ## 4. Non-Goals
 
-- Implement full desktop publishing.
-- Make export output canonical.
+- Implement image editing.
+- Implement cloud asset hosting.
+- Create a media library database.
 
 ---
 
@@ -53,22 +55,28 @@ All RFCs in this package inherit the following invariants unless explicitly amen
 
 ## 6. User-Facing Design
 
-- Export dialog lets user choose profile and target path.
+- Image blocks show preview, alt text, path, and actions: edit alt text, reveal file, change path.
 
 ---
 
 ## 7. Data Model / Contracts
 
 ```rust
-struct ExportProfile { id: String, format: ExportFormat, options: ExportOptions }
+struct ImageReferenceBlock {
+    block_id: BlockId,
+    alt_text: String,
+    target: String,
+    title: Option<String>,
+    resolved_asset: Option<PathBuf>,
+}
 ```
 
 ---
 
 ## 8. Internal Design Notes
 
-- Use sanitized renderer output.
-- Do not alter open document during export.
+- Resolve paths relative to current Markdown file.
+- Block path traversal outside workspace only for operations that mutate files, not for displaying existing references unless security policy says otherwise.
 
 ---
 
@@ -142,7 +150,8 @@ Recommended source-preservation cases:
 
 ## 14. Acceptance Criteria
 
-- Export has no side effects on Markdown source.
+- Image handling preserves Markdown link syntax.
+- Missing assets are visible and non-fatal.
 
 ---
 

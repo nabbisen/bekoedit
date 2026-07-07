@@ -93,3 +93,20 @@ policy · RFC-039 plugin system · RFC-040 sync & collaboration.
 | RFC-026 | MVP acceptance, quality gates & beta readiness | `docs/src/mvp-acceptance.md` — formal v1.0 gate |
 
 **All MVP-critical RFCs (RFC-000 through RFC-026) are now in `done/`.**
+
+## Implemented — v0.4.0 (`done/`)
+
+| RFC | Title | Notes |
+|-----|-------|-------|
+| RFC-027 | Table editing strategy | Simple (all-plaintext) GFM tables become editable cell grids; complex tables remain raw islands |
+| RFC-028 | Image & asset management | Image preview cards in Form Mode with editable alt text and path |
+| RFC-030 | Richer inline formatting in Form Mode | Bold/italic/code/link toolbar using UTF-16→UTF-8 offset bridge |
+| RFC-033 | Full-text search | `bekoedit_fs::search_workspace` + workspace search panel with ranked results |
+| RFC-035 | Export profiles | `AppState::export_html` → standalone self-contained HTML file |
+
+## Decision reached — v0.4.0 (still `proposed/`)
+
+| RFC | Title | Decision |
+|-----|-------|---------|
+| RFC-031 | Lexical integration decision | **Do not adopt Lexical.** Custom projection approach retained. See RFC for detailed rationale. |
+| RFC-032 | Performance optimization & incremental parsing | Full-reparse-after-mutation confirmed adequate for current document sizes. Deferred until profiling demonstrates a need. |

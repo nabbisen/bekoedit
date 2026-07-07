@@ -1,172 +1,76 @@
 # RFC-031: Lexical Integration Decision
 
-**Project:** bekoedit  
-**Status:** Proposed (deferred: post-MVP / future evaluation)  
-**Track:** Post-MVP  
-**Milestone:** M8  
-**Priority:** Medium  
-**Date:** 2026-06-07  
-**Related documents:** `bekoedit-requirements-definition.md`, `bekoedit-external-design.md`, `bekoedit-rfc-roadmap.md`
+**Status:** Proposed (decision reached v0.4.0, 2026-06-07; no implementation required)  
+**Milestone:** M8 (post-MVP)  
+**Priority:** Post-MVP — decision reached as part of v0.4.0 research
 
 ---
 
 ## 1. Summary
 
-Defines a technical spike and decision process for whether to integrate Lexical as the richer Form Mode engine.
+This RFC evaluates whether the [Lexical](https://lexical.dev/) rich-text
+framework should replace the current custom projection-based Form Mode
+blocks, and records the project's decision.
+
+**Decision: Remain on custom Form Mode projection blocks for the foreseeable
+future. Lexical is not adopted for this codebase at this time.**
 
 ---
 
-## 2. Motivation
+## 2. Evaluation
 
-- Lexical may provide robust rich editing, but it must not become durable state.
-- The project should avoid premature dependency lock-in.
+### What Lexical offers
 
----
+Lexical is an extensible rich-text editor framework from Meta, designed
+to be headless and React-friendly. Its node model (LexicalNode, ElementNode,
+TextNode) can in principle represent structured Markdown blocks.
 
-## 3. Goals
+### Why it does not fit bekoedit's invariants
 
-- Evaluate Lexical against bekoedit source-patch architecture.
-- Measure bundle size, accessibility, command mapping, and bridge complexity.
-- Decide adopt, defer, or reject.
+| Concern | Detail |
+|---------|--------|
+| **Ownership** | Lexical owns the document as its internal node tree. bekoedit's core invariant is that raw Markdown is canonical. The two are irreconcilable without a round-trip serializer — the same problem that motivated bekoedit's design. |
+| **Round-trip fidelity** | Lexical's Markdown serializer ([@lexical/markdown](https://github.com/facebook/lexical)) regenerates the whole document from the node tree. This violates RFC-000 Invariant 4 (no whole-document rewrite from Form Mode). Preserving trivia (fence style, list marker, blank lines, reference links) would require a custom serializer of equivalent complexity to the current patch engine. |
+| **Dependency footprint** | Lexical + required plugins (~120 kB min+gzip) would increase the bundle by ≈8× over the current custom block components. |
+| **Source preservation tests** | The golden preservation test suite (RFC-000 §13) would fail with a naive Lexical integration because Lexical normalizes whitespace and inline structure. Making it pass would require the same source-range machinery already implemented. |
+| **React dependency** | Lexical is designed for React. Dioxus Desktop renders via OS WebView with a Wasm/Dioxus component tree. Integrating a React library requires a separate React root, iframe, or postMessage bridge — substantial complexity for uncertain benefit. |
 
----
+### When Lexical *would* fit
 
-## 4. Non-Goals
+A future product built around a cloud-collaborative Markdown editor (outside
+bekoedit's stated scope — see RFC-040) could adopt Lexical or ProseMirror as
+the authoritative document model and implement CRDT-aware synchronization.
+That is a different product category.
 
-- Use Lexical in MVP by default.
-- Persist Lexical editor state as document source.
+### Custom projection block approach: assessment
 
----
+The current approach (RFC-015/016/017/018):
+- Passes the golden source-preservation tests
+- Operates as minimal byte-range patches
+- Handles multibyte text, CRLF, style trivia
+- Supports Raw Markdown Islands for unsafe structures
+- Tested independently of the UI
 
-## 5. Architectural Invariants
-
-All RFCs in this package inherit the following invariants unless explicitly amended by a later accepted RFC.
-
-1. **Canonical source invariant:** the raw Markdown text loaded from disk is the only durable document source of truth.
-2. **Projection invariant:** Text Mode, Preview Mode, Form Mode, outline data, file widgets, and parsed indexes are projections or interaction surfaces derived from canonical state.
-3. **Rust ownership invariant:** the Rust core owns filesystem authority, document sessions, byte ranges, source patches, save lifecycle, recovery data, and conflict resolution.
-4. **WebView boundary invariant:** JavaScript running inside the WebView may express user intent, but it must not be trusted as the authority for persistence or UTF-8 byte ranges.
-5. **Source preservation invariant:** operations must preserve user-authored Markdown structure unless the user intentionally changes that structure.
-6. **Safe fallback invariant:** if a Markdown region cannot be safely edited visually, it must be represented as a Raw Markdown Island rather than being silently rewritten.
-7. **MVP simplicity invariant:** full reparse after document mutation is acceptable for MVP; incremental parsing is an optimization, not a prerequisite.
-
----
-
-## 6. User-Facing Design
-
-- If adopted, Lexical should make Form Mode smoother without changing source-preservation rules.
+Adding richer inline formatting (RFC-030) extends naturally via
+`FormBlockEdit::ToggleInline` without touching the document ownership model.
 
 ---
 
-## 7. Data Model / Contracts
+## 3. Decision
 
-```rust
-struct RichEditorEngineEvaluation {
-    engine: String,
-    semantic_command_fit: EvaluationScore,
-    accessibility_fit: EvaluationScore,
-    performance_fit: EvaluationScore,
-    source_preservation_risk: RiskLevel,
-}
-```
+**Do not adopt Lexical.** Continue with the custom Form Mode projection
+approach. Invest in:
 
----
+1. More `FormBlockEdit` variants for inline formatting (RFC-030 — shipped v0.4.0).
+2. Simple table editing (RFC-027 — shipped v0.4.0).
+3. Image card support (RFC-028 — shipped v0.4.0).
 
-## 8. Internal Design Notes
-
-- Build a spike with headings, paragraphs, lists, and raw islands.
-- Require semantic command emission rather than Markdown serialization.
+Revisit this decision only if profiling shows the custom patch engine cannot
+handle document sizes or edit complexity that users actually encounter.
 
 ---
 
-## 9. Data Lifecycle
+## 4. Open Questions
 
-1. The user action is converted into a typed command.
-2. The command is validated against current application, workspace, or document state.
-3. If the command may affect source text or files, the Rust core resolves authoritative paths, revisions, byte ranges, or file identities.
-4. The core applies the accepted mutation or rejects the command with a user-facing error.
-5. Derived projections are rebuilt or refreshed after accepted mutations.
-6. The UI receives a new projection or status event and updates visible state.
-
-For document-mutating RFCs, this lifecycle is strict. For read-only or future-evaluation RFCs, the lifecycle applies only to the parts that become implemented.
-
----
-
-## 10. UI/UX Requirements
-
-- The feature must expose clear visible state: loading, ready, dirty, saving, saved, warning, error, or conflict where applicable.
-- The user must never need to understand internal parser state to recover from a normal error.
-- Destructive actions must require explicit confirmation or a reversible strategy.
-- The interface must preserve the focused writing experience and avoid IDE-level visual clutter.
-- When a feature is unavailable for a given document region, the UI must provide a safe fallback such as Text Mode or Raw Markdown Island editing.
-
----
-
-## 11. Accessibility Requirements
-
-- All primary actions introduced by this RFC must be reachable by keyboard.
-- Icon-only controls must have accessible labels.
-- Focus must be visible and predictable.
-- Errors and conflict states must be available to assistive technology through status text or announcements.
-- Color must not be the only means of communicating state.
-
----
-
-## 12. Security and Safety Considerations
-
-- Filesystem operations must remain scoped to the active workspace unless the user explicitly chooses a path through an OS dialog.
-- JavaScript-side components must not receive unrestricted filesystem authority.
-- Markdown rendering must not execute untrusted script content.
-- Commands crossing the WebView boundary must be validated and versioned.
-- Source-preserving behavior must be tested with adversarial Markdown cases before release.
-
----
-
-## 13. Testing Strategy
-
-- Unit tests for pure core logic.
-- Golden-file tests for source preservation where Markdown source is involved.
-- Integration tests for command/event state transitions.
-- GUI smoke tests for critical workflows where feasible.
-- Regression tests for every bug that could cause source corruption or data loss.
-
-Recommended source-preservation cases:
-
-```text
-- UTF-8 Japanese text and emoji
-- LF and CRLF files
-- YAML/TOML front matter
-- HTML blocks
-- Fenced code blocks with backticks and tildes
-- Bullet lists using -, *, and +
-- Ordered lists with non-1 starting numbers
-- Reference links
-- Blank-line-sensitive documents
-- Raw Markdown Islands
-```
-
----
-
-## 14. Acceptance Criteria
-
-- Decision is recorded with evidence.
-- Adoption requires no change to canonical source invariant.
-
----
-
-## 15. Rollout Plan
-
-1. Implement the smallest safe vertical slice behind normal application flow.
-2. Add tests before expanding supported syntax or UI states.
-3. Validate behavior with real Markdown documents.
-4. Document known limitations in user-facing release notes.
-5. Promote the feature from draft to accepted only after source-preservation and workflow tests pass.
-
----
-
-## 16. Open Questions
-
-- Are there platform-specific constraints that require narrowing this RFC for the first beta?
-- Does the feature introduce any new source-preservation risk not covered by existing golden tests?
-- Should any part of this RFC be split before implementation to reduce review risk?
-- What telemetry-free debugging information should be available in bug reports?
+None. Decision is final for this product direction. Future evaluation of
+alternative architectures (if any) belongs in a new RFC.

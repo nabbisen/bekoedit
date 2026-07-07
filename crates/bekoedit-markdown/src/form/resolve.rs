@@ -58,6 +58,28 @@ pub fn resolve_form_edit(
         }
         FormBlockEdit::ReplaceRawIsland { text: new_text } => resolve_island(block, new_text)?,
         FormBlockEdit::DeleteBlock => resolve_delete(text, block),
+        FormBlockEdit::ReplaceImage { alt, src: img_src } => {
+            super::images::resolve_replace_image(text, block, alt, img_src)?
+        }
+        FormBlockEdit::ReplaceTableCell {
+            row,
+            col,
+            text: cell_text,
+        } => super::tables::resolve_replace_table_cell(text, block, *row, *col, cell_text)?,
+        FormBlockEdit::AddTableRow => super::tables::resolve_add_table_row(text, block)?,
+        FormBlockEdit::ToggleInline {
+            kind,
+            utf16_start,
+            utf16_len,
+            link_url,
+        } => super::inline_fmt::resolve_toggle_inline(
+            text,
+            block,
+            *kind,
+            *utf16_start,
+            *utf16_len,
+            link_url.as_deref(),
+        )?,
     };
 
     Ok(SourcePatch {

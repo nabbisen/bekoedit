@@ -129,13 +129,36 @@ fn nested_lists_downgrade_to_complex_island() {
 }
 
 #[test]
-fn tables_are_complex_islands() {
+fn simple_table_is_form_editable_not_a_complex_island() {
+    // RFC-027: plain-cell tables become SimpleTable (form-editable).
     let doc = "| a | b |\n|---|---|\n| 1 | 2 |\n";
+    let idx = MarkdownIndex::build(doc, 1);
+    let table = idx
+        .blocks
+        .iter()
+        .find(|b| b.kind == crate::block::BlockKind::SimpleTable);
+    assert!(
+        table.is_some(),
+        "simple table must produce a SimpleTable block"
+    );
+    assert!(
+        idx.raw_islands
+            .iter()
+            .all(|i| i.island_type != RawIslandType::ComplexTable),
+        "simple table must not appear as a ComplexTable island"
+    );
+}
+
+#[test]
+fn table_with_bold_cells_is_complex_island() {
+    // A table containing **bold** remains a ComplexTable raw island.
+    let doc = "| **Name** | Score |\n|----------|-------|\n| Alice | 42 |\n";
     let idx = MarkdownIndex::build(doc, 1);
     assert!(
         idx.raw_islands
             .iter()
-            .any(|i| i.island_type == RawIslandType::ComplexTable)
+            .any(|i| i.island_type == RawIslandType::ComplexTable),
+        "table with inline markup must remain a ComplexTable island"
     );
 }
 

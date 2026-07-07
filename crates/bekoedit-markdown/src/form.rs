@@ -6,7 +6,10 @@
 //! style-preserving `SourcePatch` values; it never rewrites unrelated
 //! regions and never trusts client-supplied byte ranges.
 
+mod images;
+mod inline_fmt;
 mod resolve;
+mod tables;
 
 use serde::{Deserialize, Serialize};
 
@@ -15,6 +18,7 @@ use crate::fingerprint::{BlockFingerprint, BlockId};
 use crate::index::MarkdownIndex;
 use crate::island::RawIslandType;
 
+pub use inline_fmt::resolve_toggle_inline;
 pub use resolve::resolve_form_edit;
 
 /// One visual block in the Form Mode projection (RFC-016 §7).
@@ -50,6 +54,18 @@ pub enum FormBlockDisplay {
         code: String,
     },
     HorizontalRule,
+    /// Image block (RFC-028): preview card with editable alt text and path.
+    Image {
+        alt: String,
+        src: String,
+    },
+    /// Simple GFM table: all cells are plain text (RFC-027).
+    Table {
+        headers: Vec<String>,
+        rows: Vec<Vec<String>>,
+        /// Number of data columns (mirrors `headers.len()`).
+        col_count: usize,
+    },
     RawIsland {
         island_type: RawIslandType,
         /// Translated by the GUI via i18n.
@@ -149,6 +165,23 @@ fn display_for(text: &str, index: &MarkdownIndex, block: &BlockNode) -> FormBloc
                     .collect(),
             }
         }
+        BlockKind::SimpleTable => {
+            let source = slice(text, block.source_range.start, block.source_range.end);
+            // Parse the table into a display-friendly structure.
+            let (headers, rows) = parse_simple_table(&source);
+            let col_count = headers.len();
+            FormBlockDisplay::Table {
+                headers,
+                rows,
+                col_count,
+            }
+        }
+        BlockKind::HtmlBlock => FormBlockDisplay::RawIsland {
+            island_type: RawIslandType::HtmlBlock,
+            label_key: RawIslandType::HtmlBlock.label_key().to_string(),
+            text: slice(text, block.source_range.start, block.source_range.end),
+            editable: true,
+        },
         _ => FormBlockDisplay::RawIsland {
             island_type: RawIslandType::UnknownExtension,
             label_key: RawIslandType::UnknownExtension.label_key().to_string(),
@@ -160,6 +193,35 @@ fn display_for(text: &str, index: &MarkdownIndex, block: &BlockNode) -> FormBloc
 
 fn slice(text: &str, start: usize, end: usize) -> String {
     text.get(start..end).unwrap_or_default().to_string()
+}
+
+/// The kind of inline formatting toggle (RFC-030).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InlineFormat {
+    Bold,
+    Italic,
+    Code,
+    Link,
+}
+
+impl InlineFormat {
+    /// The Markdown marker string surrounding the selected text.
+    pub fn open_marker(self) -> &'static str {
+        match self {
+            InlineFormat::Bold => "**",
+            InlineFormat::Italic => "_",
+            InlineFormat::Code => "`",
+            InlineFormat::Link => "[",
+        }
+    }
+    pub fn close_marker(self) -> &'static str {
+        match self {
+            InlineFormat::Bold => "**",
+            InlineFormat::Italic => "_",
+            InlineFormat::Code => "`",
+            InlineFormat::Link => "]", // caller appends (url)
+        }
+    }
 }
 
 /// Semantic edits a Form Mode block may request (RFC-018 §7, as amended
@@ -189,6 +251,29 @@ pub enum FormBlockEdit {
         text: String,
     },
     DeleteBlock,
+    /// Replace alt text and/or path for an image block (RFC-028).
+    ReplaceImage {
+        alt: String,
+        src: String,
+    },
+    /// Edit a single cell in a simple GFM table (RFC-027).
+    ReplaceTableCell {
+        row: usize,
+        col: usize,
+        text: String,
+    },
+    /// Append a new empty row to a simple table (RFC-027).
+    AddTableRow,
+    /// Toggle inline markup around a JS-editor selection (RFC-030).
+    /// Offsets are UTF-16 code units relative to the block's content range
+    /// start; Rust converts them to UTF-8 before patching.
+    ToggleInline {
+        kind: InlineFormat,
+        utf16_start: usize,
+        utf16_len: usize,
+        /// URL to use when `kind == Link`.
+        link_url: Option<String>,
+    },
 }
 
 /// A semantic edit command from the UI (RFC-018 §7). Carries no
@@ -218,4 +303,19 @@ pub enum FormEditError {
     UnsupportedEditOperation { reason: String },
     #[error("invalid edit payload: {reason}")]
     InvalidEditPayload { reason: String },
+}
+
+/// Parses a GFM table source string into (headers, rows) for the projection.
+fn parse_simple_table(source: &str) -> (Vec<String>, Vec<Vec<String>>) {
+    let parse_row = |line: &str| -> Vec<String> {
+        let trimmed = line.trim().trim_start_matches('|').trim_end_matches('|');
+        trimmed.split('|').map(|c| c.trim().to_string()).collect()
+    };
+    let is_sep = |line: &str| {
+        let t = line.trim();
+        t.chars().all(|c| matches!(c, '|' | '-' | ':' | ' ')) && t.contains('-')
+    };
+    let mut rows = source.lines().filter(|l| !is_sep(l)).map(parse_row);
+    let headers = rows.next().unwrap_or_default();
+    (headers, rows.collect())
 }

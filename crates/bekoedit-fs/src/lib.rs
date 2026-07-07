@@ -16,6 +16,7 @@ pub mod ops;
 pub mod paths;
 pub mod recent;
 pub mod recovery;
+pub mod search;
 pub mod settings;
 pub mod tree;
 pub mod watcher;
@@ -28,6 +29,7 @@ pub use ops::{
 pub use paths::{PathError, resolve_in_workspace, sanitize_file_name};
 pub use recent::{RecentWorkspaceEntry, RecentWorkspaces};
 pub use recovery::{RecoverySnapshot, RecoveryStore};
+pub use search::{SearchMatch, search_workspace};
 pub use settings::UserSettings;
 pub use tree::{FileNodeKind, FileTreeIndex, FileTreeNode};
 pub use watcher::{FsWatcher, WatchEvent};

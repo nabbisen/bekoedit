@@ -1,5 +1,4 @@
-//! Editor header (RFC-010/019/020): mode switch (with Split), outline toggle,
-//! save, settings, language switch, and explorer collapse.
+//! Editor header: mode switch, outline, search, export, save, settings.
 
 use dioxus::prelude::*;
 
@@ -13,12 +12,13 @@ use crate::state::now_ms;
 #[component]
 pub fn EditorHeader() -> Element {
     let mut state = use_context::<Signal<AppState>>();
-    let mut lang_signal = use_context::<Signal<Lang>>();
-    let lang = *lang_signal.read();
-    let mut mode_signal = use_context::<Signal<EditorMode>>();
-    let mode = *mode_signal.read();
+    let mut lang_sig = use_context::<Signal<Lang>>();
+    let lang = *lang_sig.read();
+    let mut mode_sig = use_context::<Signal<EditorMode>>();
+    let mode = *mode_sig.read();
     let mut collapsed = use_context::<Signal<bool>>(); // explorer
-    let mut outline_open = use_context::<Signal<bool>>(); // outline
+    let mut outline_open = use_context::<Signal<bool>>(); // 3rd bool
+    let mut search_open = use_context::<Signal<bool>>(); // 4th bool
     let mut settings_open = use_context::<Signal<bool>>();
     let mut toasts = use_context::<Signal<Vec<crate::components::toast::Toast>>>();
 
@@ -37,6 +37,7 @@ pub fn EditorHeader() -> Element {
             role: "toolbar",
             aria_label: tr(lang, "editor.toolbar_label"),
 
+            // Explorer toggle
             button {
                 class: "icon-btn",
                 aria_label: tr(lang, "explorer.toggle"),
@@ -45,19 +46,15 @@ pub fn EditorHeader() -> Element {
                 "☰"
             }
 
+            // Document name + dirty indicator
             span {
-                class: "doc-name",
-                aria_live: "polite",
+                class: "doc-name", aria_live: "polite",
                 "{doc_name}"
-                if dirty {
-                    span { class: "dirty-dot", aria_label: tr(lang, "save.dirty"), "●" }
-                }
+                if dirty { span { class: "dirty-dot", aria_label: tr(lang, "save.dirty"), "●" } }
             }
 
-            nav {
-                class: "mode-switch",
-                role: "tablist",
-                aria_label: tr(lang, "editor.mode_label"),
+            // Mode switch
+            nav { class: "mode-switch", role: "tablist", aria_label: tr(lang, "editor.mode_label"),
                 for (target, key) in [
                     (EditorMode::Text,    "mode.text"),
                     (EditorMode::Form,    "mode.form"),
@@ -68,45 +65,82 @@ pub fn EditorHeader() -> Element {
                         role: "tab",
                         class: if mode == target { "mode active" } else { "mode" },
                         aria_selected: "{mode == target}",
-                        onclick: move |_| mode_signal.set(target),
+                        onclick: move |_| mode_sig.set(target),
                         {tr(lang, key)}
                     }
                 }
             }
 
             div { class: "header-actions",
-                // Outline panel toggle (RFC-010).
+                // Search toggle (RFC-033)
+                button {
+                    class: if *search_open.read() { "icon-btn active" } else { "icon-btn" },
+                    aria_label: tr(lang, "search.toggle"),
+                    aria_pressed: "{*search_open.read()}",
+                    onclick: move |_| {
+                        let o = *search_open.read();
+                        search_open.set(!o);
+                        if !o { outline_open.set(false); } // close outline when search opens
+                    },
+                    "🔍"
+                }
+                // Outline toggle (RFC-010)
                 if has_doc {
                     button {
                         class: if *outline_open.read() { "icon-btn active" } else { "icon-btn" },
                         aria_label: tr(lang, "outline.toggle"),
                         aria_pressed: "{*outline_open.read()}",
-                        onclick: move |_| { let o = *outline_open.read(); outline_open.set(!o); },
+                        onclick: move |_| {
+                            let o = *outline_open.read();
+                            outline_open.set(!o);
+                            if !o { search_open.set(false); }
+                        },
                         "≡"
                     }
                 }
+                // Export to HTML (RFC-035)
                 if has_doc {
                     button {
-                        class: "primary",
-                        aria_label: tr(lang, "editor.save"),
+                        aria_label: tr(lang, "export.html"),
                         onclick: move |_| {
-                            if let Err(e) = state.write().save_now(now_ms()) {
-                                push_toast(&mut toasts, ToastKind::Error, e.to_string());
-                            } else {
-                                push_toast(&mut toasts, ToastKind::Success, tr(lang, "save.saved"));
+                            if let Some(sess) = state.read().session.as_ref() {
+                                let export_path = sess.path.with_extension("html");
+                                match state.read().export_html(&export_path) {
+                                    Ok(()) => push_toast(&mut toasts, ToastKind::Success,
+                                        format!("{} → {}", tr(lang, "export.html"),
+                                                export_path.file_name()
+                                                    .map(|n| n.to_string_lossy().into_owned())
+                                                    .unwrap_or_default())),
+                                    Err(e) => push_toast(&mut toasts, ToastKind::Error, e.to_string()),
+                                }
+                            }
+                        },
+                        {tr(lang, "export.html")}
+                    }
+                }
+                // Save
+                if has_doc {
+                    button {
+                        class: "primary", aria_label: tr(lang, "editor.save"),
+                        onclick: move |_| {
+                            match state.write().save_now(now_ms()) {
+                                Ok(())  => push_toast(&mut toasts, ToastKind::Success, tr(lang, "save.saved")),
+                                Err(e)  => push_toast(&mut toasts, ToastKind::Error, e.to_string()),
                             }
                         },
                         {tr(lang, "editor.save")}
                     }
                 }
+                // Settings
                 button {
                     aria_label: tr(lang, "settings.title"),
                     onclick: move |_| settings_open.set(true),
                     "⚙"
                 }
+                // Language switch
                 button {
                     aria_label: tr(lang, "lang.switch"),
-                    onclick: move |_| { lang_signal.set(lang.toggle()); },
+                    onclick: move |_| lang_sig.set(lang.toggle()),
                     {tr(lang, "lang.switch")}
                 }
             }

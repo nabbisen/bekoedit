@@ -30,13 +30,13 @@ pub use block::{BlockKind, BlockNode, EditablePolicy, HeadingNode, ListItemNode}
 pub use fingerprint::{BlockFingerprint, BlockId};
 pub use form::{
     FormBlock, FormBlockDisplay, FormBlockEdit, FormEditCommand, FormEditError, FormListItem,
-    FormProjection,
+    FormProjection, InlineFormat,
 };
 pub use index::{MarkdownDiagnostic, MarkdownIndex};
 pub use island::{RawIsland, RawIslandEditPolicy, RawIslandType};
 pub use patch::{PatchError, PatchOrigin, PatchResult, SourcePatch};
 pub use preview::render_preview_html;
-pub use range::ByteRange;
+pub use range::{ByteRange, utf16_to_utf8_offset};
 pub use trivia::{CodeFenceStyle, LineEnding, ListMarkerStyle, SourceTrivia};
 
 #[cfg(test)]

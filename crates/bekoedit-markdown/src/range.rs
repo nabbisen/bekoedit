@@ -65,6 +65,31 @@ impl ByteRange {
     }
 }
 
+/// Converts a UTF-16 code-unit offset (as reported by browser JS APIs such
+/// as `selectionStart` / `selectionEnd`) to a UTF-8 byte position within
+/// `text`.
+///
+/// Returns `None` if `utf16_offset` falls in the middle of a surrogate pair
+/// or exceeds the text's UTF-16 length — both indicate a client-side bug.
+/// Callers must treat `None` as a safe no-op, never a panic.
+pub fn utf16_to_utf8_offset(text: &str, utf16_offset: usize) -> Option<usize> {
+    let mut byte_pos = 0usize;
+    let mut utf16_pos = 0usize;
+    for ch in text.chars() {
+        if utf16_pos == utf16_offset {
+            return Some(byte_pos);
+        }
+        // A surrogate pair spans 2 UTF-16 code units; if the offset lands
+        // inside one, it cannot be a valid boundary — return None.
+        if utf16_pos > utf16_offset {
+            return None;
+        }
+        utf16_pos += ch.len_utf16();
+        byte_pos += ch.len_utf8();
+    }
+    (utf16_pos == utf16_offset).then_some(byte_pos)
+}
+
 impl From<std::ops::Range<usize>> for ByteRange {
     fn from(r: std::ops::Range<usize>) -> Self {
         Self::new(r.start, r.end)

@@ -1,10 +1,10 @@
-# RFC-033: Full-Text Search
+# RFC-027: Table Editing Strategy
 
 **Project:** bekoedit  
-**Status:** Proposed (deferred: post-MVP / future evaluation)  
-**Track:** Future Evaluation  
-**Milestone:** M9  
-**Priority:** Low  
+**Status:** Implemented (v0.4.0, 2026-06-07)  
+**Track:** Post-MVP  
+**Milestone:** M8  
+**Priority:** Medium  
 **Date:** 2026-06-07  
 **Related documents:** `bekoedit-requirements-definition.md`, `bekoedit-external-design.md`, `bekoedit-rfc-roadmap.md`
 
@@ -12,28 +12,30 @@
 
 ## 1. Summary
 
-Evaluates workspace full-text search across Markdown files.
+Evaluates and designs safe approaches for Markdown table viewing and editing after MVP.
 
 ---
 
 ## 2. Motivation
 
-- Search is valuable for knowledge management but not required for editing MVP.
+- Tables are common in technical documents but hard to edit visually without rewriting formatting.
+- MVP should not be blocked by table complexity.
 
 ---
 
 ## 3. Goals
 
-- Design simple search first, index later if needed.
-- Respect ignore rules.
-- Show results with file path and snippet.
+- Classify simple vs complex tables.
+- Provide a safe table preview and optional raw editing.
+- Design a future visual table editor that preserves alignment where possible.
 
 ---
 
 ## 4. Non-Goals
 
-- Build a database-backed knowledge graph in MVP.
-- Search binary assets.
+- Implement table editing in MVP.
+- Normalize all tables.
+- Support every Markdown table extension.
 
 ---
 
@@ -53,21 +55,28 @@ All RFCs in this package inherit the following invariants unless explicitly amen
 
 ## 6. User-Facing Design
 
-- Search panel lists matches grouped by file.
+- Simple tables may later appear as editable grids. Complex tables remain raw islands with preview.
 
 ---
 
 ## 7. Data Model / Contracts
 
 ```rust
-struct SearchResult { path: PathBuf, line: usize, snippet: String }
+struct TableBlockModel {
+    source_range: ByteRange,
+    header: Vec<TableCell>,
+    rows: Vec<Vec<TableCell>>,
+    alignment: Vec<TableAlignment>,
+    preservation_policy: TablePreservationPolicy,
+}
 ```
 
 ---
 
 ## 8. Internal Design Notes
 
-- Start with on-demand search; evaluate indexed search later.
+- Begin with read-only rendered table plus raw island fallback.
+- Add golden tests for pipe escaping, alignment markers, and multiline limitations before visual editing.
 
 ---
 
@@ -141,7 +150,8 @@ Recommended source-preservation cases:
 
 ## 14. Acceptance Criteria
 
-- Search never mutates documents.
+- Future decision document chooses raw-only, simple-grid, or full-grid scope.
+- No table feature may rewrite unrelated document source.
 
 ---
 

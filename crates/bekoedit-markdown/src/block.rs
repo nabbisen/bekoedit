@@ -19,7 +19,10 @@ pub enum BlockKind {
     HorizontalRule,
     HtmlBlock,
     FrontMatter,
-    Table,
+    /// A simple NxM table where all cells are plain text (RFC-027).
+    SimpleTable,
+    /// A table with complex cells (merged, nested formatting, etc.).
+    ComplexTable,
     /// Anything the indexer does not positively recognize as safe.
     Unknown,
 }

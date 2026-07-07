@@ -6,6 +6,7 @@ pub mod explorer;
 pub mod form_mode;
 pub mod outline_panel;
 pub mod preview_mode;
+pub mod search_panel;
 pub mod settings_screen;
 pub mod split_mode;
 pub mod start_screen;
