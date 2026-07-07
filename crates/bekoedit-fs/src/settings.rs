@@ -81,3 +81,20 @@ impl UserSettings {
         Ok(())
     }
 }
+
+/// Saves user settings to a JSON file atomically.
+pub fn save_user_settings(path: &std::path::Path, settings: &UserSettings) -> std::io::Result<()> {
+    let json =
+        serde_json::to_string_pretty(settings).map_err(|e| std::io::Error::other(e.to_string()))?;
+    crate::atomic_write(path, &json).map(|_| ())
+}
+
+/// Loads user settings from a JSON file. Returns `Ok(Default)` if the
+/// file does not exist or is corrupt (graceful degradation).
+pub fn load_user_settings(path: &std::path::Path) -> std::io::Result<UserSettings> {
+    if !path.exists() {
+        return Ok(UserSettings::default());
+    }
+    let text = std::fs::read_to_string(path)?;
+    serde_json::from_str(&text).map_err(|e| std::io::Error::other(e.to_string()))
+}

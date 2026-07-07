@@ -3,6 +3,7 @@
 mod app;
 mod bridge;
 mod components;
+mod error_keys;
 mod i18n;
 mod settings;
 mod smoke_test;

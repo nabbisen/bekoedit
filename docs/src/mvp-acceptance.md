@@ -53,8 +53,14 @@ on the release candidate.
 
 - ✅ Switching modes does not alter the canonical Markdown source.
   *Evidence: mode switch only changes `Signal<EditorMode>` — no write path*
-- ⚠️ Text Mode correctly handles Japanese IME composition without garbling
-  multibyte text. *Requires manual verification on release candidate.*
+- ✅ Text Mode does not send partial composition text to Rust during CJK input.
+  `compositionstart` cancels the debounce timer; `compositionend` flushes
+  once composition is committed.
+  *Evidence: `editor.js` `compositionstart`/`compositionend` DOM event handlers;
+  CM6 bundle rebuilt 2026-06-07.*
+  *Note: functional IME behaviour still requires manual smoke-test on release
+  (no headless CJK keyboard available in CI). Mark the walkthrough item below
+  when complete.*
 - ✅ Form Mode sends only semantic commands; whole-document rewrite
   is impossible from Form Mode.
   *Evidence: `resolve_form_edit` only accepts `FormBlockEdit` variants*

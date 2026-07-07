@@ -304,3 +304,43 @@ Incremental parsing deferred until profiling demonstrates a need.
   `ConflictPending`) for clearer UI error messaging.
 
 [0.7.2]: https://github.com/nabbisen/bekoedit/releases/tag/v0.7.2
+
+## [0.8.0] - 2026-06-07
+
+### Added
+- **IME composition guard in CodeMirror 6** (RFC-011): `editor.js` now
+  tracks `compositionstart`/`compositionend` DOM events via
+  `EditorView.domEventHandlers`. The debounce timer is cancelled on
+  `compositionstart` and an immediate flush fires on `compositionend`.
+  Partial kana/hanzi strings are never sent to Rust during active
+  composition. CM6 bundle rebuilt.
+- **User-facing error messages** for all `StoreError` and `FileOpError`
+  variants: `error_keys.rs` maps each variant to an i18n key, including
+  OS-specific classification of permission-denied vs disk-full save
+  failures. Keys added in both EN and JA tables.
+- **Settings persistence helpers** (`bekoedit_fs::save_user_settings`,
+  `load_user_settings`): tested by `settings_persist_across_app_state_restart`.
+- **Recent-workspaces persistence test**: verifies `RecentWorkspaces`
+  serialises to disk and is readable by a fresh instance.
+- **Large workspace stress test**: 500 Markdown files in 20 subdirectories
+  scanned in < 2 s; ignore-directories test confirms `node_modules` and
+  `target` are excluded.
+- **Platform scripts**: `scripts/run-macos.sh` (removes quarantine attribute)
+  and `scripts/run-windows.ps1` (unblocks Zone.Identifier ADS) to help
+  users past unsigned-binary warnings on first launch.
+- **Production README**: GitHub badge, feature matrix, Quick Start with
+  platform-specific instructions, feature summary, design notes, and
+  link index. Replaces the earlier stub.
+- **Scroll-fraction reporter** in `editor.js`: CM6 scroll events send
+  `{type:"scrollFraction", fraction}` to the relay, enabling precise
+  Split Mode preview synchronisation.
+
+### Changed
+- `bekoedit-core/src/tests.rs` split into `tests/session_tests.rs`,
+  `tests/delete_tests.rs`, `tests/persistence_tests.rs`.
+- `bekoedit-fs/src/tests.rs` cleaned and deduplicated (346 ELOC — under
+  the 500 hard limit; further splitting noted for a future pass).
+- Acceptance checklist: IME item upgraded from ⚠️ to ✅ with code
+  evidence; manual walkthrough note retained.
+
+[0.8.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.8.0

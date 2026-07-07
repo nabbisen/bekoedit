@@ -1,84 +1,133 @@
 # bekoedit
 
-A source-preserving Markdown editor. Edit Markdown visually — headings,
-paragraphs, lists, tasks, and code as real form controls rendered in a Web
-DOM — while your raw Markdown text stays canonical, byte for byte.
+[![CI](https://github.com/nabbisen/bekoedit/actions/workflows/ci.yml/badge.svg)](https://github.com/nabbisen/bekoedit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-Built with Rust and [Dioxus](https://dioxuslabs.com/) Desktop on the
-OS-native WebView.
+**A source-preserving Markdown editor. Edit visually — your raw Markdown
+stays canonical, byte for byte.**
 
-## Why bekoedit
+Built with Rust + [Dioxus](https://dioxuslabs.com/) Desktop on the OS-native
+WebView. No Electron. No cloud. No data loss.
 
-Most visual Markdown editors convert your text into a rich-text model and
-serialize it back, normalizing your formatting along the way: list markers
-change, fences shrink, blank lines move. bekoedit refuses to do that.
+---
 
-- **Raw Markdown is the document.** Every visual surface is a disposable
-  projection of the text.
-- **Edits are minimal patches.** Changing a heading rewrites that heading's
-  bytes — nothing else. Your `*` lists stay `*`, your `~~~~` fences stay
-  `~~~~`, your CRLF stays CRLF.
-- **Unsafe regions become Raw Markdown Islands.** Front matter, HTML,
-  tables, nested lists, and anything ambiguous render as clearly labeled
-  raw-text regions instead of being lossily "understood".
-- **Rust owns the source.** The WebView UI sends semantic intent; UTF-8
-  byte ranges, file operations, and persistence never leave Rust.
+## Overview
 
-## Features (MVP)
+bekoedit (*from Japanese 逆 abekobe — two sides*) gives you two complementary
+ways to work on the same document:
 
-- Workspace explorer over a folder of Markdown files (create, rename,
-  delete to trash), with recent workspaces
-- Three modes over one canonical text: **Text** (raw source), **Form**
-  (visual block editing), **Preview** (sanitized rendering; document HTML
-  is escaped, scripts never run)
-- Debounced autosave with atomic writes, crash-recovery snapshots, and
-  external-change conflict resolution (keep mine / reload / save copy) —
-  neither version is ever lost silently
-- GUI internationalization (English and Japanese included)
+- **Text Mode** — raw Markdown in CodeMirror 6 with syntax highlighting
+- **Form Mode** — visual block editor that patches only the changed bytes
+- **Preview Mode** — rendered read-only view
+- **Split Mode** — text and preview side by side
 
-## Repository structure
+The invariant that holds across all modes:
 
-```
-crates/
-  bekoedit-markdown     parsing index, block identity, source patches,
-                        form projection, raw islands, preview rendering
-  bekoedit-fs           workspace scoping, file tree, safe file ops,
-                        atomic save, recovery snapshots, recents
-  bekoedit-core         document sessions, save lifecycle, conflicts,
-                        application state store
-  bekoedit-ui-contract  versioned command/event payloads for the
-                        WebView boundary
-  bekoedit-app          Dioxus Desktop shell (binary: `bekoedit`)
-docs/                   mdBook-compatible documentation (docs/src)
-rfcs/                   design RFCs (see rfcs/README.md)
-ARCHITECTURE.md         architectural invariants (normative summary)
-```
+> **The raw Markdown file is canonical. Every visual surface is a projection.
+> Every edit is a minimal source patch.**
 
-## Building
+---
 
-Rust 1.85+ (edition 2024). Headless crates build everywhere:
+## Why not other editors
 
+| | bekoedit | Raw-text editor | WYSIWYG editor |
+|--|---------|-----------------|----------------|
+| Source preserved exactly | ✅ | ✅ | ❌ rewrites on save |
+| Visual editing | ✅ Form Mode | ❌ | ✅ |
+| Local files, no account | ✅ | ✅ | varies |
+| Lightweight (no Electron) | ✅ | ✅ | usually ❌ |
+| CJK / multibyte safe | ✅ tested | ✅ | varies |
+
+---
+
+## Quick Start
+
+Download the latest release for your platform from
+[Releases](https://github.com/nabbisen/bekoedit/releases).
+
+**macOS** — binary is unsigned; run once to clear the quarantine flag:
 ```sh
-cargo test            # markdown, fs, core, ui-contract (default members)
+chmod +x scripts/run-macos.sh && ./scripts/run-macos.sh ./bekoedit
+./bekoedit
 ```
 
-The desktop app additionally needs the platform WebView. On Linux:
+**Windows** — unblock in PowerShell once:
+```powershell
+.\scripts\run-windows.ps1
+.\bekoedit.exe
+```
 
+**Linux** — no extra step:
 ```sh
-sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev
-cargo run -p bekoedit-app
+chmod +x bekoedit && ./bekoedit
 ```
 
-Windows uses WebView2 (preinstalled on Windows 11); macOS uses WKWebView.
+**Build from source** (requires Rust stable + Node.js ≥ 20):
+```sh
+git clone https://github.com/nabbisen/bekoedit
+cd bekoedit && cargo run -p bekoedit-app
+```
 
-## Development
+---
 
-- `cargo fmt --all` and `cargo clippy --workspace` must pass (CI enforces)
-- Tests live in `tests.rs` submodules next to the code under test
-- Source files target ≤300 effective lines
-- Design changes go through the RFC process: see
-  `rfcs/done/000-rfc-lifecycle-policy.md`
+## Features
+
+**Source-preserving patches** — Form Mode edits touch only the target byte
+range. CRLF endings, tilde fences, non-1 ordered lists, reference links,
+front matter, HTML blocks, and GFM tables survive round-trips unchanged.
+Unsupported structures become **Raw Markdown Islands** — never silently
+normalized.
+
+**Form Mode** — paragraphs, headings, bullet/ordered/task lists, blockquotes,
+fenced code blocks, images, inline links, simple GFM tables. Bold / Italic /
+Code / Link toolbar. Unsupported structures shown as editable raw islands.
+
+**Text Mode** — CodeMirror 6 with syntax highlighting, CJK/IME
+composition-safe (sends to Rust only after `compositionend`), find-in-file,
+undo/redo.
+
+**Workspace & files** — local folder tree, create/rename/delete (trash by
+default), `.git`/`node_modules`/`target` ignored, Git status badges (M/A/D/?).
+
+**Safe saves** — atomic writes (temp-file + rename), autosave debounce,
+external-modification detection, conflict resolution, crash-recovery snapshots,
+local document history (last 50 saves per document).
+
+**Navigation** — outline panel with section move, backlinks, full-text search,
+section-reorder shortcuts.
+
+**Accessibility** — keyboard-only workflows, `role="tree"` / `role="treeitem"`,
+ARIA live regions for save status, EN + JA interface.
+
+**Export & templates** — one-click HTML export, workspace templates, math block
+display (LaTeX source; KaTeX-ready).
+
+---
+
+## Design Notes
+
+Five Rust crates with strict dependency ordering — no crate depends on one
+above it. The WebView boundary is versioned: JS sends compact JSON intent;
+Rust validates, resolves byte ranges, applies patches, persists.
+
+**Test coverage:** 129 tests covering adversarial documents (CRLF + emoji +
+tilde fences + non-1 ordered lists + reference links + front matter + HTML +
+tables), UTF-8 boundary safety, stale-revision rejection, raw island
+preservation, atomic save, conflict detection, and dirty-document protection.
+
+---
+
+## More Detail
+
+[Getting Started](docs/src/getting-started.md) ·
+[Editing Modes](docs/src/editing-modes.md) ·
+[Source Preservation](docs/src/source-preservation.md) ·
+[Architecture](docs/src/architecture.md) ·
+[Contributing](CONTRIBUTING.md) ·
+[Distribution](docs/src/distribution.md)
+
+---
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Apache-2.0 — see [LICENSE](LICENSE). Copyright © nabbisen.

@@ -1,23 +1,27 @@
-//! Tests for filesystem services, validating RFC-003/004/005/007
-//! acceptance criteria and the SEC-001/002 path safety rules.
+//! bekoedit-fs test suite.
+
+use crate::atomic::{FileFingerprint, atomic_write};
+use crate::paths::is_markdown_path;
+use crate::recent::RecentWorkspaces;
+use crate::recovery::{RecoverySnapshot, RecoveryStore};
+
+fn temp_workspace() -> tempfile::TempDir {
+    tempfile::tempdir().unwrap()
+}
+
+//  Tests for filesystem services, validating RFC-003/004/005/007
+//  acceptance criteria and the SEC-001/002 path safety rules.
 
 use std::path::Path;
 
-use crate::atomic::{FileFingerprint, atomic_write};
 use crate::ops::{
     DeleteStrategy, FileOpError, create_folder, create_markdown_file, delete_path, rename_path,
 };
 use crate::paths::{
     PathError, ensure_markdown_extension, resolve_in_workspace, sanitize_file_name,
 };
-use crate::recent::RecentWorkspaces;
-use crate::recovery::{RecoverySnapshot, RecoveryStore};
 use crate::tree::{FileNodeKind, FileTreeIndex};
 use crate::workspace::{Workspace, WorkspaceError};
-
-fn temp_workspace() -> tempfile::TempDir {
-    tempfile::tempdir().expect("tempdir")
-}
 
 // --- paths (SEC-001/002) ---
 
@@ -149,8 +153,6 @@ fn ops_reject_traversal() {
         FileOpError::Path(PathError::ParentTraversal)
     ));
 }
-
-// --- atomic save + fingerprints (RFC-007 / RFC-008) ---
 
 #[test]
 fn atomic_write_round_trips_and_fingerprints_detect_change() {
@@ -344,3 +346,74 @@ fn history_returns_empty_for_unknown_path() {
     let entries = store.list(std::path::Path::new("/ws/unknown.md"));
     assert!(entries.is_empty());
 }
+
+// --- Large workspace stress test ---
+
+#[test]
+fn file_tree_scans_500_markdown_files_without_panic() {
+    let dir = temp_workspace();
+    // Create 500 Markdown files in 20 subdirectories (25 per dir).
+    for subdir in 0..20 {
+        let d = dir.path().join(format!("dir{subdir:02}"));
+        std::fs::create_dir_all(&d).unwrap();
+        for file in 0..25 {
+            std::fs::write(
+                d.join(format!("note{file:03}.md")),
+                format!("# Note {subdir}-{file}\n\nContent.\n"),
+            )
+            .unwrap();
+        }
+    }
+    let start = std::time::Instant::now();
+    let tree = crate::tree::FileTreeIndex::scan(dir.path(), &[]);
+    let elapsed = start.elapsed();
+    // nodes includes both files and directories: 500 files + 20 dirs = 520
+    let file_count = tree
+        .nodes
+        .iter()
+        .filter(|n| n.kind == crate::tree::FileNodeKind::MarkdownFile)
+        .count();
+    assert_eq!(
+        file_count,
+        500,
+        "should find all 500 files; total nodes: {}",
+        tree.nodes.len()
+    );
+    assert!(
+        elapsed.as_millis() < 2000,
+        "scan of 500 files took {} ms — should be under 2 s",
+        elapsed.as_millis()
+    );
+}
+
+#[test]
+fn workspace_scan_ignores_node_modules_and_target() {
+    let dir = temp_workspace();
+    std::fs::create_dir_all(dir.path().join("node_modules").join("pkg")).unwrap();
+    std::fs::write(
+        dir.path()
+            .join("node_modules")
+            .join("pkg")
+            .join("readme.md"),
+        "",
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.path().join("target").join("debug")).unwrap();
+    std::fs::write(dir.path().join("target").join("debug").join("notes.md"), "").unwrap();
+    std::fs::write(dir.path().join("real.md"), "# Real\n").unwrap();
+    let tree = crate::tree::FileTreeIndex::scan(dir.path(), &[]);
+    assert_eq!(
+        tree.nodes.len(),
+        1,
+        "only the non-ignored file should appear"
+    );
+    assert_eq!(tree.nodes[0].display_name, "real.md");
+}
+
+// --- RFC-034: backlinks ---
+
+// --- RFC-037: templates ---
+
+// --- Local document history ---
+
+// --- Large workspace stress test ---

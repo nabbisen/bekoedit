@@ -37,7 +37,7 @@ pub use paths::{PathError, resolve_in_workspace, sanitize_file_name};
 pub use recent::{RecentWorkspaceEntry, RecentWorkspaces};
 pub use recovery::{RecoverySnapshot, RecoveryStore};
 pub use search::{SearchMatch, search_workspace};
-pub use settings::UserSettings;
+pub use settings::{UserSettings, load_user_settings, save_user_settings};
 pub use templates::{WorkspaceTemplate, create_from_template, list_templates};
 pub use tree::{FileNodeKind, FileTreeIndex, FileTreeNode};
 pub use watcher::{FsWatcher, WatchEvent};
