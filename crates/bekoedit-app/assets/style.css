@@ -368,3 +368,36 @@ pre.math-block code { font-style: italic; color: #444; }
 .recent-path { font-size: .76em; word-break: break-all; margin-top: 2px; }
 .file-name.untitled { font-style: italic; color: var(--muted); }
 .save-as-btn { font-size: .78em; padding: 2px 6px; margin-left: 6px; }
+
+/* --- persistent app bar --- */
+.app-bar {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-bottom: 1px solid var(--line);
+  background: var(--surface); height: 36px; flex-shrink: 0;
+}
+.app-bar-logo {
+  font-weight: 700; font-size: .9em; border: none; background: none;
+  cursor: pointer; padding: 4px 8px; border-radius: 5px; color: var(--fg);
+}
+.app-bar-logo:hover { background: var(--hover-bg); }
+.app-bar-btn {
+  padding: 3px 8px; font-size: .82em; border-radius: 5px;
+  border: 1px solid transparent; background: transparent; cursor: pointer;
+}
+.app-bar-btn:hover { border-color: var(--line); background: var(--hover-bg); }
+.app-bar-btn.active { border-color: var(--accent); color: var(--accent); }
+.app-bar-spacer { flex: 1; }
+.app-bar-menu-wrap { position: relative; }
+.app-bar-dropdown {
+  position: absolute; top: calc(100% + 4px); left: 0; min-width: 200px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  padding: 4px; z-index: 200;
+}
+.dropdown-item {
+  display: block; width: 100%; text-align: left; padding: 7px 10px;
+  border: none; background: transparent; border-radius: 5px;
+  cursor: pointer; font-size: .88em;
+}
+.dropdown-item:hover { background: var(--hover-bg); }
+.dropdown-sep { border: none; border-top: 1px solid var(--line); margin: 4px 0; }

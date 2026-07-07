@@ -1,0 +1,8 @@
+# Run bekoedit from the workspace root with just `cargo run`.
+[alias]
+run-app = "run -p bekoedit-app"
+
+# Make `cargo run` default to the app crate so users don't need -p.
+[build]
+# No override needed — set CARGO_TARGET_DIR globally.
+

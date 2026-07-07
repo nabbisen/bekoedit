@@ -181,5 +181,15 @@ function setDoc(text, docId, revision) {
 
 function focus() { view?.focus(); }
 
-window.__bk = { init, setDoc, focus, get _view() { return view; } };
-export { init, setDoc, focus };
+function undo() {
+    if (!view) return;
+    import("@codemirror/commands").then(({ undo: _undo }) => _undo(view));
+}
+
+function redo() {
+    if (!view) return;
+    import("@codemirror/commands").then(({ redo: _redo }) => _redo(view));
+}
+
+window.__bk = { init, setDoc, focus, undo, redo, get _view() { return view; } };
+export { init, setDoc, focus, undo, redo };

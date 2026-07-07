@@ -11,6 +11,7 @@ use bekoedit_fs::{FsWatcher, WatchEvent};
 use bekoedit_ui_contract::EditorMode;
 
 use crate::components::{
+    app_bar::AppBar,
     backlinks_panel::BacklinksPanel,
     conflict_banner::ConflictBanner,
     editor_header::EditorHeader,
@@ -136,6 +137,7 @@ pub fn App() -> Element {
         document::Link { rel: "stylesheet", href: STYLE }
         document::Script { src: SHORTCUTS_JS }
         ToastLayer {}
+        AppBar {}
         if settings_open {
             SettingsScreen {}
         } else if workspace_open {

@@ -26,6 +26,7 @@ pub fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
+#[allow(dead_code)]
 pub fn now_secs() -> u64 {
     now_ms() / 1000
 }

@@ -325,4 +325,14 @@ impl AppState {
         // Write using the normal save path
         self.save_now(now_ms)
     }
+    /// Closes the current workspace and clears the session, returning to the
+    /// start screen. Dirty documents are not saved automatically.
+    pub fn close_workspace(&mut self) {
+        self.workspace = None;
+        self.tree = bekoedit_fs::FileTreeIndex::default();
+        self.session = None;
+        self.save_state = crate::save::SaveState::Clean;
+        self.conflict = crate::conflict::ConflictState::None;
+        self.autosave.clear();
+    }
 }

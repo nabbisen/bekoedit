@@ -131,3 +131,11 @@ policy · RFC-039 plugin system · RFC-040 sync & collaboration.
 **RFC-032 evaluation result:** full-reparse of a 240 KB document runs in 3.57 ms (release). Incremental parsing deferred — threshold not approached.
 
 **Remaining proposed:** RFC-031 (decided), RFC-032 (deferred), RFC-039/040 (future evaluation only).
+
+## Implemented — v0.9.0–v0.10.1 (`done/`)
+
+| RFC | Title | Notes |
+|-----|-------|-------|
+| RFC-002 | Runtime architecture and WebView boundary | Typed versioned payloads, eval relay with auto-restart (v0.9.0), rfd native dialogs replacing text-path input (v0.10.0) |
+
+**All MVP RFCs now implemented.** Remaining proposed: RFC-031 (decided), RFC-032 (deferred), RFC-039/040 (future evaluation only).

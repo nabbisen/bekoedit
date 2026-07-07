@@ -432,3 +432,59 @@ will resolve when those upstream crates release compatible versions.
 - `StoreError::Untitled` variant
 
 [0.10.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.10.0
+
+## [0.10.1] - 2026-06-07
+
+### Changed
+- **ELOC compliance**: `bekoedit-fs/src/tests.rs` (346 ELOC) split into
+  `tests/file_system_tests.rs` (116 ELOC), `tests/persistence_tests.rs`
+  (222 ELOC), and `tests/adv_tests.rs` (145 ELOC). No file now exceeds
+  300 ELOC; the 500 hard limit has no violations.
+- **RFC-002 marked Implemented**: the runtime architecture and WebView
+  boundary RFC is complete. All its requirements are satisfied: typed
+  `ui-contract` crate with versioned payloads, eval relay with auto-restart,
+  `bridge::relay_js` for consistent setup, and `rfd` native dialogs
+  replacing the manual text-path entry at startup.
+- **Test count**: 131 tests (2 new fs persistence tests added in the split).
+- RFC-002 moved from `rfcs/proposed/` to `rfcs/done/`.
+
+[0.10.1]: https://github.com/nabbisen/bekoedit/releases/tag/v0.10.1
+
+## [0.11.0] - 2026-06-07
+
+### Fixed
+- **Window menu did not work** — `dioxus::desktop::Config::with_menu(None)`
+  suppresses the OS-provided native menu bar (macOS "Window" menu, etc.).
+  bekoedit now manages all menus through its own UI.
+- **`cargo run` fails from workspace root** — `.cargo/config.toml` now defines
+  a `run-app` alias: `cargo run-app` launches bekoedit from any directory
+  in the workspace. The underlying reason (`cargo run` requires `-p` in a
+  virtual workspace) is documented in CONTRIBUTING.md.
+- **Editor never started when a file was selected** — two root causes:
+  1. `DirectoryTree::new()` starts with the root node uncollapsed but
+     *not loaded* (`is_expanded: false, is_loaded: false`). A `use_effect`
+     hook now triggers `on_toggled(root)` immediately on mount so the root
+     directory's children appear without user interaction.
+  2. The `Selected` event handler silently dropped errors from
+     `open_document`. Errors are now surfaced as toasts.
+  Additionally: only `.md`/`.markdown` files were opened; all files now
+  open (non-Markdown files open in Text Mode).
+- **Duplicate Settings / Language controls in the body** — the Settings
+  gear and Language toggle that were duplicated inside `EditorHeader` are
+  removed. Both live exclusively in the new `AppBar`.
+
+### Added
+- **Persistent `AppBar`** (always visible, all screens):
+  - *bekoedit* logo — click to call `close_workspace()` and return to the
+    start screen.
+  - *File* dropdown menu — "Open Folder…", "New File", "Close Workspace".
+  - Language toggle — EN ↔ JA.
+  - Settings gear.
+- **Undo ↩ / Redo ↪ buttons** in `EditorHeader` — call
+  `window.__bk.undo()` / `window.__bk.redo()` via `document::eval`.
+  `editor.js` exports `undo()` and `redo()` on `window.__bk`; the CM6
+  bundle is rebuilt.
+- **`AppState::close_workspace()`** — clears workspace, tree, and session;
+  resets save state and autosave; returns the UI to the start screen.
+
+[0.11.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.11.0

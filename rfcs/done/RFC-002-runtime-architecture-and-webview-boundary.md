@@ -1,7 +1,7 @@
 # RFC-002: Runtime Architecture and WebView Boundary
 
 **Project:** bekoedit  
-**Status:** Proposed  
+**Status:** Implemented (v0.9.0 bridge hardening, v0.10.0 rfd integration, 2026-06-07)  
 **Track:** MVP Critical  
 **Milestone:** M0  
 **Priority:** Critical  

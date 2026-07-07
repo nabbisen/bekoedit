@@ -12,8 +12,6 @@ use crate::state::now_ms;
 #[component]
 pub fn EditorHeader() -> Element {
     let mut state = use_context::<Signal<AppState>>();
-    let mut lang_sig = use_context::<Signal<Lang>>();
-    let lang = *lang_sig.read();
     let mut mode_sig = use_context::<Signal<EditorMode>>();
     let mode = *mode_sig.read();
     let mut collapsed = use_context::<Signal<bool>>(); // explorer
@@ -21,8 +19,8 @@ pub fn EditorHeader() -> Element {
     let mut search_open = use_context::<Signal<bool>>();
     let mut backlinks_open = use_context::<Signal<bool>>();
     let mut history_open = use_context::<Signal<bool>>();
-    let mut settings_open = use_context::<Signal<bool>>();
     let mut toasts = use_context::<Signal<Vec<crate::components::toast::Toast>>>();
+    let ui_lang = *use_context::<Signal<Lang>>().read();
 
     let doc_name = state
         .read()
@@ -37,12 +35,12 @@ pub fn EditorHeader() -> Element {
         header {
             class: "editor-header",
             role: "toolbar",
-            aria_label: tr(lang, "editor.toolbar_label"),
+            aria_label: tr(ui_lang, "editor.toolbar_label"),
 
             // Explorer toggle
             button {
                 class: "icon-btn",
-                aria_label: tr(lang, "explorer.toggle"),
+                aria_label: tr(ui_lang, "explorer.toggle"),
                 aria_pressed: "{*collapsed.read()}",
                 onclick: move |_| { let c = *collapsed.read(); collapsed.set(!c); },
                 "☰"
@@ -52,11 +50,11 @@ pub fn EditorHeader() -> Element {
             span {
                 class: "doc-name", aria_live: "polite",
                 "{doc_name}"
-                if dirty { span { class: "dirty-dot", aria_label: tr(lang, "save.dirty"), "●" } }
+                if dirty { span { class: "dirty-dot", aria_label: tr(ui_lang, "save.dirty"), "●" } }
             }
 
             // Mode switch
-            nav { class: "mode-switch", role: "tablist", aria_label: tr(lang, "editor.mode_label"),
+            nav { class: "mode-switch", role: "tablist", aria_label: tr(ui_lang, "editor.mode_label"),
                 for (target, key) in [
                     (EditorMode::Text,    "mode.text"),
                     (EditorMode::Form,    "mode.form"),
@@ -68,7 +66,7 @@ pub fn EditorHeader() -> Element {
                         class: if mode == target { "mode active" } else { "mode" },
                         aria_selected: "{mode == target}",
                         onclick: move |_| mode_sig.set(target),
-                        {tr(lang, key)}
+                        {tr(ui_lang, key)}
                     }
                 }
             }
@@ -77,7 +75,7 @@ pub fn EditorHeader() -> Element {
                 // Search toggle (RFC-033)
                 button {
                     class: if *search_open.read() { "icon-btn active" } else { "icon-btn" },
-                    aria_label: tr(lang, "search.toggle"),
+                    aria_label: tr(ui_lang, "search.toggle"),
                     aria_pressed: "{*search_open.read()}",
                     onclick: move |_| {
                         let o = *search_open.read();
@@ -90,7 +88,7 @@ pub fn EditorHeader() -> Element {
                 if has_doc {
                     button {
                         class: if *backlinks_open.read() { "icon-btn active" } else { "icon-btn" },
-                        aria_label: tr(lang, "backlinks.title"),
+                        aria_label: tr(ui_lang, "backlinks.title"),
                         aria_pressed: "{*backlinks_open.read()}",
                         onclick: move |_| {
                             let o = *backlinks_open.read();
@@ -104,7 +102,7 @@ pub fn EditorHeader() -> Element {
                 if has_doc {
                     button {
                         class: if *history_open.read() { "icon-btn active" } else { "icon-btn" },
-                        aria_label: tr(lang, "history.title"),
+                        aria_label: tr(ui_lang, "history.title"),
                         aria_pressed: "{*history_open.read()}",
                         onclick: move |_| {
                             let o = *history_open.read();
@@ -122,7 +120,7 @@ pub fn EditorHeader() -> Element {
                 if has_doc {
                     button {
                         class: if *outline_open.read() { "icon-btn active" } else { "icon-btn" },
-                        aria_label: tr(lang, "outline.toggle"),
+                        aria_label: tr(ui_lang, "outline.toggle"),
                         aria_pressed: "{*outline_open.read()}",
                         onclick: move |_| {
                             let o = *outline_open.read();
@@ -135,13 +133,13 @@ pub fn EditorHeader() -> Element {
                 // Export to HTML (RFC-035)
                 if has_doc {
                     button {
-                        aria_label: tr(lang, "export.html"),
+                        aria_label: tr(ui_lang, "export.html"),
                         onclick: move |_| {
                             if let Some(sess) = state.read().session.as_ref() {
                                 let export_path = sess.path.with_extension("html");
                                 match state.read().export_html(&export_path) {
                                     Ok(()) => push_toast(&mut toasts, ToastKind::Success,
-                                        format!("{} → {}", tr(lang, "export.html"),
+                                        format!("{} → {}", tr(ui_lang, "export.html"),
                                                 export_path.file_name()
                                                     .map(|n| n.to_string_lossy().into_owned())
                                                     .unwrap_or_default())),
@@ -149,34 +147,42 @@ pub fn EditorHeader() -> Element {
                                 }
                             }
                         },
-                        {tr(lang, "export.html")}
+                        {tr(ui_lang, "export.html")}
                     }
                 }
                 // Save
                 if has_doc {
                     button {
-                        class: "primary", aria_label: tr(lang, "editor.save"),
+                        class: "primary", aria_label: tr(ui_lang, "editor.save"),
                         onclick: move |_| {
                             match state.write().save_now(now_ms()) {
-                                Ok(())  => push_toast(&mut toasts, ToastKind::Success, tr(lang, "save.saved")),
+                                Ok(())  => push_toast(&mut toasts, ToastKind::Success, tr(ui_lang, "save.saved")),
                                 Err(e)  => push_toast(&mut toasts, ToastKind::Error, e.to_string()),
                             }
                         },
-                        {tr(lang, "editor.save")}
+                        {tr(ui_lang, "editor.save")}
                     }
                 }
-                // Settings
+                // Undo / Redo (Text Mode only; CM6 history handles state)
                 button {
-                    aria_label: tr(lang, "settings.title"),
-                    onclick: move |_| settings_open.set(true),
-                    "⚙"
+                    class: "icon-btn",
+                    aria_label: "Undo",
+                    title: "Undo (Ctrl+Z)",
+                    onclick: move |_| {
+                        document::eval("window.__bk?.undo()");
+                    },
+                    "↩"
                 }
-                // Language switch
                 button {
-                    aria_label: tr(lang, "lang.switch"),
-                    onclick: move |_| lang_sig.set(lang.toggle()),
-                    {tr(lang, "lang.switch")}
+                    class: "icon-btn",
+                    aria_label: "Redo",
+                    title: "Redo (Ctrl+Shift+Z)",
+                    onclick: move |_| {
+                        document::eval("window.__bk?.redo()");
+                    },
+                    "↪"
                 }
+
             }
         }
     }

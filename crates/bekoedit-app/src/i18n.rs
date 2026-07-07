@@ -14,6 +14,7 @@ pub enum Lang {
 }
 
 impl Lang {
+    #[allow(dead_code)]
     pub fn toggle(self) -> Self {
         match self {
             Lang::En => Lang::Ja,
