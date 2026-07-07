@@ -1,6 +1,6 @@
 [package]
 name        = "bekoedit-markdown"
-description = "Markdown parser index, block identity, raw islands, source patch engine, and form-edit resolution for bekoedit"
+description = "Markdown parser index, block identity, raw islands, source patch engine, and form-edit resolution for bekoedit."
 readme      = "README.md"
 version.workspace       = true
 edition.workspace       = true
