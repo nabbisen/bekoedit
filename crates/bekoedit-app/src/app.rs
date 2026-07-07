@@ -15,6 +15,7 @@ use crate::components::{
     editor_header::EditorHeader,
     explorer::Explorer,
     form_mode::FormMode,
+    history_panel::HistoryPanel,
     outline_panel::OutlinePanel,
     preview_mode::PreviewMode,
     search_panel::SearchPanel,
@@ -51,6 +52,7 @@ pub fn App() -> Element {
     use_context_provider(|| Signal::new(false_val())); // outline panel open
     use_context_provider(|| Signal::new(false_val())); // search panel open
     use_context_provider(|| Signal::new(false_val())); // backlinks panel open
+    use_context_provider(|| Signal::new(false_val())); // history panel open
     use_context_provider(|| Signal::new(Vec::<Toast>::new()));
 
     // Background: native fs watcher + autosave + external-change poll.
@@ -154,6 +156,7 @@ fn MainShell() -> Element {
     let outline_open = use_context::<Signal<bool>>(); // 3rd bool
     let search_open = use_context::<Signal<bool>>(); // 4th
     let backlinks_open = use_context::<Signal<bool>>(); // 5th
+    let history_open = use_context::<Signal<bool>>(); // 6th
     let has_doc = state.read().session.is_some();
 
     rsx! {
@@ -177,7 +180,9 @@ fn MainShell() -> Element {
                         }
                     }
                     // Right panels (mutually exclusive or stacked)
-                    if *search_open.read() {
+                    if *history_open.read() && has_doc {
+                        HistoryPanel {}
+                    } else if *search_open.read() {
                         SearchPanel {}
                     } else if *backlinks_open.read() && has_doc {
                         BacklinksPanel {}

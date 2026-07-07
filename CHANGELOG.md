@@ -195,3 +195,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `move_section_down`, `move_section_up`, `section_range`.
 
 [0.5.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.5.0
+
+## [0.6.0] - 2026-06-07
+
+### Added
+- **Math rendering in preview** (RFC-038): `$inline$` and `$$block$$`
+  LaTeX expressions are rendered as styled `<code class="math-inline">` /
+  `<pre class="math-block">` elements showing the LaTeX source. KaTeX can
+  be layered on top progressively once bundled without CDN dependency.
+- **Footnote island classification** (RFC-038): `[^label]: text` footnote
+  definitions are now indexed as `RawIslandType::Footnote` (previously
+  `UnknownExtension`). The i18n label key `island.footnote` is included in
+  both EN and JA tables.
+- **Local document history**: on every successful save, a timestamped
+  snapshot is recorded in the platform app-data directory (max 50 per
+  document, oldest pruned automatically). The ⏱ History panel browses
+  snapshots newest-first; "Restore" loads any snapshot as a new dirty
+  edit without writing to disk.
+- **RFC-032 performance benchmark**: `crates/bekoedit-markdown/benches/
+  reparse.rs` measures full-reparse latency on a 240 KB synthetic document.
+  Result: **3.57 ms/run** in release mode — the 50 ms threshold is not
+  approached, confirming full-reparse-after-mutation is adequate.
+
+### Changed
+- `store.rs` split into six focused files: `store.rs` (core: 246 ELOC),
+  `store_file_ops.rs`, `store_exports.rs`, `store_sections.rs`,
+  `store_templates.rs`, `store_history.rs`. Every file is under 300 ELOC.
+- `AppState` gains `list_history()` and `restore_history()`.
+- `bekoedit_fs` exports `HistoryEntry` and `HistoryStore`.
+- Preview CSS: `.math-inline` and `.math-block` styling added.
+- History panel CSS: `.history-list`, `.history-entry`, `.history-time`.
+
+### RFC-032 evaluation
+Full-reparse-after-mutation confirmed adequate for current document sizes.
+Incremental parsing deferred until profiling demonstrates a need.
+
+[0.6.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.6.0

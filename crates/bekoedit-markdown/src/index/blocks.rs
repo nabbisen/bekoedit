@@ -124,7 +124,7 @@ fn classify(
             .island(RawIslandType::HtmlBlock, "HTML block"),
         Tag::Table(_) => classify_table(subtree, start, end),
         Tag::FootnoteDefinition(_) => PendingBlock::new(BlockKind::Unknown, start, end)
-            .island(RawIslandType::UnknownExtension, "footnote definition"),
+            .island(RawIslandType::Footnote, "footnote definition"),
         _ => PendingBlock::new(BlockKind::Unknown, start, end)
             .island(RawIslandType::UnknownExtension, "unsupported block"),
     }

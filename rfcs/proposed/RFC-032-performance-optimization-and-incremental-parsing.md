@@ -169,3 +169,8 @@ Recommended source-preservation cases:
 - Does the feature introduce any new source-preservation risk not covered by existing golden tests?
 - Should any part of this RFC be split before implementation to reduce review risk?
 - What telemetry-free debugging information should be available in bug reports?
+
+
+## Evaluation result (v0.6.0)
+
+Benchmark: full-reparse of a 240 KB synthetic document (1000 sections, code blocks, lists) runs in **3.57 ms** in release mode on the CI host. The 50 ms interactive threshold is not approached. Full-reparse-after-mutation is adequate; incremental parsing deferred until profiling demonstrates a real need.

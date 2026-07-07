@@ -11,3 +11,7 @@ repository.workspace = true
 pulldown-cmark = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
+
+[[bench]]
+name = "reparse"
+harness = false

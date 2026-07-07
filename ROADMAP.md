@@ -5,7 +5,6 @@ Authoritative sequencing lives in `rfcs/`. This file is the orientation view.
 
 ## Remaining proposed RFCs
 
-- **RFC-038** — advanced Markdown extension policy (GFM footnotes, math rendering, custom directives)
 - **RFC-031** — decided (no Lexical; see rfcs/proposed/)
 - **RFC-032** — deferred until profiling shows need
 - **RFC-039/040** — future evaluation only
@@ -28,6 +27,16 @@ formatting, Lexical integration decision, incremental parsing.
 ## Future evaluation (RFCs 033–040)
 Full-text search, backlinks, export profiles, Git awareness, workspace
 templates, extension policy, plugin system, sync/collaboration.
+
+## Remaining proposed RFCs
+- **RFC-031**: Lexical decision (decided: no adoption — see rfcs/proposed/)
+- **RFC-032**: Incremental parsing (deferred — profiling shows no need yet)
+- **RFC-039/040**: Plugin system, sync/collaboration — future evaluation only
+
+**v1.0.0 requires explicit maintainer sign-off on the acceptance checklist.**
+
+## Shipped — v0.6.0 (2026-06-07)
+Math/footnote extension policy (RFC-038), local document history, RFC-032 performance evaluation (3.57 ms/reparse — threshold not approached), store.rs split (all files ≤300 ELOC).
 
 ## Shipped — v0.5.0 (2026-06-07)
 Section move (RFC-029), backlinks (RFC-034), Git awareness (RFC-036), workspace templates (RFC-037).

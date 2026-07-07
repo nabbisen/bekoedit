@@ -42,3 +42,49 @@ fn task_lists_render_as_checkboxes() {
     let html = render_preview_html("- [x] done\n- [ ] todo\n");
     assert!(html.contains("checkbox"));
 }
+
+// --- RFC-038: extension rendering ---
+
+#[test]
+fn math_inline_is_shown_as_code_not_executed() {
+    let html = render_preview_html("The formula $E = mc^2$ is famous.\n");
+    assert!(
+        html.contains("class=\"math-inline\""),
+        "math-inline class missing"
+    );
+    assert!(html.contains("E = mc^2"), "math source not present");
+    // Must not contain raw $ markers in a way that looks unprocessed.
+    assert!(
+        !html.contains("$E = mc^2$"),
+        "raw math dollars should be rendered"
+    );
+}
+
+#[test]
+fn math_block_is_shown_as_preformatted_code() {
+    let html = render_preview_html("$$\nE = mc^2\n$$\n");
+    assert!(html.contains("math-block"), "math-block class missing");
+    assert!(html.contains("E = mc^2"));
+}
+
+#[test]
+fn strikethrough_renders_in_preview() {
+    let html = render_preview_html("~~deleted text~~\n");
+    assert!(
+        html.contains("<del>"),
+        "strikethrough should render as <del>"
+    );
+}
+
+#[test]
+fn footnote_definition_is_classified_as_island() {
+    use crate::island::RawIslandType;
+    let doc = "See note[^1].\n\n[^1]: The footnote text.\n";
+    let idx = crate::index::MarkdownIndex::build(doc, 1);
+    assert!(
+        idx.raw_islands
+            .iter()
+            .any(|i| i.island_type == RawIslandType::Footnote),
+        "footnote definition should become a Footnote island"
+    );
+}

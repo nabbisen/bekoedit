@@ -292,3 +292,55 @@ fn create_from_template_creates_prefilled_file() {
         "# My Note\n\n"
     );
 }
+
+// --- Local document history ---
+
+#[test]
+fn history_records_and_lists_entries() {
+    let dir = temp_workspace();
+    let store = crate::history::HistoryStore::at(dir.path().join("history"));
+    let entry = crate::history::HistoryEntry {
+        original_path: std::path::PathBuf::from("/ws/doc.md"),
+        text: "# Version 1\n".to_string(),
+        saved_at_secs: 1000,
+        revision: 3,
+    };
+    store.record(&entry).unwrap();
+    let entries = store.list(std::path::Path::new("/ws/doc.md"));
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].revision, 3);
+}
+
+#[test]
+fn history_caps_at_max_and_prunes_oldest() {
+    let dir = temp_workspace();
+    let store = crate::history::HistoryStore::at(dir.path().join("history"));
+    let path = std::path::PathBuf::from("/ws/doc.md");
+    // Write 52 entries (2 over the cap of 50).
+    for i in 0u64..52 {
+        store
+            .record(&crate::history::HistoryEntry {
+                original_path: path.clone(),
+                text: format!("rev {i}"),
+                saved_at_secs: i,
+                revision: i,
+            })
+            .unwrap();
+    }
+    let entries = store.list(&path);
+    assert!(
+        entries.len() <= 50,
+        "history must be capped at 50, got {}",
+        entries.len()
+    );
+    // Newest-first: first entry should be revision 51.
+    assert_eq!(entries[0].revision, 51, "newest entry should be first");
+}
+
+#[test]
+fn history_returns_empty_for_unknown_path() {
+    let dir = temp_workspace();
+    let store = crate::history::HistoryStore::at(dir.path().join("history"));
+    let entries = store.list(std::path::Path::new("/ws/unknown.md"));
+    assert!(entries.is_empty());
+}

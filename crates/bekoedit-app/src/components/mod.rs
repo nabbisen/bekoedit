@@ -5,6 +5,7 @@ pub mod conflict_banner;
 pub mod editor_header;
 pub mod explorer;
 pub mod form_mode;
+pub mod history_panel;
 pub mod outline_panel;
 pub mod preview_mode;
 pub mod search_panel;

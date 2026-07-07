@@ -20,6 +20,7 @@ pub fn EditorHeader() -> Element {
     let mut outline_open = use_context::<Signal<bool>>(); // 3rd bool
     let mut search_open = use_context::<Signal<bool>>();
     let mut backlinks_open = use_context::<Signal<bool>>();
+    let mut history_open = use_context::<Signal<bool>>();
     let mut settings_open = use_context::<Signal<bool>>();
     let mut toasts = use_context::<Signal<Vec<crate::components::toast::Toast>>>();
 
@@ -97,6 +98,24 @@ pub fn EditorHeader() -> Element {
                             if !o { search_open.set(false); outline_open.set(false); }
                         },
                         "⬡"
+                    }
+                }
+                // History toggle
+                if has_doc {
+                    button {
+                        class: if *history_open.read() { "icon-btn active" } else { "icon-btn" },
+                        aria_label: tr(lang, "history.title"),
+                        aria_pressed: "{*history_open.read()}",
+                        onclick: move |_| {
+                            let o = *history_open.read();
+                            history_open.set(!o);
+                            if !o {
+                                search_open.set(false);
+                                outline_open.set(false);
+                                backlinks_open.set(false);
+                            }
+                        },
+                        "⏱"
                     }
                 }
                 // Outline toggle (RFC-010)

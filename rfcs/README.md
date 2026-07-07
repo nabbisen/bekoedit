@@ -121,3 +121,13 @@ policy · RFC-039 plugin system · RFC-040 sync & collaboration.
 | RFC-037 | Workspace templates | `.bekoedit/templates/*.md` auto-discovered; create-from-template in AppState |
 
 **Remaining proposed RFCs:** RFC-031 (decided: no Lexical), RFC-032 (deferred: incremental parsing), RFC-038/039/040 (future evaluation only).
+
+## Implemented — v0.6.0 (`done/`)
+
+| RFC | Title | Notes |
+|-----|-------|-------|
+| RFC-038 | Advanced Markdown extension policy | Math blocks/inline displayed as styled LaTeX source; footnotes classified as `RawIslandType::Footnote`; strikethrough via existing `ENABLE_STRIKETHROUGH` |
+
+**RFC-032 evaluation result:** full-reparse of a 240 KB document runs in 3.57 ms (release). Incremental parsing deferred — threshold not approached.
+
+**Remaining proposed:** RFC-031 (decided), RFC-032 (deferred), RFC-039/040 (future evaluation only).

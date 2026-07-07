@@ -14,6 +14,7 @@
 pub mod atomic;
 pub mod backlinks;
 pub mod git_status;
+pub mod history;
 pub mod ops;
 pub mod paths;
 pub mod recent;
@@ -28,6 +29,7 @@ pub mod workspace;
 pub use atomic::{FileFingerprint, atomic_write};
 pub use backlinks::{BacklinkEntry, find_backlinks};
 pub use git_status::{GitStatus, git_status_map};
+pub use history::{HistoryEntry, HistoryStore};
 pub use ops::{
     DeleteStrategy, FileOpError, create_folder, create_markdown_file, delete_path, rename_path,
 };

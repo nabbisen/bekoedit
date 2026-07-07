@@ -21,6 +21,8 @@ pub enum RawIslandType {
     ComplexBlockquote,
     UnknownExtension,
     MalformedRegion,
+    /// A footnote definition block (`[^1]: text`).
+    Footnote,
 }
 
 impl RawIslandType {
@@ -30,6 +32,7 @@ impl RawIslandType {
             RawIslandType::FrontMatter => "island.front_matter",
             RawIslandType::HtmlBlock => "island.html_block",
             RawIslandType::ComplexTable => "island.complex_table",
+            RawIslandType::Footnote => "island.footnote",
             RawIslandType::MathBlock => "island.math_block",
             RawIslandType::Directive => "island.directive",
             RawIslandType::ComplexList => "island.complex_list",

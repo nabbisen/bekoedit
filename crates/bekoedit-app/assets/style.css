@@ -307,3 +307,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .git-deleted   { color: var(--danger); background: #fdeeea; }
 .git-untracked { color: var(--muted); background: #f0f0f0; }
 .git-renamed   { color: #5b9bd5; background: #eef4fb; }
+
+/* --- history panel --- */
+.history-list { gap: 6px; }
+.history-entry { display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 6px; border-radius: 6px; }
+.history-entry:hover { background: #e7e3d8; }
+.history-meta { display: flex; flex-direction: column; gap: 2px; }
+.history-time { font-size: 0.85em; font-weight: 600; }
+.history-rev  { font-size: 0.76em; }
+.history-restore { font-size: 0.8em; padding: 3px 8px; }
+
+/* --- math rendering (RFC-038) --- */
+code.math-inline { background: #f0f0f8; border: 1px solid #ddd; border-radius: 3px;
+  padding: 1px 4px; font-style: italic; color: #444; }
+pre.math-block { background: #f0f0f8; border: 1px solid #ddd; border-radius: 6px;
+  padding: 10px 14px; overflow-x: auto; }
+pre.math-block code { font-style: italic; color: #444; }

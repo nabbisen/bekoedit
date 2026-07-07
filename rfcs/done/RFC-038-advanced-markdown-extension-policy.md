@@ -1,7 +1,7 @@
 # RFC-038: Advanced Markdown Extension Policy
 
 **Project:** bekoedit  
-**Status:** Proposed (deferred: post-MVP / future evaluation)  
+**Status:** Implemented (v0.6.0, 2026-06-07) — math+footnote extension policy applied; full table at RFC-038  
 **Track:** Future Evaluation  
 **Milestone:** M9  
 **Priority:** Medium  

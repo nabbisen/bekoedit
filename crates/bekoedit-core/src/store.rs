@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use bekoedit_fs::{
-    DeleteStrategy, FileOpError, FileTreeIndex, RecentWorkspaces, RecoverySnapshot, RecoveryStore,
-    Workspace, WorkspaceError, atomic_write,
+    FileOpError, FileTreeIndex, RecentWorkspaces, RecoverySnapshot, RecoveryStore, Workspace,
+    WorkspaceError, atomic_write,
 };
 use bekoedit_markdown::FormEditCommand;
 
@@ -49,7 +49,8 @@ pub struct AppState {
     pub autosave: AutosaveScheduler,
     pub recents: RecentWorkspaces,
     recents_file: PathBuf,
-    recovery: RecoveryStore,
+    pub(crate) recovery: RecoveryStore,
+    pub(crate) history: bekoedit_fs::HistoryStore,
     next_document_id: u64,
 }
 
@@ -58,6 +59,7 @@ impl AppState {
         let mut recents = RecentWorkspaces::load(&recents_file);
         recents.prune_missing();
         Self {
+            history: bekoedit_fs::HistoryStore::default_location(),
             workspace: None,
             tree: FileTreeIndex::default(),
             session: None,
@@ -98,7 +100,7 @@ impl AppState {
         }
     }
 
-    fn workspace_root(&self) -> Result<&Path, StoreError> {
+    pub(crate) fn workspace_root(&self) -> Result<&Path, StoreError> {
         self.workspace
             .as_ref()
             .map(|w| w.root_path.as_path())
@@ -208,6 +210,12 @@ impl AppState {
             Ok(fingerprint) => {
                 session.mark_saved(fingerprint);
                 let _ = self.recovery.remove(&session.path);
+                let _ = self.history.record(&bekoedit_fs::HistoryEntry {
+                    original_path: session.path.clone(),
+                    text: session.canonical_text.clone(),
+                    revision: session.revision,
+                    saved_at_secs: now_ms / 1000,
+                });
                 self.autosave.clear();
                 self.save_state = SaveState::Saved { at_ms: now_ms };
                 Ok(())
@@ -237,6 +245,12 @@ impl AppState {
                     .map_err(|e| StoreError::SaveFailed(e.to_string()))?;
                 session.mark_saved(fingerprint);
                 let _ = self.recovery.remove(&session.path);
+                let _ = self.history.record(&bekoedit_fs::HistoryEntry {
+                    original_path: session.path.clone(),
+                    text: session.canonical_text.clone(),
+                    revision: session.revision,
+                    saved_at_secs: now_ms / 1000,
+                });
                 self.save_state = SaveState::Saved { at_ms: now_ms };
             }
             ConflictResolution::ReloadDisk => {
@@ -252,6 +266,12 @@ impl AppState {
                 let fingerprint = atomic_write(&target, &session.canonical_text)
                     .map_err(|e| StoreError::SaveFailed(e.to_string()))?;
                 let _ = self.recovery.remove(&session.path);
+                let _ = self.history.record(&bekoedit_fs::HistoryEntry {
+                    original_path: session.path.clone(),
+                    text: session.canonical_text.clone(),
+                    revision: session.revision,
+                    saved_at_secs: now_ms / 1000,
+                });
                 session.path = target;
                 session.mark_saved(fingerprint);
                 self.save_state = SaveState::Saved { at_ms: now_ms };
@@ -261,178 +281,5 @@ impl AppState {
         self.conflict = ConflictState::None;
         self.autosave.resume();
         Ok(())
-    }
-
-    // --- workspace file operations (RFC-005 pass-through with refresh) ---
-
-    pub fn create_markdown_file(
-        &mut self,
-        parent: &Path,
-        name: &str,
-    ) -> Result<PathBuf, StoreError> {
-        let root = self.workspace_root()?.to_path_buf();
-        let created = bekoedit_fs::create_markdown_file(&root, parent, name)?;
-        self.refresh_tree();
-        Ok(created)
-    }
-
-    pub fn rename_path(&mut self, target: &Path, new_name: &str) -> Result<PathBuf, StoreError> {
-        let root = self.workspace_root()?.to_path_buf();
-        let renamed = bekoedit_fs::rename_path(&root, target, new_name)?;
-        // Keep the open session pointing at the renamed file (RFC-005).
-        if let Some(session) = &mut self.session
-            && session.path == root.join(target)
-        {
-            session.path = root.join(&renamed);
-        }
-        self.refresh_tree();
-        Ok(renamed)
-    }
-
-    /// Deletes a path; refuses to delete the open document while it has
-    /// unsaved changes (ER rules / FR-FS safety).
-    pub fn delete_path(
-        &mut self,
-        target: &Path,
-        strategy: DeleteStrategy,
-    ) -> Result<(), StoreError> {
-        let root = self.workspace_root()?.to_path_buf();
-        if let Some(session) = &self.session
-            && session.path == root.join(target)
-            && session.dirty
-        {
-            return Err(StoreError::ConflictPending);
-        }
-        bekoedit_fs::delete_path(&root, target, strategy)?;
-        if let Some(session) = &self.session
-            && session.path == root.join(target)
-        {
-            self.session = None;
-            self.save_state = SaveState::Clean;
-        }
-        self.refresh_tree();
-        Ok(())
-    }
-
-    // --- RFC-035: HTML export ---
-
-    /// Exports the current document's sanitized HTML to `path` as a
-    /// self-contained HTML file. Never overwrites without an explicit call;
-    /// the caller chooses the output path.
-    pub fn export_html(&self, path: &std::path::Path) -> Result<(), StoreError> {
-        let session = self.session.as_ref().ok_or(StoreError::NoDocument)?;
-        let title = session
-            .path
-            .file_stem()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "bekoedit export".into());
-        let body_html = session.preview_html();
-        let full = format!(
-            r#"<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title}</title>
-<style>
-  body {{ max-width: 780px; margin: 2rem auto; padding: 0 1.5rem;
-         font-family: system-ui, sans-serif; line-height: 1.65; color: #222; }}
-  pre  {{ background: #f6f6f2; padding: .75em 1em; border-radius: 6px; overflow-x: auto; }}
-  code {{ font-size: .92em; }}
-  blockquote {{ border-left: 3px solid #ccc; margin: 0; padding-left: 1em; color: #555; }}
-  table {{ border-collapse: collapse; }} td, th {{ border: 1px solid #ddd; padding: .3em .7em; }}
-</style>
-</head>
-<body>
-{body_html}
-</body>
-</html>
-"#,
-        );
-        bekoedit_fs::atomic_write(path, &full)
-            .map_err(|e| StoreError::SaveFailed(e.to_string()))?;
-        Ok(())
-    }
-
-    // --- RFC-029: outline section operations ---
-
-    /// Moves the section headed by `heading_idx` one position upward among
-    /// its siblings in the current document (RFC-029).
-    pub fn move_section_up(&mut self, heading_idx: usize, now_ms: u64) -> Result<(), StoreError> {
-        let session = self.session.as_mut().ok_or(StoreError::NoDocument)?;
-        let result = bekoedit_markdown::move_section_up(
-            &session.canonical_text,
-            &session.index,
-            heading_idx,
-        )
-        .map_err(|e| StoreError::SaveFailed(e.to_string()))?;
-        session.apply_text_snapshot(session.revision, result.text)?;
-        self.after_edit_internal(now_ms);
-        Ok(())
-    }
-
-    /// Moves the section headed by `heading_idx` one position downward among
-    /// its siblings (RFC-029).
-    pub fn move_section_down(&mut self, heading_idx: usize, now_ms: u64) -> Result<(), StoreError> {
-        let session = self.session.as_mut().ok_or(StoreError::NoDocument)?;
-        let result = bekoedit_markdown::move_section_down(
-            &session.canonical_text,
-            &session.index,
-            heading_idx,
-        )
-        .map_err(|e| StoreError::SaveFailed(e.to_string()))?;
-        session.apply_text_snapshot(session.revision, result.text)?;
-        self.after_edit_internal(now_ms);
-        Ok(())
-    }
-
-    fn after_edit_internal(&mut self, now_ms: u64) {
-        self.autosave.note_edit(now_ms);
-        self.save_state = match self.autosave.due_at() {
-            Some(due) => SaveState::AutoSaveScheduled { due_at_ms: due },
-            None => SaveState::Dirty,
-        };
-        if let Some(session) = &self.session {
-            let _ = self.recovery.save(&bekoedit_fs::RecoverySnapshot {
-                original_path: session.path.clone(),
-                text: session.canonical_text.clone(),
-                revision: session.revision,
-                created_at_secs: now_ms / 1000,
-            });
-        }
-    }
-    // --- RFC-037: workspace templates ---
-
-    /// Lists available workspace templates from `.bekoedit/templates/`.
-    pub fn list_templates(&self) -> Vec<bekoedit_fs::WorkspaceTemplate> {
-        self.workspace
-            .as_ref()
-            .map(|w| bekoedit_fs::list_templates(&w.root_path))
-            .unwrap_or_default()
-    }
-
-    /// Creates a file from a template and opens it.
-    pub fn create_from_template(
-        &mut self,
-        parent: &std::path::Path,
-        name: &str,
-        template_content: &str,
-    ) -> Result<std::path::PathBuf, StoreError> {
-        let root = self.workspace_root()?.to_path_buf();
-        let created = bekoedit_fs::create_from_template(&root, parent, name, template_content)?;
-        self.refresh_tree();
-        Ok(created)
-    }
-
-    // --- RFC-036: Git status ---
-
-    /// Returns the Git status map for the workspace (empty if not a Git repo).
-    pub fn git_status(
-        &self,
-    ) -> std::collections::HashMap<std::path::PathBuf, bekoedit_fs::GitStatus> {
-        self.workspace
-            .as_ref()
-            .map(|w| bekoedit_fs::git_status_map(&w.root_path))
-            .unwrap_or_default()
     }
 }
