@@ -372,3 +372,30 @@ Incremental parsing deferred until profiling demonstrates a need.
 - CHANGELOG, ROADMAP, and acceptance checklist updated.
 
 [0.9.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.9.0
+
+## [0.9.1] - 2026-06-07
+
+### Dependencies
+
+**Updated:**
+
+| Crate | From | To | Type |
+|-------|------|----|------|
+| `notify` | 6.1.1 | **8.2.0** | Direct dep — major version upgrade; our API surface (`recommended_watcher`, `EventKind`, `RecursiveMode`) is unchanged |
+
+**Cannot update (pinned by upstream crates):**
+
+| Crate | Lock | Available | Pinned by |
+|-------|------|-----------|-----------|
+| `generic-array` | 0.14.7 | 0.14.9 | `block-buffer` / `crypto-common` (sha2 dep chain) |
+| `toml` | 0.8.2 | 0.8.23 | `system-deps 6.2.2` (gtk build-time dep) |
+| `toml_datetime` | 0.6.3 | 0.6.11 | same |
+| `toml_edit` | 0.20.2 | 0.20.7 | same |
+| `webkit2gtk` | 2.0.1 | 2.0.2 | `wry 0.53.5` (Dioxus WebView layer) |
+| `webkit2gtk-sys` | 2.0.1 | 2.0.2 | same |
+
+The `webkit2gtk` and `wry` versions will update when Dioxus releases a new
+version that accepts `webkit2gtk 2.0.2`. The crypto and build-tool pins
+will resolve when those upstream crates release compatible versions.
+
+[0.9.1]: https://github.com/nabbisen/bekoedit/releases/tag/v0.9.1
