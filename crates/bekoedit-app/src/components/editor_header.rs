@@ -18,7 +18,8 @@ pub fn EditorHeader() -> Element {
     let mode = *mode_sig.read();
     let mut collapsed = use_context::<Signal<bool>>(); // explorer
     let mut outline_open = use_context::<Signal<bool>>(); // 3rd bool
-    let mut search_open = use_context::<Signal<bool>>(); // 4th bool
+    let mut search_open = use_context::<Signal<bool>>();
+    let mut backlinks_open = use_context::<Signal<bool>>();
     let mut settings_open = use_context::<Signal<bool>>();
     let mut toasts = use_context::<Signal<Vec<crate::components::toast::Toast>>>();
 
@@ -80,9 +81,23 @@ pub fn EditorHeader() -> Element {
                     onclick: move |_| {
                         let o = *search_open.read();
                         search_open.set(!o);
-                        if !o { outline_open.set(false); } // close outline when search opens
+                        if !o { outline_open.set(false); backlinks_open.set(false); }
                     },
                     "🔍"
+                }
+                // Backlinks toggle (RFC-034)
+                if has_doc {
+                    button {
+                        class: if *backlinks_open.read() { "icon-btn active" } else { "icon-btn" },
+                        aria_label: tr(lang, "backlinks.title"),
+                        aria_pressed: "{*backlinks_open.read()}",
+                        onclick: move |_| {
+                            let o = *backlinks_open.read();
+                            backlinks_open.set(!o);
+                            if !o { search_open.set(false); outline_open.set(false); }
+                        },
+                        "⬡"
+                    }
                 }
                 // Outline toggle (RFC-010)
                 if has_doc {
@@ -93,7 +108,7 @@ pub fn EditorHeader() -> Element {
                         onclick: move |_| {
                             let o = *outline_open.read();
                             outline_open.set(!o);
-                            if !o { search_open.set(false); }
+                            if !o { search_open.set(false); backlinks_open.set(false); }
                         },
                         "≡"
                     }

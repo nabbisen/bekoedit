@@ -1,10 +1,10 @@
-# RFC-029: Outline-Based Document Operations
+# RFC-034: Backlinks and Reference Discovery
 
 **Project:** bekoedit  
-**Status:** Proposed (deferred: post-MVP / future evaluation)  
-**Track:** Post-MVP  
-**Milestone:** M8  
-**Priority:** Medium  
+**Status:** Implemented (v0.5.0, 2026-06-07)  
+**Track:** Future Evaluation  
+**Milestone:** M9  
+**Priority:** Low  
 **Date:** 2026-06-07  
 **Related documents:** `bekoedit-requirements-definition.md`, `bekoedit-external-design.md`, `bekoedit-rfc-roadmap.md`
 
@@ -12,28 +12,28 @@
 
 ## 1. Summary
 
-Designs heading-based operations such as move section, rename heading, and collapse sections.
+Evaluates Markdown link reference discovery and backlink display.
 
 ---
 
 ## 2. Motivation
 
-- Outline operations are powerful for structured documents but require range-safe section detection.
+- Backlinks help knowledge management but can expand scope toward Obsidian-like systems.
 
 ---
 
 ## 3. Goals
 
-- Use MarkdownIndex headings to define section ranges.
-- Support safe rename heading and future move section operations.
-- Preserve content within moved ranges.
+- Identify links between local Markdown files.
+- Show inbound references for current document.
+- Keep feature optional and lightweight.
 
 ---
 
 ## 4. Non-Goals
 
-- Implement arbitrary AST refactoring in MVP.
-- Guarantee safe movement around malformed Markdown.
+- Build a graph database.
+- Implement proprietary wiki syntax before extension policy.
 
 ---
 
@@ -53,27 +53,22 @@ All RFCs in this package inherit the following invariants unless explicitly amen
 
 ## 6. User-Facing Design
 
-- Outline panel may later offer context actions: rename, copy link, move up/down, collapse section.
+- Info panel may show “Linked from” references.
 
 ---
 
 ## 7. Data Model / Contracts
 
 ```rust
-struct SectionRange {
-    heading_block_id: BlockId,
-    source_range: ByteRange,
-    level: u8,
-    child_heading_ids: Vec<BlockId>,
-}
+struct Backlink { from_path: PathBuf, source_range: ByteRange, label: String }
 ```
 
 ---
 
 ## 8. Internal Design Notes
 
-- Moving sections should use whole source slices and preserve line endings/trivia.
-- Reject move when source range overlaps unsafe regions unless raw move is clearly safe.
+- Use parser index where possible.
+- Respect file rename operations in future.
 
 ---
 
@@ -147,8 +142,7 @@ Recommended source-preservation cases:
 
 ## 14. Acceptance Criteria
 
-- Section operations are based on Rust-owned ranges.
-- Unrelated sections remain byte-identical.
+- Backlinks are derived projections and never canonical state.
 
 ---
 

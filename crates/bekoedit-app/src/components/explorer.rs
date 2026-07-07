@@ -30,6 +30,8 @@ pub fn Explorer() -> Element {
     let mut rename_mode = use_signal(|| false);
 
     let nodes = state.read().tree.nodes.clone();
+    let git_map = state.read().git_status();
+
     let workspace_name = state
         .read()
         .workspace
@@ -150,6 +152,17 @@ pub fn Explorer() -> Element {
                                 },
                                 tabindex: "0",
                                 span { "{node.display_name}" }
+                        if let Some(gs) = git_map.get(&node.relative_path) {
+                            span {
+                                class: "git-badge git-{gs:?}".to_lowercase(),
+                                title: format!("{gs:?}"),
+                                if *gs == bekoedit_fs::GitStatus::Modified { "M" }
+                                else if *gs == bekoedit_fs::GitStatus::Added { "A" }
+                                else if *gs == bekoedit_fs::GitStatus::Deleted { "D" }
+                                else if *gs == bekoedit_fs::GitStatus::Untracked { "?" }
+                                else { "R" }
+                            }
+                        }
                             }
                         }
                     }

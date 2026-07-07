@@ -157,3 +157,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   sizes. Incremental parsing deferred until profiling demonstrates a need.
 
 [0.4.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.4.0
+
+## [0.5.0] - 2026-06-07
+
+### Added
+- **Section move operations** (RFC-029): Up ↑ / Down ↓ buttons appear on
+  each heading row in the Outline panel. Clicking swaps the section with its
+  nearest sibling of the same heading level; sub-sections travel with their
+  parent. The engine (`bekoedit_markdown::move_section_up/down`) touches only
+  the swapped byte ranges — no other lines change.
+- **Backlinks panel** (RFC-034): `bekoedit_fs::find_backlinks` scans all
+  Markdown files under the workspace root for standard `[text](./path.md)` and
+  wiki-style `[[page]]` references to the current document. Results open via
+  the ⬡ button in the Editor Header; clicking a result opens that file.
+- **Git status awareness** (RFC-036): `bekoedit_fs::git_status_map` runs
+  `git status --porcelain` and returns a workspace-relative path→status map.
+  The Explorer shows M (modified), A (added), D (deleted), ? (untracked)
+  badges next to file names. Silently no-ops when Git is absent or the
+  directory is not a repository.
+- **Workspace templates** (RFC-037): `bekoedit_fs::list_templates` discovers
+  `*.md` files under `.bekoedit/templates/` in the workspace root.
+  `create_from_template` creates a new file pre-filled with the template text.
+  `ensure_templates_dir` bootstraps the directory with a `blank.md` example
+  on first use.
+
+### Changed
+- `OutlinePanel` updated: each heading row now shows ↑/↓ section-move buttons
+  (hidden until hover to keep the panel uncluttered).
+- `EditorHeader` updated: ⬡ (backlinks) toggle added between 🔍 (search) and
+  ≡ (outline). Opening any panel closes the others.
+- `AppState` extended with `move_section_up`, `move_section_down`,
+  `list_templates`, `create_from_template`, and `git_status` methods.
+- `bekoedit_fs` now exports `BacklinkEntry`, `find_backlinks`, `GitStatus`,
+  `git_status_map`, `WorkspaceTemplate`, `create_from_template`,
+  `list_templates`.
+- `bekoedit_markdown` now exports `SectionError`, `SectionMoveResult`,
+  `move_section_down`, `move_section_up`, `section_range`.
+
+[0.5.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.5.0

@@ -288,3 +288,22 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .match-line { color: var(--muted); font-size: 0.9em; }
 .match-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .search-match.exact .match-file::after { content: " ✓"; font-size: 0.75em; color: var(--accent); }
+
+/* --- section move buttons (RFC-029) --- */
+.section-move-btn {
+  padding: 1px 5px; font-size: 0.8em; border-color: transparent;
+  background: transparent; opacity: 0; transition: opacity 0.15s;
+}
+.outline-list li:hover .section-move-btn { opacity: 1; }
+.section-move-btn:hover { border-color: var(--line); background: #fff; }
+
+/* --- git status badges (RFC-036) --- */
+.git-badge {
+  font-size: 0.7em; font-weight: 700; padding: 0 3px;
+  border-radius: 3px; margin-left: 4px; vertical-align: middle;
+}
+.git-modified  { color: #e09400; background: #fff8e0; }
+.git-added     { color: #2a7a2a; background: #e8f5e8; }
+.git-deleted   { color: var(--danger); background: #fdeeea; }
+.git-untracked { color: var(--muted); background: #f0f0f0; }
+.git-renamed   { color: #5b9bd5; background: #eef4fb; }

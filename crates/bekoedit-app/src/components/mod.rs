@@ -1,5 +1,6 @@
 //! UI components for the bekoedit shell (RFC-010 layout regions).
 
+pub mod backlinks_panel;
 pub mod conflict_banner;
 pub mod editor_header;
 pub mod explorer;

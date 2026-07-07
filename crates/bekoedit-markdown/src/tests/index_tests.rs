@@ -225,3 +225,65 @@ fn japanese_and_emoji_ranges_are_char_safe() {
     }
     assert_eq!(idx.headings[0].text, "見出し 🎌");
 }
+
+// --- RFC-029: section operations ---
+
+#[test]
+fn section_range_covers_heading_to_next_sibling() {
+    let doc = "# A\n\nA body\n\n# B\n\nB body\n";
+    let idx = MarkdownIndex::build(doc, 1);
+    let range = crate::sections::section_range(doc, &idx, 0).unwrap();
+    assert_eq!(&doc[range.start..range.end], "# A\n\nA body\n\n");
+}
+
+#[test]
+fn move_section_up_swaps_siblings() {
+    let doc = "# A\n\nbody A\n\n# B\n\nbody B\n";
+    let idx = MarkdownIndex::build(doc, 1);
+    let result = crate::sections::move_section_up(doc, &idx, 1).unwrap();
+    // Blank lines belong to the preceding section; B moves without a preceding blank.
+    assert!(
+        result.text.starts_with("# B\n\nbody B\n"),
+        "got: {:?}",
+        result.text
+    );
+}
+
+#[test]
+fn move_section_down_swaps_siblings() {
+    let doc = "# A\n\nbody A\n\n# B\n\nbody B\n";
+    let idx = MarkdownIndex::build(doc, 1);
+    let result = crate::sections::move_section_down(doc, &idx, 0).unwrap();
+    // Blank lines belong to the preceding section; B moves without a preceding blank.
+    assert!(
+        result.text.starts_with("# B\n\nbody B\n"),
+        "got: {:?}",
+        result.text
+    );
+}
+
+#[test]
+fn move_section_up_on_first_is_no_sibling() {
+    let doc = "# Only\n\nbody\n";
+    let idx = MarkdownIndex::build(doc, 1);
+    assert!(matches!(
+        crate::sections::move_section_up(doc, &idx, 0),
+        Err(crate::sections::SectionError::NoSibling)
+    ));
+}
+
+#[test]
+fn section_move_preserves_subsections() {
+    let doc = "# A\n\n## A.1\n\ncontent\n\n# B\n\nbody B\n";
+    let idx = MarkdownIndex::build(doc, 1);
+    // "# B" is the heading at index 2 (0: # A, 1: ## A.1, 2: # B)
+    let b_idx = idx.headings.iter().position(|h| h.text == "B").unwrap();
+    let result = crate::sections::move_section_up(doc, &idx, b_idx).unwrap();
+    // After moving B up: B section comes before A (which includes A.1)
+    assert!(
+        result.text.starts_with("# B\n\nbody B\n"),
+        "got: {:?}",
+        result.text
+    );
+    assert!(result.text.contains("## A.1"));
+}

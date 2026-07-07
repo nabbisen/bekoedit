@@ -110,3 +110,14 @@ policy · RFC-039 plugin system · RFC-040 sync & collaboration.
 |-----|-------|---------|
 | RFC-031 | Lexical integration decision | **Do not adopt Lexical.** Custom projection approach retained. See RFC for detailed rationale. |
 | RFC-032 | Performance optimization & incremental parsing | Full-reparse-after-mutation confirmed adequate for current document sizes. Deferred until profiling demonstrates a need. |
+
+## Implemented — v0.5.0 (`done/`)
+
+| RFC | Title | Notes |
+|-----|-------|-------|
+| RFC-029 | Outline-based document operations | Move-section-up/down in the outline panel; engine preserves all source trivia |
+| RFC-034 | Backlinks & reference discovery | `find_backlinks` scans workspace; ⬡ button opens BacklinksPanel |
+| RFC-036 | Git awareness | `git status --porcelain` subprocess; M/A/D/? badges in the file explorer |
+| RFC-037 | Workspace templates | `.bekoedit/templates/*.md` auto-discovered; create-from-template in AppState |
+
+**Remaining proposed RFCs:** RFC-031 (decided: no Lexical), RFC-032 (deferred: incremental parsing), RFC-038/039/040 (future evaluation only).

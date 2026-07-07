@@ -10,6 +10,7 @@ use bekoedit_fs::{FsWatcher, WatchEvent};
 use bekoedit_ui_contract::EditorMode;
 
 use crate::components::{
+    backlinks_panel::BacklinksPanel,
     conflict_banner::ConflictBanner,
     editor_header::EditorHeader,
     explorer::Explorer,
@@ -49,6 +50,7 @@ pub fn App() -> Element {
     use_context_provider(|| Signal::new(false_val())); // settings screen open
     use_context_provider(|| Signal::new(false_val())); // outline panel open
     use_context_provider(|| Signal::new(false_val())); // search panel open
+    use_context_provider(|| Signal::new(false_val())); // backlinks panel open
     use_context_provider(|| Signal::new(Vec::<Toast>::new()));
 
     // Background: native fs watcher + autosave + external-change poll.
@@ -150,7 +152,8 @@ fn MainShell() -> Element {
     let mode = *use_context::<Signal<EditorMode>>().read();
     let collapsed = *use_context::<Signal<bool>>().read(); // explorer
     let outline_open = use_context::<Signal<bool>>(); // 3rd bool
-    let search_open = use_context::<Signal<bool>>(); // 4th bool
+    let search_open = use_context::<Signal<bool>>(); // 4th
+    let backlinks_open = use_context::<Signal<bool>>(); // 5th
     let has_doc = state.read().session.is_some();
 
     rsx! {
@@ -176,6 +179,8 @@ fn MainShell() -> Element {
                     // Right panels (mutually exclusive or stacked)
                     if *search_open.read() {
                         SearchPanel {}
+                    } else if *backlinks_open.read() && has_doc {
+                        BacklinksPanel {}
                     } else if *outline_open.read() && has_doc {
                         OutlinePanel {}
                     }

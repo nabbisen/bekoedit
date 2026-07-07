@@ -1,7 +1,7 @@
-# RFC-037: Workspace Templates
+# RFC-036: Git Awareness
 
 **Project:** bekoedit  
-**Status:** Proposed (deferred: post-MVP / future evaluation)  
+**Status:** Implemented (v0.5.0, 2026-06-07)  
 **Track:** Future Evaluation  
 **Milestone:** M9  
 **Priority:** Low  
@@ -12,27 +12,29 @@
 
 ## 1. Summary
 
-Evaluates creating initial folder/file structures from templates.
+Evaluates lightweight Git status awareness without turning bekoedit into a Git client.
 
 ---
 
 ## 2. Motivation
 
-- Templates can help new users but are not essential for editing existing files.
+- Markdown workspaces are often Git repositories.
+- Full Git integration is outside MVP.
 
 ---
 
 ## 3. Goals
 
-- Support simple local templates if adopted.
-- Avoid cloud template marketplace.
+- Optionally show file modified/untracked status.
+- Avoid write operations to Git metadata.
+- Keep Git optional.
 
 ---
 
 ## 4. Non-Goals
 
-- Create a plugin/template ecosystem.
-- Overwrite existing files without confirmation.
+- Commit, push, pull, merge UI.
+- Resolve Git conflicts.
 
 ---
 
@@ -52,21 +54,21 @@ All RFCs in this package inherit the following invariants unless explicitly amen
 
 ## 6. User-Facing Design
 
-- New workspace dialog may offer blank or template choices.
+- Explorer may show small status markers.
 
 ---
 
 ## 7. Data Model / Contracts
 
 ```rust
-struct WorkspaceTemplate { id: String, files: Vec<TemplateFile> }
+struct GitFileStatus { path: PathBuf, status: String }
 ```
 
 ---
 
 ## 8. Internal Design Notes
 
-- Template creation uses safe file operation pipeline.
+- Use a lightweight status provider that can be disabled.
 
 ---
 
@@ -140,7 +142,7 @@ Recommended source-preservation cases:
 
 ## 14. Acceptance Criteria
 
-- Template application is reversible by user-controlled file deletion.
+- Git absence has no impact on core editing.
 
 ---
 

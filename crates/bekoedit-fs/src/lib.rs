@@ -12,17 +12,22 @@
 //! validated here (path scoping, traversal rejection, name sanitization).
 
 pub mod atomic;
+pub mod backlinks;
+pub mod git_status;
 pub mod ops;
 pub mod paths;
 pub mod recent;
 pub mod recovery;
 pub mod search;
 pub mod settings;
+pub mod templates;
 pub mod tree;
 pub mod watcher;
 pub mod workspace;
 
 pub use atomic::{FileFingerprint, atomic_write};
+pub use backlinks::{BacklinkEntry, find_backlinks};
+pub use git_status::{GitStatus, git_status_map};
 pub use ops::{
     DeleteStrategy, FileOpError, create_folder, create_markdown_file, delete_path, rename_path,
 };
@@ -31,6 +36,7 @@ pub use recent::{RecentWorkspaceEntry, RecentWorkspaces};
 pub use recovery::{RecoverySnapshot, RecoveryStore};
 pub use search::{SearchMatch, search_workspace};
 pub use settings::UserSettings;
+pub use templates::{WorkspaceTemplate, create_from_template, list_templates};
 pub use tree::{FileNodeKind, FileTreeIndex, FileTreeNode};
 pub use watcher::{FsWatcher, WatchEvent};
 pub use workspace::{Workspace, WorkspaceError};

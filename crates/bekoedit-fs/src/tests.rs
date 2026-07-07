@@ -245,3 +245,50 @@ fn user_settings_corrupt_file_yields_defaults() {
     let loaded = crate::settings::UserSettings::load(&path);
     assert_eq!(loaded, crate::settings::UserSettings::default());
 }
+
+// --- RFC-034: backlinks ---
+
+#[test]
+fn backlinks_finds_standard_markdown_link() {
+    let dir = temp_workspace();
+    std::fs::write(dir.path().join("source.md"), "[see target](./target.md)\n").unwrap();
+    std::fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+    let links = crate::backlinks::find_backlinks(dir.path(), std::path::Path::new("target.md"));
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].source_path, std::path::Path::new("source.md"));
+    assert_eq!(links[0].line_number, 1);
+}
+
+#[test]
+fn backlinks_empty_when_no_references() {
+    let dir = temp_workspace();
+    std::fs::write(dir.path().join("a.md"), "no links here\n").unwrap();
+    std::fs::write(dir.path().join("b.md"), "# B\n").unwrap();
+    let links = crate::backlinks::find_backlinks(dir.path(), std::path::Path::new("b.md"));
+    assert!(links.is_empty());
+}
+
+// --- RFC-037: templates ---
+
+#[test]
+fn template_listing_returns_empty_when_dir_absent() {
+    let dir = temp_workspace();
+    assert!(crate::templates::list_templates(dir.path()).is_empty());
+}
+
+#[test]
+fn create_from_template_creates_prefilled_file() {
+    let dir = temp_workspace();
+    let created = crate::templates::create_from_template(
+        dir.path(),
+        std::path::Path::new(""),
+        "note",
+        "# My Note\n\n",
+    )
+    .unwrap();
+    assert_eq!(created, std::path::Path::new("note.md"));
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("note.md")).unwrap(),
+        "# My Note\n\n"
+    );
+}

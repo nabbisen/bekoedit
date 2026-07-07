@@ -3,7 +3,14 @@
 Authoritative sequencing lives in `rfcs/`. This file is the orientation view.
 **v1.0.0 requires explicit maintainer sign-off before any release.**
 
-## Next (remaining MVP proposed RFCs)
+## Remaining proposed RFCs
+
+- **RFC-038** — advanced Markdown extension policy (GFM footnotes, math rendering, custom directives)
+- **RFC-031** — decided (no Lexical; see rfcs/proposed/)
+- **RFC-032** — deferred until profiling shows need
+- **RFC-039/040** — future evaluation only
+
+## Archive (shipped earlier, ROADMAP was stale)
 
 - **RFC-005** — native filesystem watcher (inotify / FSEvents /
   ReadDirectoryChanges) replacing the current poll-on-tick model.
@@ -21,6 +28,9 @@ formatting, Lexical integration decision, incremental parsing.
 ## Future evaluation (RFCs 033–040)
 Full-text search, backlinks, export profiles, Git awareness, workspace
 templates, extension policy, plugin system, sync/collaboration.
+
+## Shipped — v0.5.0 (2026-06-07)
+Section move (RFC-029), backlinks (RFC-034), Git awareness (RFC-036), workspace templates (RFC-037).
 
 ## Shipped — v0.4.0 (2026-06-07)
 Inline formatting toolbar, simple GFM table editing, image cards, workspace search, HTML export. RFC-031 Lexical decision written (decision: retain custom approach).
