@@ -1,9 +1,9 @@
-# RFC-026: MVP Acceptance, Quality Gates, and Beta Readiness
+# RFC-010: Main Shell, Layout, and Navigation UX
 
 **Project:** bekoedit  
-**Status:** Proposed  
+**Status:** Implemented (v0.3.0, 2026-06-07)  
 **Track:** MVP Critical  
-**Milestone:** M7  
+**Milestone:** M3  
 **Priority:** Critical  
 **Date:** 2026-06-07  
 **Related documents:** `bekoedit-requirements-definition.md`, `bekoedit-external-design.md`, `bekoedit-rfc-roadmap.md`
@@ -12,33 +12,35 @@
 
 ## 1. Summary
 
-Defines the MVP completeness criteria, beta readiness checklist, quality gates, and explicit exclusions.
+Defines the primary application shell, panes, navigation hierarchy, editor header, mode switch, status bar, and responsive layout behavior.
+
+**Review resolution (2026-06-07).** The external design (`bekoedit-external-design.md` §16) describes an optional Split Mode (Text + Preview, Ctrl/Cmd+4), and the requirements definition lists it as Open Question 1. This RFC resolves that question for MVP: `EditorMode` is `{ Text, Form, Preview }` and Split Mode is **deferred to post-MVP** (tracked as a future amendment to this RFC or a follow-up RFC). The Ctrl/Cmd+4 shortcut remains reserved for Split Mode.
 
 ---
 
 ## 2. Motivation
 
-- Without acceptance criteria, the MVP can expand endlessly.
-- Beta users need a trustworthy but honestly scoped editor.
+- A focused Markdown editor depends on a clear layout.
+- Users need the file tree, editor, outline, and status information without IDE-level clutter.
 
 ---
 
 ## 3. Goals
 
-- Define MVP feature completeness.
-- Define source preservation gates.
-- Define usability and accessibility checks.
-- Define known limitations that are acceptable for beta.
-- Prevent post-MVP features from blocking MVP.
+- Define the three-pane desktop layout.
+- Provide mode switch between Text, Form, and Preview.
+- Support collapsible explorer and outline panels.
+- Keep writing area central and uncluttered.
+- Define empty, loading, document, and error pages.
 
 ---
 
 ## 4. Non-Goals
 
-- Declare production maturity.
-- Guarantee no bugs.
-- Include advanced table editing, plugin APIs, cloud sync, or collaboration.
-- Claim full Markdown extension coverage.
+- Design mobile UI.
+- Create a full IDE layout system.
+- Support arbitrary draggable panel plugins.
+- Implement theming beyond basic light/dark in MVP.
 
 ---
 
@@ -58,37 +60,64 @@ All RFCs in this package inherit the following invariants unless explicitly amen
 
 ## 6. User-Facing Design
 
-- Beta release notes must clearly state: local-first, source-preserving design, safe visual editing scope, raw islands, unsigned binaries, and known limitations.
+- Main layout wireframe:
+
+```text
++--------------------------------------------------------------------------------+
+| App Bar: bekoedit | Workspace | File | Edit | View | Command Search | Settings |
++----------------------+--------------------------------------+------------------+
+| Workspace Explorer   | Editor Header                        | Outline / Info   |
+| - root folder        | file.md   Dirty/Saved   Text Form Preview               |
+| - docs/              +--------------------------------------+------------------+
+|   - intro.md         |                                      | # Heading 1      |
+|   - design.md        |        Active editor surface         | ## Heading 2     |
+| - notes/             |        Text / Form / Preview         | Raw islands      |
+|                      |                                      | Warnings         |
++----------------------+--------------------------------------+------------------+
+| Status: Saved | Line/Column | Workspace | Watcher | Errors | Accessibility msg |
++--------------------------------------------------------------------------------+
+```
+
+Empty workspace page:
+
+```text
++-----------------------------------------------------+
+| bekoedit                                            |
+|                                                     |
+|  Open a local Markdown workspace                    |
+|  [Open Folder]                                      |
+|                                                     |
+|  Recent Workspaces                                  |
+|  - ~/notes                                          |
+|  - ~/projects/docs                                  |
++-----------------------------------------------------+
+```
+
 
 ---
 
 ## 7. Data Model / Contracts
 
-MVP readiness checklist:
+```rust
+struct LayoutState {
+    explorer_visible: bool,
+    outline_visible: bool,
+    active_mode: EditorMode,
+    focused_region: FocusRegion,
+}
 
-```text
-[ ] Open workspace
-[ ] File tree navigation
-[ ] Text Mode editing
-[ ] Preview Mode rendering
-[ ] Safe Form Mode MVP
-[ ] Raw Markdown Islands
-[ ] Autosave and manual save
-[ ] Conflict detection
-[ ] Recovery snapshot
-[ ] Accessibility baseline
-[ ] Cross-platform CI artifacts
-[ ] Source preservation tests
+enum EditorMode { Text, Form, Preview }
 ```
+
+Layout state is user preference plus session state; it does not alter document content.
 
 ---
 
 ## 8. Internal Design Notes
 
-- Create a release checklist in the repository.
-- Separate blocking defects from known limitations.
-- Require regression tests for every fixed source-corruption bug.
-- Keep beta feedback structured around source preservation, UX clarity, and file lifecycle.
+- Keep shell components single-purpose: Explorer, EditorHeader, EditorSurface, OutlinePanel, StatusBar.
+- Mode switch sends a command; mode state changes only when projection is valid.
+- Save status, conflict banners, and raw island warnings must have reserved UI locations.
 
 ---
 
@@ -162,10 +191,10 @@ Recommended source-preservation cases:
 
 ## 14. Acceptance Criteria
 
-- All MVP-critical RFCs are implemented or intentionally deferred with documented impact.
-- No known source-corruption bug remains unfixed.
-- Beta release notes document limitations.
-- A new user can complete core workflows without reading developer docs.
+- The app has a recognizable main shell.
+- The active mode is always visible.
+- Explorer and outline can be hidden without losing document state.
+- Keyboard focus order is predictable across regions.
 
 ---
 

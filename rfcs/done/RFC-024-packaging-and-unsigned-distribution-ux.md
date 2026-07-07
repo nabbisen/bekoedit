@@ -1,10 +1,10 @@
-# RFC-005: File Operations and External File Watching
+# RFC-024: Packaging and Unsigned Distribution UX
 
 **Project:** bekoedit  
-**Status:** Proposed  
+**Status:** Implemented (v0.3.0, 2026-06-07)  
 **Track:** MVP Critical  
-**Milestone:** M1  
-**Priority:** Critical  
+**Milestone:** M7  
+**Priority:** High  
 **Date:** 2026-06-07  
 **Related documents:** `bekoedit-requirements-definition.md`, `bekoedit-external-design.md`, `bekoedit-rfc-roadmap.md`
 
@@ -12,32 +12,32 @@
 
 ## 1. Summary
 
-Defines create, rename, delete, refresh, and external file-change detection for workspace files.
+Defines packaging targets and user-facing installation guidance for unsigned GitHub Release binaries.
 
 ---
 
 ## 2. Motivation
 
-- A Markdown editor that manages files must avoid destructive surprises.
-- External tools such as Git, sync clients, and terminals may change files while bekoedit is open.
+- Paid code signing and app store distribution are out of scope.
+- Unsigned distribution creates real UX friction that must be documented honestly.
 
 ---
 
 ## 3. Goals
 
-- Support safe create, rename, delete, and refresh.
-- Detect external file create, modify, rename, and delete events where platform APIs allow.
-- Protect dirty documents before destructive file operations.
-- Prefer move-to-trash for delete when available.
+- Produce downloadable builds for Windows, macOS, and Linux where feasible.
+- Document unsigned binary warnings.
+- Provide clear installation and first-launch instructions.
+- Avoid misleading trust claims.
 
 ---
 
 ## 4. Non-Goals
 
-- Implement Git operations.
-- Implement cross-device sync conflict merging.
-- Guarantee perfect watcher behavior on every filesystem.
-- Provide bulk file operations in MVP.
+- Purchase Apple Developer or Authenticode certificates.
+- Publish to app stores.
+- Guarantee bypass instructions remain unchanged forever.
+- Implement auto-update in MVP.
 
 ---
 
@@ -57,38 +57,32 @@ All RFCs in this package inherit the following invariants unless explicitly amen
 
 ## 6. User-Facing Design
 
-- Context menu on file tree nodes offers New File, New Folder, Rename, Delete, Reveal in Folder, and Refresh where applicable.
-- Destructive operations require clear confirmation.
-- External deletion of an open file triggers a visible conflict state.
+- Release page includes platform-specific download options and first-run notes.
+- The app About page shows version, commit hash, license, and unsigned distribution status.
 
 ---
 
 ## 7. Data Model / Contracts
 
 ```rust
-enum FileOperationCommand {
-    CreateMarkdown { parent: FileId, name: String },
-    CreateFolder { parent: FileId, name: String },
-    Rename { target: FileId, new_name: String },
-    Delete { target: FileId, strategy: DeleteStrategy },
-    RefreshTree,
-}
-
-enum FileWatchEvent {
-    Created(PathBuf), Modified(PathBuf), Deleted(PathBuf), Renamed { from: PathBuf, to: PathBuf }, UnknownRefreshNeeded
+struct BuildMetadata {
+    version: SemVer,
+    git_commit: String,
+    build_target: String,
+    build_date: String,
+    signed: bool,
 }
 ```
 
-All commands resolve through the active workspace root and must reject path traversal.
+Build metadata is embedded into the binary and displayed in About.
 
 ---
 
 ## 8. Internal Design Notes
 
-- Sanitize file names and reject separators in single-name input fields.
-- Use workspace-relative path validation before filesystem mutation.
-- After rename, update document session path if the renamed file is open.
-- Debounce watcher bursts and convert ambiguous bursts into tree refresh.
+- Package formats may include `.exe` or `.msi` for Windows, `.app`/`.dmg` or archive for macOS, and AppImage/deb/tarball for Linux depending on tooling maturity.
+- Keep packaging scripts reproducible in CI.
+- Generate checksums for release assets.
 
 ---
 
@@ -162,10 +156,10 @@ Recommended source-preservation cases:
 
 ## 14. Acceptance Criteria
 
-- User can create a Markdown file from the explorer.
-- Rename updates the tree and open document tab/session.
-- Delete protects dirty open documents.
-- External modification of an open file is detected and surfaced.
+- Each supported OS has a documented artifact strategy.
+- Release artifacts include checksums.
+- Unsigned warning instructions are present and honest.
+- The app displays build metadata.
 
 ---
 

@@ -13,3 +13,8 @@
 - [Architecture Overview](architecture.md)
 - [Source Preservation Model](source-preservation.md)
 - [Contributing and RFC Process](contributing.md)
+
+# For Maintainers
+
+- [Distribution & unsigned binaries](distribution.md)
+- [MVP Acceptance Checklist](mvp-acceptance.md)

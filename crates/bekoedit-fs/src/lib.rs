@@ -18,6 +18,7 @@ pub mod recent;
 pub mod recovery;
 pub mod settings;
 pub mod tree;
+pub mod watcher;
 pub mod workspace;
 
 pub use atomic::{FileFingerprint, atomic_write};
@@ -29,6 +30,7 @@ pub use recent::{RecentWorkspaceEntry, RecentWorkspaces};
 pub use recovery::{RecoverySnapshot, RecoveryStore};
 pub use settings::UserSettings;
 pub use tree::{FileNodeKind, FileTreeIndex, FileTreeNode};
+pub use watcher::{FsWatcher, WatchEvent};
 pub use workspace::{Workspace, WorkspaceError};
 
 #[cfg(test)]

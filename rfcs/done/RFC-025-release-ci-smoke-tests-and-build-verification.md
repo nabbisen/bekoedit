@@ -1,10 +1,10 @@
-# RFC-010: Main Shell, Layout, and Navigation UX
+# RFC-025: Release CI, Smoke Tests, and Build Verification
 
 **Project:** bekoedit  
-**Status:** Proposed  
+**Status:** Implemented (v0.3.0, 2026-06-07)  
 **Track:** MVP Critical  
-**Milestone:** M3  
-**Priority:** Critical  
+**Milestone:** M7  
+**Priority:** High  
 **Date:** 2026-06-07  
 **Related documents:** `bekoedit-requirements-definition.md`, `bekoedit-external-design.md`, `bekoedit-rfc-roadmap.md`
 
@@ -12,35 +12,33 @@
 
 ## 1. Summary
 
-Defines the primary application shell, panes, navigation hierarchy, editor header, mode switch, status bar, and responsive layout behavior.
-
-**Review resolution (2026-06-07).** The external design (`bekoedit-external-design.md` §16) describes an optional Split Mode (Text + Preview, Ctrl/Cmd+4), and the requirements definition lists it as Open Question 1. This RFC resolves that question for MVP: `EditorMode` is `{ Text, Form, Preview }` and Split Mode is **deferred to post-MVP** (tracked as a future amendment to this RFC or a follow-up RFC). The Ctrl/Cmd+4 shortcut remains reserved for Split Mode.
+Defines CI release checks, smoke tests, artifact verification, and pre-release gates.
 
 ---
 
 ## 2. Motivation
 
-- A focused Markdown editor depends on a clear layout.
-- Users need the file tree, editor, outline, and status information without IDE-level clutter.
+- Desktop packaging failures are common.
+- A Markdown editor must be tested for source preservation before release.
 
 ---
 
 ## 3. Goals
 
-- Define the three-pane desktop layout.
-- Provide mode switch between Text, Form, and Preview.
-- Support collapsible explorer and outline panels.
-- Keep writing area central and uncluttered.
-- Define empty, loading, document, and error pages.
+- Run cross-platform build verification.
+- Run unit and integration tests for document safety.
+- Perform packaging smoke checks.
+- Generate release notes and checksums.
+- Block release if source-preservation tests fail.
 
 ---
 
 ## 4. Non-Goals
 
-- Design mobile UI.
-- Create a full IDE layout system.
-- Support arbitrary draggable panel plugins.
-- Implement theming beyond basic light/dark in MVP.
+- Fully automate manual GUI QA.
+- Guarantee every OS-specific WebView version behavior.
+- Implement paid signing gates.
+- Deploy to app stores.
 
 ---
 
@@ -60,64 +58,32 @@ All RFCs in this package inherit the following invariants unless explicitly amen
 
 ## 6. User-Facing Design
 
-- Main layout wireframe:
-
-```text
-+--------------------------------------------------------------------------------+
-| App Bar: bekoedit | Workspace | File | Edit | View | Command Search | Settings |
-+----------------------+--------------------------------------+------------------+
-| Workspace Explorer   | Editor Header                        | Outline / Info   |
-| - root folder        | file.md   Dirty/Saved   Text Form Preview               |
-| - docs/              +--------------------------------------+------------------+
-|   - intro.md         |                                      | # Heading 1      |
-|   - design.md        |        Active editor surface         | ## Heading 2     |
-| - notes/             |        Text / Form / Preview         | Raw islands      |
-|                      |                                      | Warnings         |
-+----------------------+--------------------------------------+------------------+
-| Status: Saved | Line/Column | Workspace | Watcher | Errors | Accessibility msg |
-+--------------------------------------------------------------------------------+
-```
-
-Empty workspace page:
-
-```text
-+-----------------------------------------------------+
-| bekoedit                                            |
-|                                                     |
-|  Open a local Markdown workspace                    |
-|  [Open Folder]                                      |
-|                                                     |
-|  Recent Workspaces                                  |
-|  - ~/notes                                          |
-|  - ~/projects/docs                                  |
-+-----------------------------------------------------+
-```
-
+- Users do not see CI directly, but release confidence increases through documented checks and release notes.
 
 ---
 
 ## 7. Data Model / Contracts
 
 ```rust
-struct LayoutState {
-    explorer_visible: bool,
-    outline_visible: bool,
-    active_mode: EditorMode,
-    focused_region: FocusRegion,
+struct ReleaseGateReport {
+    version: SemVer,
+    test_summary: TestSummary,
+    source_preservation_suite: GateStatus,
+    packaging_suite: GateStatus,
+    known_issues: Vec<String>,
 }
-
-enum EditorMode { Text, Form, Preview }
 ```
 
-Layout state is user preference plus session state; it does not alter document content.
+Release reports may be attached to GitHub Releases or stored in docs.
 
 ---
 
 ## 8. Internal Design Notes
 
-- Keep shell components single-purpose: Explorer, EditorHeader, EditorSurface, OutlinePanel, StatusBar.
-- Mode switch sends a command; mode state changes only when projection is valid.
-- Save status, conflict banners, and raw island warnings must have reserved UI locations.
+- Add golden-file tests for Markdown preservation.
+- Test UTF-8, CRLF, front matter, HTML, lists, code fences, raw islands, and conflicts.
+- Use platform matrix builds.
+- Run a minimal GUI launch smoke test where feasible.
 
 ---
 
@@ -191,10 +157,10 @@ Recommended source-preservation cases:
 
 ## 14. Acceptance Criteria
 
-- The app has a recognizable main shell.
-- The active mode is always visible.
-- Explorer and outline can be hidden without losing document state.
-- Keyboard focus order is predictable across regions.
+- CI blocks merge/release on failing tests.
+- Golden source-preservation tests exist.
+- Release artifacts are produced by CI.
+- Checksums and build metadata are generated.
 
 ---
 

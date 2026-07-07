@@ -1,10 +1,10 @@
-# RFC-012: Preview Mode and Rendered Markdown Display
+# RFC-026: MVP Acceptance, Quality Gates, and Beta Readiness
 
 **Project:** bekoedit  
-**Status:** Proposed  
+**Status:** Implemented (v0.3.0, 2026-06-07)  
 **Track:** MVP Critical  
-**Milestone:** M3  
-**Priority:** High  
+**Milestone:** M7  
+**Priority:** Critical  
 **Date:** 2026-06-07  
 **Related documents:** `bekoedit-requirements-definition.md`, `bekoedit-external-design.md`, `bekoedit-rfc-roadmap.md`
 
@@ -12,32 +12,33 @@
 
 ## 1. Summary
 
-Defines read-only Markdown preview rendering derived from canonical source.
+Defines the MVP completeness criteria, beta readiness checklist, quality gates, and explicit exclusions.
 
 ---
 
 ## 2. Motivation
 
-- Users need a safe rendered view before visual editing becomes powerful.
-- Preview Mode validates source preservation without mutation.
+- Without acceptance criteria, the MVP can expand endlessly.
+- Beta users need a trustworthy but honestly scoped editor.
 
 ---
 
 ## 3. Goals
 
-- Render canonical Markdown into HTML for read-only preview.
-- Sanitize or control rendered HTML.
-- Support scroll position preservation where feasible.
-- Show raw island or unsupported syntax warnings if relevant.
+- Define MVP feature completeness.
+- Define source preservation gates.
+- Define usability and accessibility checks.
+- Define known limitations that are acceptable for beta.
+- Prevent post-MVP features from blocking MVP.
 
 ---
 
 ## 4. Non-Goals
 
-- Make Preview Mode editable.
-- Allow arbitrary script execution from Markdown.
-- Implement export profiles.
-- Implement custom theme marketplace.
+- Declare production maturity.
+- Guarantee no bugs.
+- Include advanced table editing, plugin APIs, cloud sync, or collaboration.
+- Claim full Markdown extension coverage.
 
 ---
 
@@ -57,34 +58,37 @@ All RFCs in this package inherit the following invariants unless explicitly amen
 
 ## 6. User-Facing Design
 
-- Preview Mode displays the rendered document in the main editor surface.
-- The mode switch clearly marks Preview as read-only.
-- If rendering fails partially, show fallback raw text or warning blocks.
+- Beta release notes must clearly state: local-first, source-preserving design, safe visual editing scope, raw islands, unsigned binaries, and known limitations.
 
 ---
 
 ## 7. Data Model / Contracts
 
-```rust
-struct PreviewProjection {
-    document_id: DocumentId,
-    revision: u64,
-    html: SanitizedHtml,
-    headings: Vec<HeadingNode>,
-    warnings: Vec<RenderWarning>,
-}
-```
+MVP readiness checklist:
 
-Preview is derived and disposable. It must never be saved as the document source.
+```text
+[ ] Open workspace
+[ ] File tree navigation
+[ ] Text Mode editing
+[ ] Preview Mode rendering
+[ ] Safe Form Mode MVP
+[ ] Raw Markdown Islands
+[ ] Autosave and manual save
+[ ] Conflict detection
+[ ] Recovery snapshot
+[ ] Accessibility baseline
+[ ] Cross-platform CI artifacts
+[ ] Source preservation tests
+```
 
 ---
 
 ## 8. Internal Design Notes
 
-- Use Rust Markdown parsing/rendering for deterministic preview generation.
-- Sanitize HTML or restrict rendering policy before injecting into WebView.
-- Do not execute scripts contained in Markdown HTML.
-- Cache preview by document revision if needed.
+- Create a release checklist in the repository.
+- Separate blocking defects from known limitations.
+- Require regression tests for every fixed source-corruption bug.
+- Keep beta feedback structured around source preservation, UX clarity, and file lifecycle.
 
 ---
 
@@ -158,10 +162,10 @@ Recommended source-preservation cases:
 
 ## 14. Acceptance Criteria
 
-- Preview updates after text edits.
-- Preview cannot mutate canonical text.
-- Inline HTML is displayed according to explicit safety policy.
-- Preview rendering errors are user-visible and non-destructive.
+- All MVP-critical RFCs are implemented or intentionally deferred with documented impact.
+- No known source-corruption bug remains unfixed.
+- Beta release notes document limitations.
+- A new user can complete core workflows without reading developer docs.
 
 ---
 

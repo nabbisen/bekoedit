@@ -111,6 +111,8 @@ pub enum EditorMode {
     Text,
     Form,
     Preview,
+    /// Side-by-side Text + Preview (RFC-010 Split Mode, enabled from v0.3.0).
+    Split,
 }
 
 #[cfg(test)]

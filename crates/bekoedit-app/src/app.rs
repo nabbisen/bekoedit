@@ -1,9 +1,12 @@
 //! Root application component (RFC-010/019/020/022).
 
+use std::path::PathBuf;
+
 use dioxus::prelude::*;
 use serde::Deserialize;
 
 use bekoedit_core::AppState;
+use bekoedit_fs::{FsWatcher, WatchEvent};
 use bekoedit_ui_contract::EditorMode;
 
 use crate::components::{
@@ -11,8 +14,10 @@ use crate::components::{
     editor_header::EditorHeader,
     explorer::Explorer,
     form_mode::FormMode,
+    outline_panel::OutlinePanel,
     preview_mode::PreviewMode,
     settings_screen::SettingsScreen,
+    split_mode::SplitMode,
     start_screen::StartScreen,
     status_bar::StatusBar,
     text_mode::TextMode,
@@ -41,15 +46,55 @@ pub fn App() -> Element {
     use_context_provider(|| Signal::new(settings.default_mode));
     use_context_provider(|| Signal::new(false_val())); // explorer collapsed
     use_context_provider(|| Signal::new(false_val())); // settings screen open
+    use_context_provider(|| Signal::new(false_val())); // outline panel open
     use_context_provider(|| Signal::new(Vec::<Toast>::new()));
 
-    // Background autosave + external-change poll.
+    // Background task: native fs watcher + autosave + external-change poll.
+    // Restarts the watcher whenever the active workspace root changes.
     use_future(move || {
-        let mut state: Signal<AppState> = state;
+        let mut app: Signal<AppState> = state;
         async move {
+            let mut watcher: Option<(PathBuf, FsWatcher)> = None;
             loop {
                 tokio::time::sleep(std::time::Duration::from_millis(TICK_MS)).await;
-                let mut s = state.write();
+
+                // (Re)start the watcher when the workspace changes.
+                let ws_root = app.read().workspace.as_ref().map(|w| w.root_path.clone());
+                match (&ws_root, watcher.as_ref().map(|(p, _)| p)) {
+                    (Some(new), Some(cur)) if new == cur => {} // unchanged
+                    (Some(new), _) => {
+                        watcher = FsWatcher::start(new).ok().map(|w| (new.clone(), w));
+                    }
+                    (None, _) => watcher = None,
+                }
+
+                // Drain OS filesystem events.
+                if let Some((_, ref fw)) = watcher {
+                    let events = fw.drain();
+                    if !events.is_empty() {
+                        let mut s = app.write();
+                        let sess_path = s.session.as_ref().map(|sess| sess.path.clone());
+                        let mut need_tree_refresh = false;
+                        for evt in events {
+                            match evt {
+                                WatchEvent::Modified(p) | WatchEvent::Deleted(p) => {
+                                    if sess_path.as_ref() == Some(&p) {
+                                        s.check_external_change();
+                                    }
+                                    need_tree_refresh = true;
+                                }
+                                WatchEvent::Created(_) => need_tree_refresh = true,
+                            }
+                        }
+                        if need_tree_refresh {
+                            s.refresh_tree();
+                        }
+                    }
+                }
+
+                // Autosave + fallback external-change check (catches renames
+                // and platforms where the watcher is unavailable).
+                let mut s = app.write();
                 if s.session.is_some() {
                     s.check_external_change();
                     let _ = s.autosave_tick(now_ms());
@@ -76,6 +121,7 @@ pub fn App() -> Element {
                     "mode_text" => mode_signal.set(EditorMode::Text),
                     "mode_form" => mode_signal.set(EditorMode::Form),
                     "mode_preview" => mode_signal.set(EditorMode::Preview),
+                    "mode_split" => mode_signal.set(EditorMode::Split),
                     _ => {}
                 }
             }
@@ -109,6 +155,7 @@ fn MainShell() -> Element {
     let lang = *use_context::<Signal<Lang>>().read();
     let mode = *use_context::<Signal<EditorMode>>().read();
     let collapsed = *use_context::<Signal<bool>>().read();
+    let outline_open = use_context::<Signal<bool>>();
     let has_document = state.read().session.is_some();
 
     rsx! {
@@ -117,15 +164,21 @@ fn MainShell() -> Element {
             main { class: "editor-pane",
                 EditorHeader {}
                 ConflictBanner {}
-                div { class: "surface",
-                    if has_document {
-                        match mode {
-                            EditorMode::Text    => rsx! { TextMode {} },
-                            EditorMode::Form    => rsx! { FormMode {} },
-                            EditorMode::Preview => rsx! { PreviewMode {} },
+                div { class: "surface-row",
+                    div { class: "surface",
+                        if has_document {
+                            match mode {
+                                EditorMode::Text    => rsx! { TextMode {} },
+                                EditorMode::Form    => rsx! { FormMode {} },
+                                EditorMode::Preview => rsx! { PreviewMode {} },
+                                EditorMode::Split   => rsx! { SplitMode {} },
+                            }
+                        } else {
+                            p { class: "empty-hint", {tr(lang, "editor.no_document")} }
                         }
-                    } else {
-                        p { class: "empty-hint", {tr(lang, "editor.no_document")} }
+                    }
+                    if *outline_open.read() && has_document {
+                        OutlinePanel {}
                     }
                 }
                 StatusBar {}

@@ -29,3 +29,9 @@ formatting, Lexical integration decision, incremental parsing.
 ## Future evaluation (RFCs 033–040)
 Full-text search, backlinks, export profiles, Git awareness, workspace
 templates, extension policy, plugin system, sync/collaboration.
+
+## Shipped — v0.3.0 (2026-06-07)
+Native filesystem watcher (inotify/FSEvents/ReadDirectoryChangesW),
+Split Mode with scroll-sync, Outline panel, distribution docs, CI
+smoke-test scaffold, MVP acceptance checklist. All MVP-critical RFCs
+(000–026) are now either Implemented or deferred to post-MVP.

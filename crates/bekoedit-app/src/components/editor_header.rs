@@ -1,6 +1,5 @@
-//! Editor header (RFC-010/019/020): mode switch, save, settings toggle,
-//! explorer collapse (RFC-020 Ctrl+B), language switcher.
-//! ARIA: mode buttons use role="tab" semantics via aria-pressed (RFC-021).
+//! Editor header (RFC-010/019/020): mode switch (with Split), outline toggle,
+//! save, settings, language switch, and explorer collapse.
 
 use dioxus::prelude::*;
 
@@ -18,7 +17,8 @@ pub fn EditorHeader() -> Element {
     let lang = *lang_signal.read();
     let mut mode_signal = use_context::<Signal<EditorMode>>();
     let mode = *mode_signal.read();
-    let mut collapsed = use_context::<Signal<bool>>();
+    let mut collapsed = use_context::<Signal<bool>>(); // explorer
+    let mut outline_open = use_context::<Signal<bool>>(); // outline
     let mut settings_open = use_context::<Signal<bool>>();
     let mut toasts = use_context::<Signal<Vec<crate::components::toast::Toast>>>();
 
@@ -37,15 +37,11 @@ pub fn EditorHeader() -> Element {
             role: "toolbar",
             aria_label: tr(lang, "editor.toolbar_label"),
 
-            // Explorer collapse toggle (RFC-020: Ctrl+B / button).
             button {
                 class: "icon-btn",
                 aria_label: tr(lang, "explorer.toggle"),
                 aria_pressed: "{*collapsed.read()}",
-                onclick: move |_| {
-                    let c = *collapsed.read();
-                    collapsed.set(!c);
-                },
+                onclick: move |_| { let c = *collapsed.read(); collapsed.set(!c); },
                 "☰"
             }
 
@@ -58,7 +54,6 @@ pub fn EditorHeader() -> Element {
                 }
             }
 
-            // Mode switch (RFC-019): visually a tab strip.
             nav {
                 class: "mode-switch",
                 role: "tablist",
@@ -67,6 +62,7 @@ pub fn EditorHeader() -> Element {
                     (EditorMode::Text,    "mode.text"),
                     (EditorMode::Form,    "mode.form"),
                     (EditorMode::Preview, "mode.preview"),
+                    (EditorMode::Split,   "mode.split"),
                 ] {
                     button {
                         role: "tab",
@@ -79,6 +75,16 @@ pub fn EditorHeader() -> Element {
             }
 
             div { class: "header-actions",
+                // Outline panel toggle (RFC-010).
+                if has_doc {
+                    button {
+                        class: if *outline_open.read() { "icon-btn active" } else { "icon-btn" },
+                        aria_label: tr(lang, "outline.toggle"),
+                        aria_pressed: "{*outline_open.read()}",
+                        onclick: move |_| { let o = *outline_open.read(); outline_open.set(!o); },
+                        "≡"
+                    }
+                }
                 if has_doc {
                     button {
                         class: "primary",
@@ -100,10 +106,7 @@ pub fn EditorHeader() -> Element {
                 }
                 button {
                     aria_label: tr(lang, "lang.switch"),
-                    onclick: move |_| {
-                        let next = lang.toggle();
-                        lang_signal.set(next);
-                    },
+                    onclick: move |_| { lang_signal.set(lang.toggle()); },
                     {tr(lang, "lang.switch")}
                 }
             }

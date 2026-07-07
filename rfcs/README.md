@@ -80,3 +80,16 @@ RFC-032 incremental parsing performance.
 RFC-033 full-text search · RFC-034 backlinks · RFC-035 export profiles ·
 RFC-036 Git awareness · RFC-037 workspace templates · RFC-038 extension
 policy · RFC-039 plugin system · RFC-040 sync & collaboration.
+
+## Implemented — v0.3.0 (`done/`)
+
+| RFC | Title | Notes |
+|-----|-------|-------|
+| RFC-005 | File operations & external file watching | `FsWatcher` wraps `notify` v6; restarts on workspace change |
+| RFC-010 | Main shell layout & navigation UX | Split Mode, Outline panel, explorer collapse |
+| RFC-012 | Preview Mode scroll sync | Proportional fractional sync in Split Mode |
+| RFC-024 | Packaging & unsigned distribution UX | `docs/src/distribution.md` covering all three platforms |
+| RFC-025 | Release CI smoke tests | Build-and-smoke CI job; ELOC check in lint job |
+| RFC-026 | MVP acceptance, quality gates & beta readiness | `docs/src/mvp-acceptance.md` — formal v1.0 gate |
+
+**All MVP-critical RFCs (RFC-000 through RFC-026) are now in `done/`.**

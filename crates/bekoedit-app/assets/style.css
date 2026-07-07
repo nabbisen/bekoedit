@@ -217,3 +217,36 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 /* settings screen has its own scrollable view */
 .settings-screen { height: 100vh; overflow-y: auto; }
+
+/* --- split mode (RFC-010/012) --- */
+.split-mode { display: flex; height: 100%; }
+.split-left { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.split-left .text-mode-cm { flex: 1; height: auto; }
+.split-left .cm-editor { height: 100%; }
+.split-divider { width: 1px; background: var(--line); flex-shrink: 0; cursor: col-resize; }
+.split-right { flex: 1; min-width: 0; overflow-y: auto; }
+.surface-row { flex: 1; display: flex; overflow: hidden; }
+.surface { flex: 1; overflow: auto; display: flex; flex-direction: column; }
+
+/* --- outline panel (RFC-010) --- */
+.outline-panel {
+  width: 220px;
+  min-width: 180px;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  padding: 12px 10px;
+  overflow-y: auto;
+}
+.outline-title { font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 10px; }
+.outline-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px; }
+.outline-btn {
+  width: 100%; text-align: left; border: none; background: transparent;
+  padding: 3px 6px; border-radius: 4px; cursor: pointer;
+  font-size: 0.88em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--ink);
+}
+.outline-btn:hover { background: #e7e3d8; }
+.outline-h1 .outline-btn { font-weight: 700; }
+.outline-h2 .outline-btn { font-weight: 600; }
+.outline-h3 .outline-btn { font-size: 0.84em; }
+.outline-h4, .outline-h5, .outline-h6 { .outline-btn { font-size: 0.82em; color: var(--muted); } }

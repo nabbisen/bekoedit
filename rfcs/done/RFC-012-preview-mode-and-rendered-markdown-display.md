@@ -1,9 +1,9 @@
-# RFC-024: Packaging and Unsigned Distribution UX
+# RFC-012: Preview Mode and Rendered Markdown Display
 
 **Project:** bekoedit  
-**Status:** Proposed  
+**Status:** Implemented (v0.3.0, 2026-06-07)  
 **Track:** MVP Critical  
-**Milestone:** M7  
+**Milestone:** M3  
 **Priority:** High  
 **Date:** 2026-06-07  
 **Related documents:** `bekoedit-requirements-definition.md`, `bekoedit-external-design.md`, `bekoedit-rfc-roadmap.md`
@@ -12,32 +12,32 @@
 
 ## 1. Summary
 
-Defines packaging targets and user-facing installation guidance for unsigned GitHub Release binaries.
+Defines read-only Markdown preview rendering derived from canonical source.
 
 ---
 
 ## 2. Motivation
 
-- Paid code signing and app store distribution are out of scope.
-- Unsigned distribution creates real UX friction that must be documented honestly.
+- Users need a safe rendered view before visual editing becomes powerful.
+- Preview Mode validates source preservation without mutation.
 
 ---
 
 ## 3. Goals
 
-- Produce downloadable builds for Windows, macOS, and Linux where feasible.
-- Document unsigned binary warnings.
-- Provide clear installation and first-launch instructions.
-- Avoid misleading trust claims.
+- Render canonical Markdown into HTML for read-only preview.
+- Sanitize or control rendered HTML.
+- Support scroll position preservation where feasible.
+- Show raw island or unsupported syntax warnings if relevant.
 
 ---
 
 ## 4. Non-Goals
 
-- Purchase Apple Developer or Authenticode certificates.
-- Publish to app stores.
-- Guarantee bypass instructions remain unchanged forever.
-- Implement auto-update in MVP.
+- Make Preview Mode editable.
+- Allow arbitrary script execution from Markdown.
+- Implement export profiles.
+- Implement custom theme marketplace.
 
 ---
 
@@ -57,32 +57,34 @@ All RFCs in this package inherit the following invariants unless explicitly amen
 
 ## 6. User-Facing Design
 
-- Release page includes platform-specific download options and first-run notes.
-- The app About page shows version, commit hash, license, and unsigned distribution status.
+- Preview Mode displays the rendered document in the main editor surface.
+- The mode switch clearly marks Preview as read-only.
+- If rendering fails partially, show fallback raw text or warning blocks.
 
 ---
 
 ## 7. Data Model / Contracts
 
 ```rust
-struct BuildMetadata {
-    version: SemVer,
-    git_commit: String,
-    build_target: String,
-    build_date: String,
-    signed: bool,
+struct PreviewProjection {
+    document_id: DocumentId,
+    revision: u64,
+    html: SanitizedHtml,
+    headings: Vec<HeadingNode>,
+    warnings: Vec<RenderWarning>,
 }
 ```
 
-Build metadata is embedded into the binary and displayed in About.
+Preview is derived and disposable. It must never be saved as the document source.
 
 ---
 
 ## 8. Internal Design Notes
 
-- Package formats may include `.exe` or `.msi` for Windows, `.app`/`.dmg` or archive for macOS, and AppImage/deb/tarball for Linux depending on tooling maturity.
-- Keep packaging scripts reproducible in CI.
-- Generate checksums for release assets.
+- Use Rust Markdown parsing/rendering for deterministic preview generation.
+- Sanitize HTML or restrict rendering policy before injecting into WebView.
+- Do not execute scripts contained in Markdown HTML.
+- Cache preview by document revision if needed.
 
 ---
 
@@ -156,10 +158,10 @@ Recommended source-preservation cases:
 
 ## 14. Acceptance Criteria
 
-- Each supported OS has a documented artifact strategy.
-- Release artifacts include checksums.
-- Unsigned warning instructions are present and honest.
-- The app displays build metadata.
+- Preview updates after text edits.
+- Preview cannot mutate canonical text.
+- Inline HTML is displayed according to explicit safety policy.
+- Preview rendering errors are user-visible and non-destructive.
 
 ---
 

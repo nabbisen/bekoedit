@@ -70,3 +70,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   platform default settings file.
 
 [0.2.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.2.0
+
+## [0.3.0] - 2026-06-07
+
+### Added
+- **Native filesystem watcher** (RFC-005): `bekoedit-fs::FsWatcher` wraps
+  `notify::RecommendedWatcher` (inotify/FSEvents/ReadDirectoryChangesW).
+  External file modifications now trigger conflict detection and tree refresh
+  within ~500 ms instead of relying solely on the autosave tick poll.
+- **Split Mode** (RFC-010): side-by-side Text editor + rendered preview.
+  Accessible via `Ctrl/Cmd+4` or the new Split tab in the mode switch.
+  `EditorMode::Split` added to the `bekoedit-ui-contract` contract.
+- **Outline panel** (RFC-010): heading navigation derived from the live
+  `MarkdownIndex`. Clicking a heading scrolls CM6 to that position.
+  Toggled with the `≡` button in the editor header (`Ctrl/Cmd+Shift+O`
+  forthcoming). The panel is visible in all editing modes.
+- **Scroll synchronisation** (RFC-012): in Split Mode, the preview pane
+  mirrors the fractional scroll position of the CM6 editor via a JS
+  scroll-event relay and a `dioxus::document::eval` call.
+- **Outline toggle context** (RFC-010): `outline_open: Signal<bool>` added
+  to app context; EditorHeader exposes the `≡` toggle button.
+- **RFC integrity checker** (`scripts/check-rfcs.sh`): validates Status
+  fields, `done/` completeness, duplicate numbers, and README link
+  resolution — the optional CI invariant from RFC-000 §13.
+- **CI smoke-test scaffold** (RFC-025): `build-and-smoke` job in CI builds
+  the JS bundle, compiles the desktop binary, and runs a headless-launch
+  check. The `--headless-smoke` flag is scaffolded as a no-op pending a
+  small Dioxus startup probe.
+- **Distribution docs** (RFC-024): `docs/src/distribution.md` covers
+  Gatekeeper (macOS), SmartScreen (Windows), and apt deps (Linux).
+- **MVP acceptance checklist** (RFC-026): `docs/src/mvp-acceptance.md`
+  is the formal gate. Every criterion must be ticked before any v1.0 release.
+
+### Changed
+- `app.rs` background task: now drives `FsWatcher::drain()` each tick in
+  addition to the autosave poll; the watcher is lazily started when a
+  workspace opens and restarted if the workspace root changes.
+- EditorHeader: outline toggle `≡` button added; mode switch includes Split.
+- Keyboard shortcut `Ctrl/Cmd+4` mapped to Split mode.
+- `AppState` context now includes a third `Signal<bool>` for outline
+  panel visibility (explorer collapsed and settings open remain separate).
+
+[0.3.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.3.0

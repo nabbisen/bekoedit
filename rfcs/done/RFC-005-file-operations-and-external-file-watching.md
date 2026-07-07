@@ -1,10 +1,10 @@
-# RFC-025: Release CI, Smoke Tests, and Build Verification
+# RFC-005: File Operations and External File Watching
 
 **Project:** bekoedit  
-**Status:** Proposed  
+**Status:** Implemented (v0.3.0, 2026-06-07)  
 **Track:** MVP Critical  
-**Milestone:** M7  
-**Priority:** High  
+**Milestone:** M1  
+**Priority:** Critical  
 **Date:** 2026-06-07  
 **Related documents:** `bekoedit-requirements-definition.md`, `bekoedit-external-design.md`, `bekoedit-rfc-roadmap.md`
 
@@ -12,33 +12,32 @@
 
 ## 1. Summary
 
-Defines CI release checks, smoke tests, artifact verification, and pre-release gates.
+Defines create, rename, delete, refresh, and external file-change detection for workspace files.
 
 ---
 
 ## 2. Motivation
 
-- Desktop packaging failures are common.
-- A Markdown editor must be tested for source preservation before release.
+- A Markdown editor that manages files must avoid destructive surprises.
+- External tools such as Git, sync clients, and terminals may change files while bekoedit is open.
 
 ---
 
 ## 3. Goals
 
-- Run cross-platform build verification.
-- Run unit and integration tests for document safety.
-- Perform packaging smoke checks.
-- Generate release notes and checksums.
-- Block release if source-preservation tests fail.
+- Support safe create, rename, delete, and refresh.
+- Detect external file create, modify, rename, and delete events where platform APIs allow.
+- Protect dirty documents before destructive file operations.
+- Prefer move-to-trash for delete when available.
 
 ---
 
 ## 4. Non-Goals
 
-- Fully automate manual GUI QA.
-- Guarantee every OS-specific WebView version behavior.
-- Implement paid signing gates.
-- Deploy to app stores.
+- Implement Git operations.
+- Implement cross-device sync conflict merging.
+- Guarantee perfect watcher behavior on every filesystem.
+- Provide bulk file operations in MVP.
 
 ---
 
@@ -58,32 +57,38 @@ All RFCs in this package inherit the following invariants unless explicitly amen
 
 ## 6. User-Facing Design
 
-- Users do not see CI directly, but release confidence increases through documented checks and release notes.
+- Context menu on file tree nodes offers New File, New Folder, Rename, Delete, Reveal in Folder, and Refresh where applicable.
+- Destructive operations require clear confirmation.
+- External deletion of an open file triggers a visible conflict state.
 
 ---
 
 ## 7. Data Model / Contracts
 
 ```rust
-struct ReleaseGateReport {
-    version: SemVer,
-    test_summary: TestSummary,
-    source_preservation_suite: GateStatus,
-    packaging_suite: GateStatus,
-    known_issues: Vec<String>,
+enum FileOperationCommand {
+    CreateMarkdown { parent: FileId, name: String },
+    CreateFolder { parent: FileId, name: String },
+    Rename { target: FileId, new_name: String },
+    Delete { target: FileId, strategy: DeleteStrategy },
+    RefreshTree,
+}
+
+enum FileWatchEvent {
+    Created(PathBuf), Modified(PathBuf), Deleted(PathBuf), Renamed { from: PathBuf, to: PathBuf }, UnknownRefreshNeeded
 }
 ```
 
-Release reports may be attached to GitHub Releases or stored in docs.
+All commands resolve through the active workspace root and must reject path traversal.
 
 ---
 
 ## 8. Internal Design Notes
 
-- Add golden-file tests for Markdown preservation.
-- Test UTF-8, CRLF, front matter, HTML, lists, code fences, raw islands, and conflicts.
-- Use platform matrix builds.
-- Run a minimal GUI launch smoke test where feasible.
+- Sanitize file names and reject separators in single-name input fields.
+- Use workspace-relative path validation before filesystem mutation.
+- After rename, update document session path if the renamed file is open.
+- Debounce watcher bursts and convert ambiguous bursts into tree refresh.
 
 ---
 
@@ -157,10 +162,10 @@ Recommended source-preservation cases:
 
 ## 14. Acceptance Criteria
 
-- CI blocks merge/release on failing tests.
-- Golden source-preservation tests exist.
-- Release artifacts are produced by CI.
-- Checksums and build metadata are generated.
+- User can create a Markdown file from the explorer.
+- Rename updates the tree and open document tab/session.
+- Delete protects dirty open documents.
+- External modification of an open file is detected and surfaced.
 
 ---
 

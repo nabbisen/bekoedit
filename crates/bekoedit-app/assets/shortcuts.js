@@ -22,6 +22,7 @@
     else if (e.key === "2") { key = "mode_form"; }
     else if (e.key === "3") { key = "mode_preview"; }
     else if (e.key === "b" || e.key === "B") { key = "toggle_explorer"; }
+    else if (e.key === "4") { key = "mode_split"; }
 
     if (key) {
       e.preventDefault();

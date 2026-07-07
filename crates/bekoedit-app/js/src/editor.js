@@ -158,6 +158,8 @@ function focus() {
 }
 
 // Attach to window so Rust's eval calls can reach it.
-window.__bk = { init, setDoc, focus };
+// Expose the EditorView instance for outline navigation (RFC-010).
+Object.defineProperty(window.__bk || {}, '_view', { get: () => view });
+window.__bk = { init, setDoc, focus, get _view() { return view; } };
 
 export { init, setDoc, focus };
