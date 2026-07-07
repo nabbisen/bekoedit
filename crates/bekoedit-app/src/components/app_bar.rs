@@ -1,10 +1,8 @@
-//! Persistent application bar (top of every screen).
+//! Persistent application bar — one logo, one overflow menu.
 //!
-//! Provides:
-//! - bekoedit logo — clicking clears the workspace (returns to start screen)
-//! - File menu — Open Folder…, New File, ─, Close Workspace
-//! - Language toggle (EN ↔ JA)
-//! - Settings gear
+//! Keeps two items visible at all times: the home logo and a single
+//! overflow "⋯" that surfaces everything else. First-time users are not
+//! confronted with File menus, language selectors, or settings gears.
 
 use dioxus::prelude::*;
 
@@ -17,9 +15,9 @@ use crate::state::now_ms;
 pub fn AppBar() -> Element {
     let mut state = use_context::<Signal<AppState>>();
     let mut lang_sig = use_context::<Signal<Lang>>();
-    let lang = *lang_sig.read();
+    let ui_lang = *lang_sig.read();
     let mut settings_open = use_context::<Signal<bool>>();
-    let mut file_menu_open = use_signal(|| false);
+    let mut menu_open = use_signal(|| false);
 
     let has_workspace = state.read().workspace.is_some();
 
@@ -28,52 +26,53 @@ pub fn AppBar() -> Element {
             // ── Logo / Home ───────────────────────────────────────────────
             button {
                 class: "app-bar-logo",
-                title: tr(lang, "start.open_folder"),
+                title: tr(ui_lang, "app.title"),
                 onclick: move |_| {
-                    // Return to start screen by clearing the workspace
+                    let o = *menu_open.read();
+                    if o { menu_open.set(false); }
                     state.write().close_workspace();
                 },
                 "bekoedit"
             }
 
-            // ── File menu ─────────────────────────────────────────────────
+            div { class: "app-bar-spacer" }
+
+            // ── Single overflow menu ─────────────────────────────────────
             div { class: "app-bar-menu-wrap",
                 button {
-                    class: if *file_menu_open.read() { "app-bar-btn active" } else { "app-bar-btn" },
+                    class: if *menu_open.read() { "app-bar-btn active" } else { "app-bar-btn" },
+                    aria_label: "Menu",
                     aria_haspopup: "menu",
-                    aria_expanded: "{*file_menu_open.read()}",
+                    aria_expanded: "{*menu_open.read()}",
                     onclick: move |_| {
-                        let cur = *file_menu_open.read();
-                        file_menu_open.set(!cur);
+                        let cur = *menu_open.read();
+                        menu_open.set(!cur);
                     },
-                    {tr(lang, "menu.file")}
-                    " ▾"
+                    "⋯"
                 }
-                if *file_menu_open.read() {
+                if *menu_open.read() {
                     div {
                         class: "app-bar-dropdown",
                         role: "menu",
-                        // Dismiss on blur
-                        onblur: move |_| file_menu_open.set(false),
+                        tabindex: "-1",
 
                         // Open Folder
                         button {
                             class: "dropdown-item",
                             role: "menuitem",
                             onclick: move |_| {
-                                file_menu_open.set(false);
+                                menu_open.set(false);
                                 let mut st = state;
                                 spawn(async move {
-                                    if let Some(handle) = rfd::AsyncFileDialog::new()
+                                    if let Some(h) = rfd::AsyncFileDialog::new()
                                         .set_title("Select workspace folder")
-                                        .pick_folder()
-                                        .await
+                                        .pick_folder().await
                                     {
-                                        let _ = st.write().open_workspace(handle.path(), now_ms());
+                                        let _ = st.write().open_workspace(h.path(), now_ms());
                                     }
                                 });
                             },
-                            "📂 " {tr(lang, "start.open_folder")}
+                            "📂  " {tr(ui_lang, "start.open_folder")}
                         }
 
                         // New File
@@ -81,52 +80,51 @@ pub fn AppBar() -> Element {
                             class: "dropdown-item",
                             role: "menuitem",
                             onclick: move |_| {
-                                file_menu_open.set(false);
+                                menu_open.set(false);
                                 state.write().new_untitled();
                             },
-                            "📝 " {tr(lang, "start.new_file")}
+                            "📝  " {tr(ui_lang, "start.new_file")}
                         }
 
-                        // Close Workspace
+                        // Close Workspace (only when one is open)
                         if has_workspace {
                             hr { class: "dropdown-sep" }
                             button {
                                 class: "dropdown-item",
                                 role: "menuitem",
                                 onclick: move |_| {
-                                    file_menu_open.set(false);
+                                    menu_open.set(false);
                                     state.write().close_workspace();
                                 },
-                                {tr(lang, "menu.close_workspace")}
+                                {tr(ui_lang, "menu.close_workspace")}
                             }
+                        }
+
+                        hr { class: "dropdown-sep" }
+
+                        // Language
+                        button {
+                            class: "dropdown-item",
+                            role: "menuitem",
+                            onclick: move |_| {
+                                menu_open.set(false);
+                                lang_sig.set(if ui_lang == Lang::En { Lang::Ja } else { Lang::En });
+                            },
+                            "🌐  " {tr(ui_lang, "lang.switch")}
+                        }
+
+                        // Settings
+                        button {
+                            class: "dropdown-item",
+                            role: "menuitem",
+                            onclick: move |_| {
+                                menu_open.set(false);
+                                settings_open.set(true);
+                            },
+                            "⚙  " {tr(ui_lang, "settings.title")}
                         }
                     }
                 }
-            }
-
-            // Spacer
-            div { class: "app-bar-spacer" }
-
-            // ── Language toggle ───────────────────────────────────────────
-            button {
-                class: "app-bar-btn",
-                title: tr(lang, "lang.switch"),
-                onclick: move |_| {
-                    let next = if lang == Lang::En { Lang::Ja } else { Lang::En };
-                    lang_sig.set(next);
-                },
-                {tr(lang, "lang.switch")}
-            }
-
-            // ── Settings ─────────────────────────────────────────────────
-            button {
-                class: if *settings_open.read() { "app-bar-btn active" } else { "app-bar-btn" },
-                aria_label: tr(lang, "settings.title"),
-                onclick: move |_| {
-                    let cur = *settings_open.read();
-                    settings_open.set(!cur);
-                },
-                "⚙"
             }
         }
     }

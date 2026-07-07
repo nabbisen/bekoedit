@@ -401,3 +401,16 @@ pre.math-block code { font-style: italic; color: #444; }
 }
 .dropdown-item:hover { background: var(--hover-bg); }
 .dropdown-sep { border: none; border-top: 1px solid var(--line); margin: 4px 0; }
+
+/* --- advanced overflow dropdown (editor header) --- */
+.adv-dropdown {
+  position: absolute; top: calc(100% + 4px); right: 0; min-width: 180px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  padding: 4px; z-index: 200;
+}
+/* Mode tab secondary (Form) — slightly muted by default */
+.mode-tab-secondary { opacity: .7; }
+.mode-tab-secondary:hover, .mode-tab-secondary.active { opacity: 1; }
+/* Status bar tooltip-only detail */
+.save-state[title] { cursor: default; }

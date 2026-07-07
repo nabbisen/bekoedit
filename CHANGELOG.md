@@ -488,3 +488,41 @@ will resolve when those upstream crates release compatible versions.
   resets save state and autosave; returns the UI to the start screen.
 
 [0.11.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.11.0
+
+## [0.11.1] - 2026-06-09
+
+### Design: Less is more
+
+Applied the "Less is more" principle throughout the UI. First-time users
+now see substantially fewer controls at a glance; advanced features are
+accessible but not in the way.
+
+**Visible control count before → after:**
+
+| Zone | Before | After |
+|------|--------|-------|
+| AppBar | 4 (logo, File▾, Language, ⚙) | 2 (logo, ⋯) |
+| EditorHeader | 15 (6 panel toggles, 4 mode tabs, undo, redo, export, save, save-as) | 5 (explorer, filename, Text/Preview/Form tabs, Save) |
+| Explorer | 4 (+ New, ↻ Refresh, template dropdown, tree) | 2 (+ New, tree) |
+| StatusBar | 5 (save state, word count, line ending, islands, diagnostics) | 1 (save state — detail on hover) |
+| **Total** | **28** | **10** |
+
+**Tier model:**
+
+- **Tier 1 (always visible):** filename · save state · Text / Preview / Form mode tabs · Save
+- **Tier 2 (on demand):** Form Mode is in the primary mode bar but visually subdued
+- **Tier 3 (power, behind "•••"):** Split · Outline · Search · Backlinks · History · Export HTML
+
+**Specific changes:**
+
+- `AppBar`: two items only — "bekoedit" (home) + "⋯" overflow menu. The File
+  menu, Language toggle, and Settings gear moved inside ⋯.
+- `EditorHeader`: undo/redo toolbar buttons removed (keyboard shortcuts suffice);
+  all panel toggles moved into the "•••" dropdown; only Text, Preview, and Form
+  tabs remain in the primary bar.
+- `StatusBar`: one label only. Word count, line ending, island count, and
+  diagnostic count moved to a tooltip (`title` attribute) on the save-state span.
+- Explorer: refresh button removed (swdir-tree auto-refreshes; manual refresh
+  still available via "•••" or tree events).
+
+[0.11.1]: https://github.com/nabbisen/bekoedit/releases/tag/v0.11.1
