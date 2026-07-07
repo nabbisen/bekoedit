@@ -563,3 +563,29 @@ and core crates (no new dev-dependencies; `tempfile` remains the only one).
   persists it. Caught by `save_as_writes_to_disk_and_clears_untitled`.
 
 [0.11.2]: https://github.com/nabbisen/bekoedit/releases/tag/v0.11.2
+
+## [0.11.3] - 2026-06-09
+
+### Fixed
+- **"New File" on the start screen did nothing.** `new_untitled()` creates a
+  session without opening a workspace, but the navigation guard in `app.rs`
+  was `workspace.is_some()`, so the editor never appeared. Guard widened to
+  `workspace.is_some() || session.is_some()`.
+
+- **Clicking a file showed "Dragging 1 item(s)" and never opened the
+  document.**  Root cause: `dioxus-swdir-tree`'s `TreeRow.on_mouseup` only
+  dispatches `DragMsg::Released` when `is_drag_active` is `true`, but
+  `is_drag_active` is captured at last-render time. In Dioxus Desktop a fast
+  click (mousedown → mouseup before the next repaint) leaves `is_drag_active`
+  stale at `false`, so `Released` never fires, the drag state is never
+  cleared, the "Dragging N item(s)" overlay persists, and `DragOutcome::Clicked`
+  — the only path to `open_document` — is never reached.
+
+  Fix: replaced `DirectoryTreeView` with a custom `TreeRowItem` component
+  that renders each visible row with a plain `onclick` handler. The
+  `DirectoryTree` state machine and `use_scan_driver` from the library are
+  still used for lazy directory loading and the prefetch-skip list. Only the
+  drag-and-drop rendering layer is bypassed — bekoedit has no use for
+  drag-and-drop in the file tree.
+
+[0.11.3]: https://github.com/nabbisen/bekoedit/releases/tag/v0.11.3

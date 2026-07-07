@@ -414,3 +414,15 @@ pre.math-block code { font-style: italic; color: #444; }
 .mode-tab-secondary:hover, .mode-tab-secondary.active { opacity: 1; }
 /* Status bar tooltip-only detail */
 .save-state[title] { cursor: default; }
+
+/* --- custom tree rows (no drag-and-drop) --- */
+.tree-rows { overflow-y: auto; }
+.tree-row {
+  display: flex; align-items: center; gap: 4px;
+  padding: 3px 8px; cursor: pointer; border-radius: 4px;
+  font-size: .85em; white-space: nowrap; overflow: hidden;
+  user-select: none;
+}
+.tree-row:hover { background: var(--hover-bg); }
+.tree-row.tree-file .tree-icon { opacity: .4; }
+.tree-name { overflow: hidden; text-overflow: ellipsis; }

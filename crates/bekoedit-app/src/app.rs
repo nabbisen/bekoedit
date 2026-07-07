@@ -130,7 +130,7 @@ pub fn App() -> Element {
         }
     });
 
-    let workspace_open = state.read().workspace.is_some();
+    let workspace_open = state.read().workspace.is_some() || state.read().session.is_some();
     let settings_open = *use_context::<Signal<bool>>().read();
 
     rsx! {
