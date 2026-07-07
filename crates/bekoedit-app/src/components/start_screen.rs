@@ -1,66 +1,94 @@
-//! Start screen (external design §18): open a folder as workspace, or
-//! pick a recent workspace. Open failures surface inline without crashing
-//! (RFC-003 acceptance).
-
-use std::path::PathBuf;
+//! Start screen (RFC-010): shown when no workspace is open.
+//!
+//! Provides three entry points:
+//! - **Open Folder** — native OS folder picker via `rfd::AsyncFileDialog`
+//! - **New File** — blank in-memory document, no workspace required
+//! - **Recent workspaces** — reopen a previously used folder
 
 use dioxus::prelude::*;
 
 use bekoedit_core::AppState;
 
 use crate::i18n::{Lang, tr};
-use crate::state::now_secs;
+use crate::state::now_ms;
 
 #[component]
 pub fn StartScreen() -> Element {
     let mut state = use_context::<Signal<AppState>>();
     let lang = *use_context::<Signal<Lang>>().read();
-    let mut path_input = use_signal(String::new);
-    let mut error = use_signal(String::new);
 
-    let mut open = move |path: PathBuf| {
-        let result = state.write().open_workspace(&path, now_secs());
-        if let Err(e) = result {
-            error.set(e.to_string());
-        }
-    };
-
-    let recents = state.read().recents.entries.clone();
+    let recents: Vec<_> = state
+        .read()
+        .recents
+        .entries
+        .iter()
+        .map(|e| e.root_path.clone())
+        .collect();
 
     rsx! {
         div { class: "start-screen",
-            h1 { {tr(lang, "app.title")} }
-            p { class: "tagline", {tr(lang, "start.tagline")} }
-            div { class: "open-row",
-                input {
-                    r#type: "text",
-                    placeholder: tr(lang, "start.path_placeholder"),
-                    value: "{path_input}",
-                    oninput: move |evt| path_input.set(evt.value()),
+            div { class: "start-card",
+                h1 { class: "start-title", {tr(lang, "app.title")} }
+                p  { class: "start-tagline muted", {tr(lang, "app.tagline")} }
+
+                div { class: "start-actions",
+                    // ── Open Folder ─────────────────────────────────────────
+                    button {
+                        class: "btn-primary start-btn",
+                        aria_label: tr(lang, "start.open_folder"),
+                        onclick: move |_| {
+                            let mut st = state;
+                            spawn(async move {
+                                if let Some(handle) = rfd::AsyncFileDialog::new()
+                                    .set_title("Select a workspace folder")
+                                    .pick_folder()
+                                    .await
+                                {
+                                    let _ = st.write().open_workspace(handle.path(), now_ms());
+                                }
+                            });
+                        },
+                        "📂 "
+                        {tr(lang, "start.open_folder")}
+                    }
+
+                    // ── New In-Memory File ───────────────────────────────────
+                    button {
+                        class: "btn-secondary start-btn",
+                        aria_label: tr(lang, "start.new_file"),
+                        onclick: move |_| {
+                            state.write().new_untitled();
+                        },
+                        "📝 "
+                        {tr(lang, "start.new_file")}
+                    }
                 }
-                button {
-                    class: "primary",
-                    onclick: move |_| open(PathBuf::from(path_input.read().trim())),
-                    {tr(lang, "start.open")}
-                }
-            }
-            if !error.read().is_empty() {
-                p { class: "error", "{error}" }
-            }
-            h2 { {tr(lang, "start.recents")} }
-            if recents.is_empty() {
-                p { class: "muted", {tr(lang, "start.no_recents")} }
-            } else {
-                ul { class: "recents",
-                    for entry in recents {
-                        li {
-                            button {
-                                onclick: {
-                                    let path = entry.root_path.clone();
-                                    move |_| open(path.clone())
-                                },
-                                span { class: "recent-name", "{entry.display_name}" }
-                                span { class: "recent-path", "{entry.root_path.display()}" }
+
+                // ── Recent workspaces ────────────────────────────────────────
+                if !recents.is_empty() {
+                    div { class: "start-recents",
+                        h2 { class: "start-recents-title", {tr(lang, "start.recents")} }
+                        ul { class: "start-recents-list",
+                            for path in &recents {
+                                li { key: "{path.display()}",
+                                    button {
+                                        class: "start-recent-btn",
+                                        onclick: {
+                                            let p = path.clone();
+                                            move |_| {
+                                                if p.exists() {
+                                                    let _ = state.write().open_workspace(&p, now_ms());
+                                                }
+                                            }
+                                        },
+                                        span { class: "recent-name",
+                                            {path.file_name()
+                                                .map(|n| n.to_string_lossy().into_owned())
+                                                .unwrap_or_else(|| path.display().to_string())}
+                                        }
+                                        span { class: "recent-path muted", "{path.display()}" }
+                                    }
+                                }
                             }
                         }
                     }

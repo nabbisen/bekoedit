@@ -12,6 +12,8 @@ name = "bekoedit"
 path = "src/main.rs"
 
 [dependencies]
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal", "pollster"] }
+dioxus-swdir-tree = { version = "0.7", default-features = true }
 bekoedit-core = { path = "../bekoedit-core" }
 bekoedit-fs = { path = "../bekoedit-fs" }
 bekoedit-markdown = { path = "../bekoedit-markdown" }

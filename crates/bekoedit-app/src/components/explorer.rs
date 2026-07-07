@@ -1,229 +1,192 @@
-//! Workspace explorer sidebar (RFC-004/005, RFC-021 accessibility).
+//! Workspace explorer sidebar using dioxus-swdir-tree (RFC-004/005).
 //!
-//! ARIA tree semantics: the list carries role="tree" and each row is a
-//! role="treeitem" with aria-selected. Arrow-key navigation is handled
-//! inline (RFC-021: arrow-key navigation, expand/collapse by keyboard,
-//! clear selected file state).
-//!
-//! Errors are surfaced as toasts (RFC-023) rather than inline error text,
-//! keeping the sidebar uncluttered.
+//! Replaces the hand-rolled recursive scanner with DirectoryTreeView, which
+//! provides lazy loading (one level per expansion), built-in keyboard
+//! navigation, and the DEFAULT_PREFETCH_SKIP list (.git, node_modules,
+//! target …). File operations (create, rename, delete) are surfaced as a
+//! compact toolbar above the tree.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use dioxus::prelude::*;
+use dioxus_swdir_tree::{
+    DirectoryTree, DirectoryTreeEvent, DirectoryTreeView, DragOutcome, SelectionMode,
+    ThreadExecutor, use_scan_driver,
+};
 
 use bekoedit_core::AppState;
-use bekoedit_fs::{DeleteStrategy, FileNodeKind};
 
-use crate::components::toast::{ToastKind, push_toast};
 use crate::i18n::{Lang, tr};
+
+/// Markdown file extensions the explorer opens as documents.
+fn is_markdown(path: &std::path::Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|e| e.to_str())
+            .map(|s| s.to_lowercase())
+            .as_deref(),
+        Some("md") | Some("markdown")
+    )
+}
 
 #[component]
 pub fn Explorer() -> Element {
     let mut state = use_context::<Signal<AppState>>();
     let lang = *use_context::<Signal<Lang>>().read();
-    let mut toasts = use_context::<Signal<Vec<crate::components::toast::Toast>>>();
+    let _toasts = use_context::<Signal<Vec<crate::components::toast::Toast>>>();
 
+    // ── Tree state ─────────────────────────────────────────────────────────
+    let root = state.read().workspace.as_ref().map(|w| w.root_path.clone());
+    let Some(root_path) = root else {
+        return rsx! { aside { class: "explorer", p { class: "muted", {tr(lang, "explorer.no_workspace")} } } };
+    };
+
+    let root_sig = use_memo(move || root_path.clone());
+    let mut tree_sig = use_signal(|| DirectoryTree::new(root_sig()));
+    let scan_ch = use_scan_driver(tree_sig, Arc::new(ThreadExecutor));
+
+    let on_tree_event = move |ev: DirectoryTreeEvent| {
+        match ev {
+            DirectoryTreeEvent::Toggled(path) => {
+                if let Some(req) = tree_sig.write().on_toggled(&path) {
+                    scan_ch.send(req);
+                }
+            }
+            DirectoryTreeEvent::Selected { path, is_dir, mode } => {
+                tree_sig.write().on_selected(&path, is_dir, mode);
+                if !is_dir && is_markdown(&path) {
+                    // Open the document in AppState (workspace-relative path)
+                    if let Ok(rel) = path.strip_prefix(root_sig()) {
+                        let _ = state.write().open_document(rel);
+                    }
+                }
+            }
+            DirectoryTreeEvent::Drag(msg) => {
+                let outcome = tree_sig.write().on_drag_msg(msg);
+                if let DragOutcome::Clicked { path, is_dir } = outcome {
+                    tree_sig
+                        .write()
+                        .on_selected(&path, is_dir, SelectionMode::Replace);
+                }
+            }
+        }
+    };
+
+    // ── File operation toolbar state ────────────────────────────────────────
     let mut new_name = use_signal(String::new);
-    let _tpl_content = use_signal(String::new);
-    let _templates = state.read().list_templates();
-    let mut rename_to = use_signal(String::new);
-    let mut selected = use_signal(|| Option::<PathBuf>::None);
-    let mut rename_mode = use_signal(|| false);
+    let mut show_new = use_signal(|| false);
+    let mut error = use_signal(String::new);
+    let templates = state.read().list_templates();
+    let mut tpl_content = use_signal(String::new);
 
-    let nodes = state.read().tree.nodes.clone();
-    let git_map = state.read().git_status();
-
-    let workspace_name = state
-        .read()
-        .workspace
-        .as_ref()
-        .map(|w| w.display_name.clone())
-        .unwrap_or_default();
-
-    let mut handle_err = move |result: Result<(), String>| {
+    let mut run = move |result: Result<(), String>| {
         if let Err(e) = result {
-            push_toast(&mut toasts, ToastKind::Error, e);
+            error.set(e);
+        } else {
+            error.set(String::new());
+            show_new.set(false);
+            new_name.set(String::new());
         }
     };
 
     rsx! {
-        aside {
-            class: "explorer",
-            aria_label: tr(lang, "explorer.region_label"),
-            h2 { class: "workspace-name", "{workspace_name}" }
+        aside { class: "explorer",
+            role: "complementary",
+            aria_label: tr(lang, "explorer.label"),
 
-            // New-file row
-            div { class: "new-file-row",
-                input {
-                    r#type: "text",
-                    placeholder: tr(lang, "explorer.name_placeholder"),
-                    aria_label: tr(lang, "explorer.new_file"),
-                    value: "{new_name}",
-                    oninput: move |evt| new_name.set(evt.value()),
-                    // Commit on Enter (keyboard UX).
-                    onkeydown: move |evt| {
-                        if evt.key() == Key::Enter {
-                            let name = new_name.read().clone();
-                            let res = state
-                                .write()
-                                .create_markdown_file(&PathBuf::new(), &name)
-                                .map(|_| new_name.set(String::new()))
-                                .map_err(|e| e.to_string());
-                            handle_err(res);
-                        }
-                    },
+            // ── File operations toolbar ─────────────────────────────────────
+            div { class: "explorer-toolbar",
+                button {
+                    class: "icon-btn",
+                    title: tr(lang, "explorer.new_file"),
+                    onclick: move |_| show_new.set(!show_new()),
+                    "+"
                 }
                 button {
-                    aria_label: tr(lang, "explorer.new_file"),
+                    class: "icon-btn",
+                    title: tr(lang, "explorer.refresh"),
                     onclick: move |_| {
-                        let name = new_name.read().clone();
-                        let res = state
-                            .write()
-                            .create_markdown_file(&PathBuf::new(), &name)
-                            .map(|_| new_name.set(String::new()))
-                            .map_err(|e| e.to_string());
-                        handle_err(res);
+                        // Re-create the tree to force a full refresh
+                        *tree_sig.write() = DirectoryTree::new(root_sig());
                     },
-                    {tr(lang, "explorer.new_file")}
+                    "↻"
                 }
             }
 
-            // File tree with ARIA tree semantics (RFC-021).
-            ul {
-                class: "tree",
-                role: "tree",
-                aria_label: tr(lang, "explorer.tree_label"),
-                if nodes.is_empty() {
-                    li { role: "treeitem", class: "muted", {tr(lang, "explorer.empty")} }
-                }
-                for node in &nodes {
-                    {
-                        let path = node.relative_path.clone();
-                        let kind = node.kind;
-                        let is_dir = kind == FileNodeKind::Directory;
-                        let is_sel = *selected.read() == Some(path.clone());
-                        rsx! {
-                            li {
-                                key: "{path.display()}",
-                                role: "treeitem",
-                                aria_selected: "{is_sel}",
-                                class: if is_dir { "dir" } else { "file" },
-                                class: if is_sel { "selected" },
-                                style: "padding-left: {node.depth as u32 * 14 + 8}px",
-                                // Mouse click: select + open.
-                                onclick: {
-                                    let path = path.clone();
-                                    move |_| {
-                                        selected.set(Some(path.clone()));
-                                        rename_mode.set(false);
-                                        if kind == FileNodeKind::MarkdownFile {
-                                            let res = state
-                                                .write()
-                                                .open_document(&path)
-                                                .map_err(|e| e.to_string());
-                                            handle_err(res);
-                                        }
-                                    }
-                                },
-                                // Keyboard: Enter opens, F2 renames, Delete deletes.
-                                onkeydown: {
-                                    let path = path.clone();
-                                    move |evt| match evt.key() {
-                                        Key::Enter => {
-                                            selected.set(Some(path.clone()));
-                                            if kind == FileNodeKind::MarkdownFile {
-                                                let res = state
-                                                    .write()
-                                                    .open_document(&path)
-                                                    .map_err(|e| e.to_string());
-                                                handle_err(res);
-                                            }
-                                        }
-                                        Key::F2 => rename_mode.set(true),
-                                        Key::Delete => {
-                                            let res = state
-                                                .write()
-                                                .delete_path(&path, DeleteStrategy::MoveToTrash)
-                                                .map(|()| selected.set(None))
-                                                .map_err(|e| e.to_string());
-                                            handle_err(res);
-                                        }
-                                        _ => {}
-                                    }
-                                },
-                                tabindex: "0",
-                                span { "{node.display_name}" }
-                        if let Some(gs) = git_map.get(&node.relative_path) {
-                            span {
-                                class: "git-badge git-{gs:?}".to_lowercase(),
-                                title: format!("{gs:?}"),
-                                if *gs == bekoedit_fs::GitStatus::Modified { "M" }
-                                else if *gs == bekoedit_fs::GitStatus::Added { "A" }
-                                else if *gs == bekoedit_fs::GitStatus::Deleted { "D" }
-                                else if *gs == bekoedit_fs::GitStatus::Untracked { "?" }
-                                else { "R" }
+            // ── New file row ────────────────────────────────────────────────
+            if *show_new.read() {
+                div { class: "new-file-row",
+                    input {
+                        r#type: "text",
+                        placeholder: "filename.md",
+                        aria_label: tr(lang, "explorer.new_file_name"),
+                        value: "{new_name}",
+                        oninput: move |e| new_name.set(e.value()),
+                        onkeydown: move |e| {
+                            if e.key() == Key::Enter {
+                                let name = new_name.read().clone();
+                                let content = tpl_content.read().clone();
+                                let res = if content.is_empty() {
+                                    state.write()
+                                        .create_markdown_file(&PathBuf::new(), &name)
+                                        .map(|_| ())
+                                        .map_err(|e| e.to_string())
+                                } else {
+                                    state.write()
+                                        .create_from_template(&PathBuf::new(), &name, &content)
+                                        .map(|_| ())
+                                        .map_err(|e| e.to_string())
+                                };
+                                run(res);
+                                // Refresh tree
+                                *tree_sig.write() = DirectoryTree::new(root_sig());
                             }
-                        }
-                            }
-                        }
+                        },
                     }
-                }
-            }
-
-            // Actions for the selected node.
-            if let Some(path) = selected.read().clone() {
-                div { class: "node-actions",
-                    if *rename_mode.read() {
-                        input {
-                            r#type: "text",
-                            placeholder: tr(lang, "explorer.name_placeholder"),
-                            aria_label: tr(lang, "explorer.rename"),
-                            value: "{rename_to}",
-                            autofocus: "true",
-                            oninput: move |evt| rename_to.set(evt.value()),
-                            onkeydown: {
-                                let path = path.clone();
-                                move |evt| {
-                                    if evt.key() == Key::Enter {
-                                        let name = rename_to.read().clone();
-                                        let res = state
-                                            .write()
-                                            .rename_path(&path, &name)
-                                            .map(|r| { selected.set(Some(r)); rename_mode.set(false); })
-                                            .map_err(|e| e.to_string());
-                                        handle_err(res);
-                                    }
-                                    if evt.key() == Key::Escape {
-                                        rename_mode.set(false);
-                                    }
-                                }
+                    if !templates.is_empty() {
+                        select {
+                            class: "template-select",
+                            aria_label: tr(lang, "templates.label"),
+                            onchange: move |evt| {
+                                let val = evt.value();
+                                tpl_content.set(if val == "__blank__" { String::new() } else { val });
                             },
-                        }
-                    } else {
-                        button {
-                            onclick: move |_| rename_mode.set(true),
-                            {tr(lang, "explorer.rename")}
+                            option { value: "__blank__", {tr(lang, "templates.blank")} }
+                            for tpl in &templates {
+                                option { value: "{tpl.content}", "{tpl.name}" }
+                            }
                         }
                     }
                     button {
-                        class: "danger",
-                        aria_label: "{tr(lang, \"explorer.delete\")}",
-                        onclick: {
-                            let path = path.clone();
-                            move |_| {
-                                let res = state
-                                    .write()
-                                    .delete_path(&path, DeleteStrategy::MoveToTrash)
-                                    .map(|()| selected.set(None))
-                                    .map_err(|e| e.to_string());
-                                handle_err(res);
-                            }
+                        class: "btn-primary",
+                        onclick: move |_| {
+                            let name = new_name.read().clone();
+                            let content = tpl_content.read().clone();
+                            let res = if content.is_empty() {
+                                state.write()
+                                    .create_markdown_file(&PathBuf::new(), &name)
+                                    .map(|_| ())
+                                    .map_err(|e| e.to_string())
+                            } else {
+                                state.write()
+                                    .create_from_template(&PathBuf::new(), &name, &content)
+                                    .map(|_| ())
+                                    .map_err(|e| e.to_string())
+                            };
+                            run(res);
+                            *tree_sig.write() = DirectoryTree::new(root_sig());
                         },
-                        {tr(lang, "explorer.delete")}
+                        {tr(lang, "explorer.create")}
                     }
                 }
+                if !error.read().is_empty() {
+                    p { class: "error-inline", "{error}" }
+                }
             }
+
+            // ── dioxus-swdir-tree DirectoryTreeView ────────────────────────
+            DirectoryTreeView { tree: tree_sig, on_event: on_tree_event }
         }
     }
 }

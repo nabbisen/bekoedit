@@ -8,7 +8,7 @@ layout, development workflow, and the conventions used throughout the codebase.
 | Tool | Minimum version | Purpose |
 |------|-----------------|---------|
 | Rust (stable) | 1.85 | All Rust crates |
-| Node.js | 20 | Build the CodeMirror 6 bundle |
+| Node.js | 22 | Build the CodeMirror 6 bundle |
 | Git | Any recent | Version control |
 
 Install Rust via [rustup](https://rustup.rs). The workspace toolchain file

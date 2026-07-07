@@ -37,6 +37,8 @@ pub enum StoreError {
     ConflictPending,
     #[error("document has unsaved changes; save or discard before this operation")]
     DocumentDirty,
+    #[error("this is a new untitled file; use Save As to choose a location")]
+    Untitled,
     #[error("save failed: {0}")]
     SaveFailed(String),
 }
@@ -202,6 +204,15 @@ impl AppState {
         if self.check_external_change().requires_user_decision() {
             return Err(StoreError::ConflictPending);
         }
+        // Untitled files must use save_as() instead.
+        if self
+            .session
+            .as_ref()
+            .map(|s| s.is_untitled)
+            .unwrap_or(false)
+        {
+            return Err(StoreError::Untitled);
+        }
         let session = self.session.as_mut().ok_or(StoreError::NoDocument)?;
         if !session.dirty {
             self.autosave.clear();
@@ -290,5 +301,28 @@ impl AppState {
         let root = self.workspace_root().ok()?;
         let absolute = bekoedit_fs::resolve_in_workspace(root, relative).ok()?;
         std::fs::metadata(&absolute).ok().map(|m| m.len())
+    }
+    // ── Untitled file support ────────────────────────────────────────────────
+
+    /// Creates a blank in-memory document without requiring a workspace.
+    /// Returns `StoreError::Untitled` from `save_now()` so the UI knows
+    /// to show a "Save As" dialog.
+    pub fn new_untitled(&mut self) {
+        let id = self.next_document_id;
+        self.next_document_id += 1;
+        self.session = Some(DocumentSession::new_untitled(id));
+        self.save_state = SaveState::Dirty;
+        self.conflict = crate::conflict::ConflictState::None;
+        self.autosave.clear();
+        self.autosave.pause(); // Don't auto-write untitled files to temp dir
+    }
+
+    /// Moves an in-memory untitled document to a permanent path and saves.
+    pub fn save_as(&mut self, new_path: std::path::PathBuf, now_ms: u64) -> Result<(), StoreError> {
+        let session = self.session.as_mut().ok_or(StoreError::NoDocument)?;
+        session.path = new_path.clone();
+        session.is_untitled = false;
+        // Write using the normal save path
+        self.save_now(now_ms)
     }
 }

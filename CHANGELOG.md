@@ -399,3 +399,36 @@ version that accepts `webkit2gtk 2.0.2`. The crypto and build-tool pins
 will resolve when those upstream crates release compatible versions.
 
 [0.9.1]: https://github.com/nabbisen/bekoedit/releases/tag/v0.9.1
+
+## [0.10.0] - 2026-06-07
+
+### Fixed
+- **Start screen: native folder picker** — "Open Folder" now opens the OS
+  native folder selection dialog via `rfd::AsyncFileDialog::pick_folder()`.
+  Users no longer need to type a directory path manually.
+- **Start screen: "New File" button** — creates a blank in-memory document
+  without requiring a workspace. The document is labelled "Untitled" in the
+  editor header. `save_now()` returns `StoreError::Untitled` so the UI knows
+  to show a "Save As" dialog (`rfd::AsyncFileDialog::save_file()`).
+
+### Changed (improvement)
+- **Explorer replaced with `dioxus-swdir-tree` v0.7** — the hand-rolled
+  recursive file tree scanner is replaced by `DirectoryTreeView`, providing:
+  - **Lazy loading**: one directory level per user expand gesture; a million-
+    file home directory costs only what you actually open (vs. upfront full scan)
+  - **Built-in keyboard navigation**: arrow keys, Enter, F2, Delete
+  - **Generation-tagged scans**: stale async scan results cannot corrupt the tree
+  - **`DEFAULT_PREFETCH_SKIP`**: `.git`, `node_modules`, `target`, `build`,
+    `dist`, `__pycache__`, `.venv` already ignored — no custom filter needed
+  - File-create toolbar and template selector retained above the tree
+
+### Added
+- `rfd = "0.17"` dependency for native OS file/folder dialogs
+- `dioxus-swdir-tree = "0.7"` dependency for the directory tree widget
+- `DocumentSession::new_untitled()` — creates an in-memory session with
+  `is_untitled: true`; saves are blocked until the user picks a path
+- `AppState::new_untitled()` and `AppState::save_as(path)` — entry point
+  for the New/Save-As workflow
+- `StoreError::Untitled` variant
+
+[0.10.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.10.0

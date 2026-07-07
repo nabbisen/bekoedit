@@ -50,6 +50,8 @@ pub struct DocumentSession {
     /// True when memory differs from the last confirmed save.
     pub dirty: bool,
     /// Identity of the last-known on-disk content.
+    /// `true` for in-memory files not yet saved to disk.
+    pub is_untitled: bool,
     pub disk_fingerprint: Option<FileFingerprint>,
     pub index: MarkdownIndex,
 }
@@ -67,6 +69,7 @@ impl DocumentSession {
             line_ending,
             revision: 1,
             dirty: false,
+            is_untitled: false,
             disk_fingerprint: None,
             index,
         }
@@ -74,6 +77,24 @@ impl DocumentSession {
 
     /// Loads a session from disk. Invalid UTF-8 is reported safely
     /// (RFC-006 acceptance) rather than lossily converted.
+    /// Creates a blank in-memory session that has not been saved to disk.
+    pub fn new_untitled(document_id: u64) -> Self {
+        let path = std::env::temp_dir().join(format!("bekoedit-untitled-{document_id}.md"));
+        let text = String::new();
+        let index = MarkdownIndex::build(&text, 1);
+        Self {
+            document_id,
+            path,
+            line_ending: LineEnding::Lf,
+            revision: 1,
+            dirty: false,
+            is_untitled: true,
+            disk_fingerprint: None,
+            index,
+            canonical_text: text,
+        }
+    }
+
     pub fn load(document_id: u64, path: &Path) -> Result<Self, SessionError> {
         let bytes = std::fs::read(path).map_err(|e| SessionError::Read(e.to_string()))?;
         let text = String::from_utf8(bytes).map_err(|_| SessionError::NotUtf8)?;
