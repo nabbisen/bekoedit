@@ -329,3 +329,22 @@ pre.math-block code { font-style: italic; color: #444; }
 .template-select { font-size: 0.82em; padding: 3px 6px; border-radius: 5px;
   border: 1px solid var(--line); background: var(--bg); color: var(--fg);
   max-width: 140px; }
+
+/* --- recovery screen --- */
+.recovery-screen {
+  display: flex; align-items: center; justify-content: center;
+  height: 100vh; background: var(--bg);
+}
+.recovery-card {
+  max-width: 560px; width: 90%; padding: 32px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--surface);
+  box-shadow: 0 4px 24px rgba(0,0,0,.10);
+}
+.recovery-card h2 { margin: 0 0 8px; font-size: 1.1em; }
+.recovery-desc { margin: 0 0 18px; color: var(--muted); font-size: .9em; }
+.recovery-list { list-style: none; padding: 0; margin: 0 0 16px; display: flex; flex-direction: column; gap: 10px; }
+.recovery-item { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); }
+.recovery-path { font-size: .85em; font-weight: 600; word-break: break-all; }
+.recovery-meta { font-size: .78em; margin: 2px 0 8px; }
+.recovery-actions { display: flex; gap: 8px; }
+.recovery-skip { font-size: .82em; color: var(--muted); }

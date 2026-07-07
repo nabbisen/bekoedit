@@ -8,6 +8,7 @@ pub mod form_mode;
 pub mod history_panel;
 pub mod outline_panel;
 pub mod preview_mode;
+pub mod recovery_screen;
 pub mod search_panel;
 pub mod settings_screen;
 pub mod split_mode;

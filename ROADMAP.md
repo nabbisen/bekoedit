@@ -35,6 +35,14 @@ templates, extension policy, plugin system, sync/collaboration.
 
 **v1.0.0 requires explicit maintainer sign-off on the acceptance checklist.**
 
+## Shipped — v0.9.0 (2026-06-07)
+Recovery screen (RFC-007 UI), large-file warning, relay auto-restart
+(RFC-002), `file_size_bytes` query. All acceptance checklist items have
+code evidence. Only the human walkthrough and IME manual check remain.
+
+## Shipped — v0.8.0 (2026-06-07)
+IME composition guard in CodeMirror 6 (RFC-011), User-facing error messages for all `StoreError` and `FileOpError` variants, Settings persistence helpers, Recent-workspaces persistence test, Large workspace stress test, Platform scripts, Production README, Scroll-fraction reporter. Codebase housekeeping.
+
 ## Shipped — v0.7.0 (2026-06-07)
 v1.0.0 preparation: word/char count, template selector UI, RFC-002 bridge
 hardening, headless smoke test, CONTRIBUTING.md, docs completion, acceptance

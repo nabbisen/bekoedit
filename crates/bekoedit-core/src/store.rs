@@ -51,7 +51,7 @@ pub struct AppState {
     pub autosave: AutosaveScheduler,
     pub recents: RecentWorkspaces,
     recents_file: PathBuf,
-    pub(crate) recovery: RecoveryStore,
+    pub recovery: RecoveryStore,
     pub(crate) history: bekoedit_fs::HistoryStore,
     next_document_id: u64,
 }
@@ -283,5 +283,12 @@ impl AppState {
         self.conflict = ConflictState::None;
         self.autosave.resume();
         Ok(())
+    }
+    /// Returns the size in bytes of a workspace-relative path without opening it.
+    /// The UI uses this to warn users before opening very large files.
+    pub fn file_size_bytes(&self, relative: &Path) -> Option<u64> {
+        let root = self.workspace_root().ok()?;
+        let absolute = bekoedit_fs::resolve_in_workspace(root, relative).ok()?;
+        std::fs::metadata(&absolute).ok().map(|m| m.len())
     }
 }

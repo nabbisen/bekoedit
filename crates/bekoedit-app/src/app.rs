@@ -106,21 +106,26 @@ pub fn App() -> Element {
     let mut mode_sig = use_context::<Signal<EditorMode>>();
     let mut app_st: Signal<AppState> = state;
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
-        let relay_js = bridge::relay_js("__bk_shortcut_relay");
-        let mut relay = document::eval(&relay_js);
-        while let Ok(raw) = relay.recv().await {
-            if let Ok(AppMsg::Shortcut { key }) = serde_json::from_value(raw) {
-                match key.as_str() {
-                    "save" => {
-                        let _ = app_st.write().save_now(now_ms());
+        // Auto-restarting shortcut relay (RFC-002 hardening).
+        for _ in 0..bridge::MAX_RELAY_RESTARTS {
+            let relay_js = bridge::relay_js("__bk_shortcut_relay");
+            let mut relay = document::eval(&relay_js);
+            while let Ok(raw) = relay.recv().await {
+                if let Ok(AppMsg::Shortcut { key }) = serde_json::from_value(raw) {
+                    match key.as_str() {
+                        "save" => {
+                            let _ = app_st.write().save_now(now_ms());
+                        }
+                        "mode_text" => mode_sig.set(EditorMode::Text),
+                        "mode_form" => mode_sig.set(EditorMode::Form),
+                        "mode_preview" => mode_sig.set(EditorMode::Preview),
+                        "mode_split" => mode_sig.set(EditorMode::Split),
+                        _ => {}
                     }
-                    "mode_text" => mode_sig.set(EditorMode::Text),
-                    "mode_form" => mode_sig.set(EditorMode::Form),
-                    "mode_preview" => mode_sig.set(EditorMode::Preview),
-                    "mode_split" => mode_sig.set(EditorMode::Split),
-                    _ => {}
                 }
             }
+            // relay disconnected — restart after a brief pause
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         }
     });
 

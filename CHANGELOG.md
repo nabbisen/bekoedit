@@ -344,3 +344,31 @@ Incremental parsing deferred until profiling demonstrates a need.
   evidence; manual walkthrough note retained.
 
 [0.8.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.8.0
+
+## [0.9.0] - 2026-06-07
+
+### Added
+- **Recovery screen** (RFC-007 UI gap closed): on startup, if
+  `RecoveryStore::list()` returns pending snapshots, the app shows a
+  recovery screen before the start screen. Each snapshot shows its file
+  path and revision with "Restore" (loads into a dirty edit session) and
+  "Discard" (removes the snapshot) buttons. "Dismiss all" clears all
+  snapshots without opening any file.
+- **Large-file warning** in the Explorer file-open handler: files larger
+  than 1.5 MB trigger an info toast before the document loads, warning
+  the user that performance may be affected.
+- **Relay auto-restart** (RFC-002 hardening): the shortcut-relay
+  `use_coroutine` now wraps the inner `while let Ok` loop in a `for`
+  restart loop (up to `MAX_RELAY_RESTARTS = 10` attempts), with a 500 ms
+  backoff. If the relay eval disconnects mid-session, it automatically
+  reconnects rather than silently stopping.
+- `AppState::file_size_bytes(relative)` — public query for the size of a
+  workspace-relative file without loading it.
+
+### Changed
+- `AppState::recovery` field changed from `pub(crate)` to `pub` so
+  `RecoveryScreen` can call `recovery.list()` and `recovery.remove()`.
+- Recovery screen CSS added to `style.css`.
+- CHANGELOG, ROADMAP, and acceptance checklist updated.
+
+[0.9.0]: https://github.com/nabbisen/bekoedit/releases/tag/v0.9.0
