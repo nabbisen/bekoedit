@@ -2,9 +2,10 @@
 
 **No v1.0.0 release without explicit maintainer sign-off on every item.**
 
-Each item links to its evidence. Items marked ✅ are proven by automated
-tests running on every push. Items marked ⚠️ require manual verification
-on the release candidate.
+Each item links to its evidence. Items marked ✅ have code, tests, or
+documentation evidence in the repository. Items marked ⚠️ require release
+candidate verification or latest CI/release-run evidence before v1.0.0
+sign-off.
 
 ---
 
@@ -31,7 +32,10 @@ on the release candidate.
 - ✅ External modifications are detected (fs watcher + pre-save check).
   *Evidence: headless smoke test check 4 (`ConflictState::DiskChangedDirtyMemory`)*
 - ✅ Neither disk version nor in-memory version is silently lost on conflict.
-  *Evidence: `conflict_resolution_*` tests in `bekoedit-core/src/tests.rs`*
+  *Evidence: `conflict_resolution_*`,
+  `pending_conflict_blocks_section_moves`, and
+  `pending_conflict_blocks_history_restore` tests in
+  `bekoedit-core/src/tests.rs`*
 - ✅ Crash-recovery snapshot exists before risky writes; presented on next launch.
   *Evidence: `recovery_snapshot_*` tests*
 - ✅ Save failures surface to the user via the assertive live region.
@@ -88,12 +92,17 @@ on the release candidate.
 
 ## CI / distribution (RFC-024/025)
 
-- ✅ CI lint + test + build passes on every push.
-  *Evidence: `.github/workflows/ci.yml`*
-- ✅ Headless smoke test (`--headless-smoke`) passes all 5 checks in CI.
-  *Evidence: `smoke_test.rs`, exit 0 confirmed*
-- ✅ Release workflow builds Linux/macOS/Windows artifacts on tag push.
-  *Evidence: `.github/workflows/release.yml`*
+- ⚠️ CI lint + test + build are configured on push and pull request.
+  *Evidence: `.github/workflows/ci.yml`; release sign-off must inspect the
+  latest CI run.*
+- ⚠️ Headless smoke test (`--headless-smoke`) is configured as a blocking CI
+  gate and exercises 5 checks.
+  *Evidence: `.github/workflows/ci.yml`, `smoke_test.rs`; release sign-off
+  must inspect the latest CI run.*
+- ⚠️ Release workflow is configured to build Linux/macOS/Windows artifacts on
+  tag push.
+  *Evidence: `.github/workflows/release.yml`; release sign-off must inspect
+  the produced artifacts, including Windows zip root layout.*
 - ✅ Unsigned binary guidance documented.
   *Evidence: `docs/src/distribution.md`*
 

@@ -15,8 +15,9 @@ Resolved 2026-06-07 rather than renumbering the cross-referenced corpus.
 
 ## 2026-06-07 review resolutions
 
-1. **Split Mode** — deferred post-MVP; `EditorMode = {Text, Form, Preview}`.
-   Resolution note in RFC-010.
+1. **Split Mode** — initially deferred from the earliest MVP cut, then
+   implemented in v0.3.0. Current `EditorMode` includes
+   `{Text, Form, Preview, Split}`.
 2. **RFC-018 command set** — amended: `ReplaceListItemText`, `DeleteBlock`
    added; `ToggleTaskChecked` keyed by `item_ordinal`. `SetLinkTarget` deferred.
 3. **Open Question 10** — single open document for MVP.
@@ -57,29 +58,14 @@ Resolved 2026-06-07 rather than renumbering the cross-referenced corpus.
 
 ---
 
-## Proposed — remaining MVP (`proposed/`)
+## Current proposed / deferred (`proposed/`)
 
 | RFC | Title | Notes |
 |-----|-------|-------|
-| RFC-002 | Runtime architecture & WebView boundary | Contract crate ships; in-process eval relay adopted; JSON hardening ongoing |
-| RFC-005 | File operations & external file watching | File ops implemented; native fs watcher (inotify/FSEvents/ReadDirectoryChanges) pending |
-| RFC-010 | Main shell layout & navigation UX | Core layout ships; outline panel, split-pane resize, outline tab deferred |
-| RFC-012 | Preview Mode | Sanitized rendering ships; scroll-sync deferred |
-| RFC-024 | Packaging & unsigned distribution UX | Release workflow sketched in .github/workflows/release.yml |
-| RFC-025 | Release CI smoke tests | CI matrix (lint/test/build) ships; smoke-test suite pending |
-| RFC-026 | MVP acceptance, quality gates & beta readiness | Acceptance matrix being filled as RFCs land |
-
-## Proposed — post-MVP (`proposed/`, deferred)
-
-RFC-027 table editing · RFC-028 image/asset management · RFC-029 outline
-operations · RFC-030 richer inline formatting · RFC-031 Lexical decision ·
-RFC-032 incremental parsing performance.
-
-## Proposed — future evaluation (`proposed/`, deferred)
-
-RFC-033 full-text search · RFC-034 backlinks · RFC-035 export profiles ·
-RFC-036 Git awareness · RFC-037 workspace templates · RFC-038 extension
-policy · RFC-039 plugin system · RFC-040 sync & collaboration.
+| RFC-031 | Lexical integration decision | Decision reached: do not adopt Lexical; retained in `proposed/` as a deferred decision record |
+| RFC-032 | Performance optimization and incremental parsing | Deferred until profiling shows full reparse is insufficient |
+| RFC-039 | Plugin system evaluation | Future evaluation only |
+| RFC-040 | Sync and collaboration evaluation | Future evaluation only |
 
 ## Implemented — v0.3.0 (`done/`)
 
@@ -120,7 +106,8 @@ policy · RFC-039 plugin system · RFC-040 sync & collaboration.
 | RFC-036 | Git awareness | `git status --porcelain` subprocess; M/A/D/? badges in the file explorer |
 | RFC-037 | Workspace templates | `.bekoedit/templates/*.md` auto-discovered; create-from-template in AppState |
 
-**Remaining proposed RFCs:** RFC-031 (decided: no Lexical), RFC-032 (deferred: incremental parsing), RFC-038/039/040 (future evaluation only).
+**Remaining proposed RFCs:** RFC-031 (decided: no Lexical), RFC-032
+(deferred: incremental parsing), RFC-039/040 (future evaluation only).
 
 ## Implemented — v0.6.0 (`done/`)
 

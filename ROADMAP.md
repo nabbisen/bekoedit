@@ -3,13 +3,13 @@
 Authoritative sequencing lives in `rfcs/`. This file is the orientation view.
 **v1.0.0 requires explicit maintainer sign-off before any release.**
 
-## Remaining proposed RFCs
+## Current proposed / deferred RFCs
 
 - **RFC-031** — decided (no Lexical; see rfcs/proposed/)
 - **RFC-032** — deferred until profiling shows need
 - **RFC-039/040** — future evaluation only
 
-## Archive (shipped earlier, ROADMAP was stale)
+## Shipped MVP / post-MVP RFCs
 
 - **RFC-005** — native filesystem watcher (inotify / FSEvents /
   ReadDirectoryChanges) replacing the current poll-on-tick model.
@@ -28,17 +28,15 @@ formatting, Lexical integration decision, incremental parsing.
 Full-text search, backlinks, export profiles, Git awareness, workspace
 templates, extension policy, plugin system, sync/collaboration.
 
-## Remaining proposed RFCs
-- **RFC-031**: Lexical decision (decided: no adoption — see rfcs/proposed/)
-- **RFC-032**: Incremental parsing (deferred — profiling shows no need yet)
-- **RFC-039/040**: Plugin system, sync/collaboration — future evaluation only
-
 **v1.0.0 requires explicit maintainer sign-off on the acceptance checklist.**
 
 ## Shipped — v0.9.0 (2026-06-07)
 Recovery screen (RFC-007 UI), large-file warning, relay auto-restart
-(RFC-002), `file_size_bytes` query. All acceptance checklist items have
-code evidence. Only the human walkthrough and IME manual check remain.
+(RFC-002), `file_size_bytes` query. Acceptance checklist items have code
+evidence where automation can cover them; v1.0.0 sign-off still requires
+human walkthrough, IME manual verification, latest CI/release artifact
+inspection, Windows zip root-layout inspection, and no open `data-loss` or
+`source-corruption` issues.
 
 ## Shipped — v0.8.0 (2026-06-07)
 IME composition guard in CodeMirror 6 (RFC-011), User-facing error messages for all `StoreError` and `FileOpError` variants, Settings persistence helpers, Recent-workspaces persistence test, Large workspace stress test, Platform scripts, Production README, Scroll-fraction reporter. Codebase housekeeping.
@@ -46,8 +44,8 @@ IME composition guard in CodeMirror 6 (RFC-011), User-facing error messages for 
 ## Shipped — v0.7.0 (2026-06-07)
 v1.0.0 preparation: word/char count, template selector UI, RFC-002 bridge
 hardening, headless smoke test, CONTRIBUTING.md, docs completion, acceptance
-checklist evidence log. All automated checks green; IME manual verification
-pending.
+checklist evidence log. Automated gate evidence was recorded for that
+checkpoint; IME manual verification remained pending.
 
 ## Shipped — v0.6.0 (2026-06-07)
 Math/footnote extension policy (RFC-038), local document history, RFC-032 performance evaluation (3.57 ms/reparse — threshold not approached), store.rs split (all files ≤300 ELOC).

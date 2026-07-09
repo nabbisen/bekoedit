@@ -113,10 +113,11 @@ Five Rust crates with strict dependency ordering — no crate depends on one
 above it. The WebView boundary is versioned: JS sends compact JSON intent;
 Rust validates, resolves byte ranges, applies patches, persists.
 
-**Test coverage:** 129 tests covering adversarial documents (CRLF + emoji +
+**Test coverage:** 144 tests covering adversarial documents (CRLF + emoji +
 tilde fences + non-1 ordered lists + reference links + front matter + HTML +
 tables), UTF-8 boundary safety, stale-revision rejection, raw island
-preservation, atomic save, conflict detection, and dirty-document protection.
+preservation, atomic save, conflict detection, dirty-document protection, and
+conflict-safe section/history mutations.
 
 ---
 
