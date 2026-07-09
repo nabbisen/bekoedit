@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use bekoedit_fs::{DeleteStrategy, RecoveryStore};
+use bekoedit_fs::{DeleteStrategy, HistoryEntry, RecoveryStore};
 use bekoedit_markdown::{FormBlockEdit, FormEditCommand};
 
 use crate::conflict::{ConflictResolution, ConflictState};
@@ -181,6 +181,56 @@ fn external_change_with_dirty_memory_blocks_save() {
         state.edit_text(99, "x".into(), 2).is_err(),
         "edits blocked during conflict"
     );
+}
+
+#[test]
+fn pending_conflict_blocks_section_moves() {
+    let (dir, mut state) = workspace_with_doc("# A\n\nbody A\n\n# B\n\nbody B\n");
+    let local_text = "# A\n\nlocal A\n\n# B\n\nbody B\n";
+    let rev = state.session.as_ref().unwrap().revision;
+    state.edit_text(rev, local_text.into(), 0).unwrap();
+    std::fs::write(dir.path().join("doc.md"), "# A\n\nexternal A\n").unwrap();
+
+    assert_eq!(
+        state.check_external_change(),
+        ConflictState::DiskChangedDirtyMemory
+    );
+
+    assert_eq!(
+        state.move_section_down(0, 1).unwrap_err(),
+        StoreError::ConflictPending
+    );
+    assert_eq!(
+        state.move_section_up(1, 1).unwrap_err(),
+        StoreError::ConflictPending
+    );
+    assert_eq!(state.session.as_ref().unwrap().canonical_text, local_text);
+}
+
+#[test]
+fn pending_conflict_blocks_history_restore() {
+    let (dir, mut state) = workspace_with_doc("# v1\n");
+    let local_text = "# local\n";
+    let rev = state.session.as_ref().unwrap().revision;
+    state.edit_text(rev, local_text.into(), 0).unwrap();
+    std::fs::write(dir.path().join("doc.md"), "# external\n").unwrap();
+
+    assert_eq!(
+        state.check_external_change(),
+        ConflictState::DiskChangedDirtyMemory
+    );
+
+    let entry = HistoryEntry {
+        original_path: state.session.as_ref().unwrap().path.clone(),
+        text: "# restored\n".into(),
+        revision: 1,
+        saved_at_secs: 0,
+    };
+    assert_eq!(
+        state.restore_history(&entry).unwrap_err(),
+        StoreError::ConflictPending
+    );
+    assert_eq!(state.session.as_ref().unwrap().canonical_text, local_text);
 }
 
 #[test]
