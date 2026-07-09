@@ -45,6 +45,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test  # default-members only (headless, no GUI deps)
 
+  audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-audit --version 0.22.2 --locked
+      - run: cargo audit
+
   build-and-smoke:
     name: Build + smoke test (Linux)
     runs-on: ubuntu-latest
@@ -54,7 +64,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
       - name: Install WebView deps
         run: |
           sudo apt-get update

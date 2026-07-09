@@ -92,17 +92,17 @@ sign-off.
 
 ## CI / distribution (RFC-024/025)
 
-- ⚠️ CI lint + test + build are configured on push and pull request.
+- ⚠️ CI lint + test + audit + build are configured on push and pull request.
   *Evidence: `.github/workflows/ci.yml`; release sign-off must inspect the
   latest CI run.*
 - ⚠️ Headless smoke test (`--headless-smoke`) is configured as a blocking CI
   gate and exercises 5 checks.
   *Evidence: `.github/workflows/ci.yml`, `smoke_test.rs`; release sign-off
   must inspect the latest CI run.*
-- ⚠️ Release workflow is configured to build Linux/macOS/Windows artifacts on
-  tag push.
+- ⚠️ Release workflow is configured to build Linux/macOS/Windows artifacts and
+  SHA-256 checksum sidecars on tag push.
   *Evidence: `.github/workflows/release.yml`; release sign-off must inspect
-  the produced artifacts, including Windows zip root layout.*
+  the produced artifacts, checksums, and Windows zip root layout.*
 - ✅ Unsigned binary guidance documented.
   *Evidence: `docs/src/distribution.md`*
 
@@ -132,7 +132,8 @@ Before pushing the v1.0.0 tag, sign here:
 
 [ ] No open issues tagged `data-loss` or `source-corruption`.
 
-[ ] CI release workflow produced artifacts for all three platforms.
+[ ] CI release workflow produced artifacts and checksum sidecars for all
+    three platforms.
 
 Signed: @nabbisen   Date: ____________
 ```

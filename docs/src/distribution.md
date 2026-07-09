@@ -74,7 +74,7 @@ if it is not already installed).
 Paid Apple Developer IDs (USD 99/year) and Windows EV certificates (several
 hundred USD/year) are not included in the initial project budget. bekoedit
 is fully open-source — you can audit the code, reproduce the build from
-source, or verify checksums published alongside each release.
+source, or verify SHA-256 checksum sidecars published alongside each release.
 
 Once the project reaches a sustainable state, signed distribution through
 official channels (Mac App Store, Microsoft Store) is on the future roadmap.
@@ -83,15 +83,18 @@ official channels (Mac App Store, Microsoft Store) is on the future roadmap.
 
 ## Checksum verification
 
-Each release page on GitHub includes SHA-256 checksums for all artifacts.
-Verify before running:
+Each release page on GitHub includes one SHA-256 sidecar per artifact, named
+`<artifact>.sha256`. Verify before running:
 
 ```sh
 # macOS / Linux
-shasum -a 256 bekoedit-<version>-<target>.tar.gz
+shasum -a 256 -c bekoedit-<version>-<target>.tar.gz.sha256
 
 # Windows (PowerShell)
-Get-FileHash bekoedit-<version>-<target>.zip -Algorithm SHA256
+$expected = (Get-Content bekoedit-<version>-<target>.zip.sha256).Split()[0]
+$actual = (Get-FileHash bekoedit-<version>-<target>.zip -Algorithm SHA256).Hash.ToLower()
+if ($actual -ne $expected) { throw "checksum mismatch" }
 ```
 
-Compare against the `checksums.txt` file attached to the release.
+The command succeeds only when the downloaded artifact matches its published
+checksum.
