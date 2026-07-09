@@ -68,9 +68,7 @@ jobs:
         run: |
           # Verify the binary starts and exits cleanly in a headless display.
           # Uses xvfb-run to provide a virtual framebuffer on CI.
-          timeout 10 xvfb-run -a ./target/release/bekoedit --headless-smoke \
-            || [ $? -eq 124 ]  # timeout is fine; crash is not
-        continue-on-error: true  # remove once --headless-smoke flag implemented
+          timeout 10 xvfb-run -a ./target/release/bekoedit --headless-smoke
       - name: Check binary links and size
         run: |
           file target/release/bekoedit

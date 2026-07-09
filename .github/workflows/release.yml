@@ -23,7 +23,7 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install WebView deps (Linux)
@@ -39,20 +39,20 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           NAME="bekoedit-${VERSION}-${{ matrix.target }}"
-          mkdir -p "stage/${NAME}"
-          cp target/release/bekoedit "stage/${NAME}/"
-          cp README.md LICENSE NOTICE CHANGELOG.md "stage/${NAME}/"
-          tar -C stage -czf "${NAME}.tar.gz" "${NAME}"
+          mkdir -p stage
+          cp target/release/bekoedit stage/
+          cp README.md LICENSE NOTICE CHANGELOG.md stage/
+          tar -C stage -czf "${NAME}.tar.gz" bekoedit README.md LICENSE NOTICE CHANGELOG.md
       - name: Package (windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $version = $env:GITHUB_REF_NAME.TrimStart("v")
           $name = "bekoedit-$version-${{ matrix.target }}"
-          New-Item -ItemType Directory -Path "stage/$name" | Out-Null
-          Copy-Item target/release/bekoedit.exe "stage/$name/"
-          Copy-Item README.md,LICENSE,NOTICE,CHANGELOG.md "stage/$name/"
-          Compress-Archive -Path "stage/$name" -DestinationPath "$name.zip"
+          New-Item -ItemType Directory -Path "stage" -Force | Out-Null
+          Copy-Item target/release/bekoedit.exe "stage/"
+          Copy-Item README.md,LICENSE,NOTICE,CHANGELOG.md "stage/"
+          Compress-Archive -Path "stage/*" -DestinationPath "$name.zip"
       - uses: softprops/action-gh-release@v2
         with:
           files: |
