@@ -1,7 +1,5 @@
 // Atomic save, fingerprints, recovery, recent workspaces, and settings.
 
-use std::path::Path;
-
 use crate::atomic::{FileFingerprint, atomic_write};
 use crate::recent::RecentWorkspaces;
 use crate::recovery::{RecoverySnapshot, RecoveryStore};
@@ -90,9 +88,11 @@ fn recent_workspaces_returns_default_when_file_absent() {
 fn user_settings_persist_and_reload() {
     let dir = temp_workspace();
     let path = dir.path().join("settings.json");
-    let mut s = UserSettings::default();
-    s.autosave_debounce_ms = 2500;
-    s.show_hidden_files = true;
+    let s = UserSettings {
+        autosave_debounce_ms: 2500,
+        show_hidden_files: true,
+        ..Default::default()
+    };
     save_user_settings(&path, &s).unwrap();
     let loaded = load_user_settings(&path).unwrap();
     assert_eq!(loaded.autosave_debounce_ms, 2500);

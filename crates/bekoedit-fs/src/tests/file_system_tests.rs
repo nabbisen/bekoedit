@@ -5,8 +5,7 @@ use std::path::Path;
 use crate::ops::FileOpError;
 use crate::ops::{DeleteStrategy, create_folder, create_markdown_file, delete_path, rename_path};
 use crate::paths::{
-    PathError, ensure_markdown_extension, is_markdown_path, resolve_in_workspace,
-    sanitize_file_name,
+    PathError, ensure_markdown_extension, resolve_in_workspace, sanitize_file_name,
 };
 use crate::tree::{FileNodeKind, FileTreeIndex};
 use crate::workspace::{Workspace, WorkspaceError};

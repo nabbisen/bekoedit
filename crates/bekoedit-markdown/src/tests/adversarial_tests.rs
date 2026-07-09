@@ -61,7 +61,6 @@ fn adversarial_doc() -> String {
 fn edit_one_block_check_rest(doc: &str, block_ordinal: usize, edit: FormBlockEdit) {
     let idx = MarkdownIndex::build(doc, 1);
     let block = &idx.blocks[block_ordinal];
-    let range = block.source_range;
 
     let cmd = FormEditCommand {
         base_revision: 1,

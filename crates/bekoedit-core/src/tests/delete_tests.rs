@@ -6,12 +6,8 @@
 
 use std::path::Path;
 
-use bekoedit_fs::{DeleteStrategy, RecoveryStore};
-use bekoedit_markdown::{FormBlockEdit, FormEditCommand};
+use bekoedit_fs::RecoveryStore;
 
-use crate::conflict::{ConflictResolution, ConflictState};
-use crate::save::{AutosaveScheduler, SaveState};
-use crate::session::{DocumentSession, SessionError};
 use crate::store::{AppState, StoreError};
 
 fn test_state(dir: &Path) -> AppState {
@@ -21,17 +17,6 @@ fn test_state(dir: &Path) -> AppState {
         100,
     )
 }
-
-fn workspace_with_doc(content: &str) -> (tempfile::TempDir, AppState) {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(dir.path().join("doc.md"), content).unwrap();
-    let mut state = test_state(dir.path());
-    state.open_workspace(dir.path(), 0).unwrap();
-    state.open_document(Path::new("doc.md")).unwrap();
-    (dir, state)
-}
-
-// --- session (RFC-006) ---
 
 // ── dirty-document delete is blocked (MVP acceptance) ────────────────────
 

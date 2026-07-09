@@ -1,7 +1,5 @@
 // Backlinks, templates, history, and large-workspace tests.
 
-use crate::paths::is_markdown_path;
-
 fn temp_workspace() -> tempfile::TempDir {
     tempfile::tempdir().unwrap()
 }
