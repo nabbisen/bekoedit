@@ -14,7 +14,7 @@ artifact inspection was observed for the release candidate being signed off.
 
 | Field | Value |
 |-------|-------|
-| Candidate version | `vX.Y.Z` |
+| Candidate version | `X.Y.Z` |
 | Commit SHA | `________` |
 | Release branch | `________` |
 | Evidence date | `YYYY-MM-DD` |

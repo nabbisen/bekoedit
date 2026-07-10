@@ -103,7 +103,7 @@ checksum.
 
 ## Release evidence
 
-Before v1.0.0 sign-off, maintainers should record the observed local gates,
+Before 1.0.0 sign-off, maintainers should record the observed local gates,
 latest CI run, release workflow artifacts, checksum verification, manual
 walkthrough, and accepted risks in the
 [Release Evidence Log](release-evidence.md). The evidence log is a template:

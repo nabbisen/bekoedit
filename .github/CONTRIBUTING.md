@@ -108,6 +108,6 @@ Scopes: `markdown`, `fs`, `core`, `app`, `ui-contract`, `docs`, `ci`, `deps`.
 
 ## Releasing
 
-Releases are tagged `vX.Y.Z`. The release checklist is in
-`docs/src/distribution.md`. **v1.0.0 requires explicit maintainer sign-off**
-on every item in `docs/src/mvp-acceptance.md`.
+Releases are tagged with bare SemVer, for example `X.Y.Z`. The release
+checklist is in `docs/src/distribution.md`. **1.0.0 requires explicit
+maintainer sign-off** on every item in `docs/src/mvp-acceptance.md`.

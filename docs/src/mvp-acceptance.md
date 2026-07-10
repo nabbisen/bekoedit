@@ -1,10 +1,10 @@
 # MVP Acceptance Checklist
 
-**No v1.0.0 release without explicit maintainer sign-off on every item.**
+**No 1.0.0 release without explicit maintainer sign-off on every item.**
 
 Each item links to its evidence. Items marked ✅ have code, tests, or
 documentation evidence in the repository. Items marked ⚠️ require release
-candidate verification or latest CI/release-run evidence before v1.0.0
+candidate verification or latest CI/release-run evidence before 1.0.0
 sign-off.
 
 ---
@@ -121,7 +121,7 @@ sign-off.
 
 ## Maintainer sign-off
 
-Before pushing the v1.0.0 tag, sign here:
+Before pushing the 1.0.0 tag, sign here:
 
 ```
 [ ] I have completed a release evidence log from docs/src/release-evidence.md.

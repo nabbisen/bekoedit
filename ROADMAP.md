@@ -1,7 +1,7 @@
 # Roadmap
 
 Authoritative sequencing lives in `rfcs/`. This file is the orientation view.
-**v1.0.0 requires explicit maintainer sign-off before any release.**
+**1.0.0 requires explicit maintainer sign-off before any release.**
 
 ## Current proposed / deferred RFCs
 
@@ -28,12 +28,12 @@ formatting, Lexical integration decision, incremental parsing.
 Full-text search, backlinks, export profiles, Git awareness, workspace
 templates, extension policy, plugin system, sync/collaboration.
 
-**v1.0.0 requires explicit maintainer sign-off on the acceptance checklist.**
+**1.0.0 requires explicit maintainer sign-off on the acceptance checklist.**
 
 ## Shipped — v0.9.0 (2026-06-07)
 Recovery screen (RFC-007 UI), large-file warning, relay auto-restart
 (RFC-002), `file_size_bytes` query. Acceptance checklist items have code
-evidence where automation can cover them; v1.0.0 sign-off still requires
+evidence where automation can cover them; 1.0.0 sign-off still requires
 human walkthrough, IME manual verification, latest CI/release artifact
 inspection, Windows zip root-layout inspection, and no open `data-loss` or
 `source-corruption` issues.
@@ -42,7 +42,7 @@ inspection, Windows zip root-layout inspection, and no open `data-loss` or
 IME composition guard in CodeMirror 6 (RFC-011), User-facing error messages for all `StoreError` and `FileOpError` variants, Settings persistence helpers, Recent-workspaces persistence test, Large workspace stress test, Platform scripts, Production README, Scroll-fraction reporter. Codebase housekeeping.
 
 ## Shipped — v0.7.0 (2026-06-07)
-v1.0.0 preparation: word/char count, template selector UI, RFC-002 bridge
+1.0.0 preparation: word/char count, template selector UI, RFC-002 bridge
 hardening, headless smoke test, CONTRIBUTING.md, docs completion, acceptance
 checklist evidence log. Automated gate evidence was recorded for that
 checkpoint; IME manual verification remained pending.
