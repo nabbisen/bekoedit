@@ -17,4 +17,5 @@
 # For Maintainers
 
 - [Distribution & unsigned binaries](distribution.md)
+- [Release Evidence Log](release-evidence.md)
 - [MVP Acceptance Checklist](mvp-acceptance.md)

@@ -124,6 +124,8 @@ sign-off.
 Before pushing the v1.0.0 tag, sign here:
 
 ```
+[ ] I have completed a release evidence log from docs/src/release-evidence.md.
+
 [ ] I have run the ten-minute release walkthrough on the release binary.
     Platform: ____________   Date: ____________
 

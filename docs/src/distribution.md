@@ -98,3 +98,14 @@ if ($actual -ne $expected) { throw "checksum mismatch" }
 
 The command succeeds only when the downloaded artifact matches its published
 checksum.
+
+---
+
+## Release evidence
+
+Before v1.0.0 sign-off, maintainers should record the observed local gates,
+latest CI run, release workflow artifacts, checksum verification, manual
+walkthrough, and accepted risks in the
+[Release Evidence Log](release-evidence.md). The evidence log is a template:
+copy it for the release candidate and fill it with workflow links, artifact
+names, command output summaries, and maintainer decisions.
