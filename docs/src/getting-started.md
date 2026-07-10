@@ -2,9 +2,11 @@
 
 ## Install / build
 
-Prebuilt archives are published per release as
-`bekoedit-<version>.tar.gz`. To build from source you need Rust 1.85+
-(edition 2024):
+Prebuilt archives are published per release with target-qualified names such as
+`bekoedit-<version>-x86_64-unknown-linux-gnu.tar.gz`,
+`bekoedit-<version>-aarch64-apple-darwin.tar.gz`, and
+`bekoedit-<version>-x86_64-pc-windows-msvc.zip`. To build from source you need
+Rust 1.85+ (edition 2024):
 
 ```sh
 cargo run -p bekoedit
