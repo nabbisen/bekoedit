@@ -68,7 +68,7 @@ chmod +x bekoedit && ./bekoedit
 **Build from source** (requires Rust stable + Node.js >= 24):
 ```sh
 git clone https://github.com/nabbisen/bekoedit
-cd bekoedit && cargo run -p bekoedit-app
+cd bekoedit && cargo run -p bekoedit
 ```
 
 ---

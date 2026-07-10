@@ -7,7 +7,7 @@ Prebuilt archives are published per release as
 (edition 2024):
 
 ```sh
-cargo run -p bekoedit-app
+cargo run -p bekoedit
 ```
 
 On Linux, install the WebView dependencies first:

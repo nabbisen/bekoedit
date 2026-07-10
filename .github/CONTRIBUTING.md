@@ -36,10 +36,10 @@ benches/              Performance benchmarks (reparse.rs)
 cargo install dioxus-cli --version 0.7
 
 # Build and run in development mode
-cargo run -p bekoedit-app
+cargo run -p bekoedit
 
 # Build release binary
-cargo build --release -p bekoedit-app
+cargo build --release -p bekoedit
 
 # Rebuild the CodeMirror 6 bundle after editing js/src/editor.js
 cd crates/bekoedit-app/js && npm install && npm run build
@@ -52,7 +52,7 @@ cd crates/bekoedit-app/js && npm install && npm run build
 cargo test --workspace
 
 # Headless smoke test (CI equivalent)
-cargo build -p bekoedit-app && ./target/debug/bekoedit --headless-smoke
+cargo build -p bekoedit && ./target/debug/bekoedit --headless-smoke
 
 # Performance benchmark (RFC-032)
 cargo bench -p bekoedit-markdown -- --test

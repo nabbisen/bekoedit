@@ -73,7 +73,7 @@ jobs:
       - name: Build JS bundle
         run: cd crates/bekoedit-app/js && npm ci && node build.mjs
       - name: Build desktop app
-        run: cargo build -p bekoedit-app --release
+        run: cargo build -p bekoedit --release
       - name: Smoke test (headless launch, exit 0 within 10 s)
         run: |
           # Verify the binary starts and exits cleanly in a headless display.

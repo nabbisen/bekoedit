@@ -32,7 +32,7 @@ Record the command, environment, and observed result.
 | `cargo audit` | `________` |
 | `bash scripts/check-rfcs.sh` | `________` |
 | `mdbook build docs` | `________` |
-| `cargo build -p bekoedit-app --release` | `________` |
+| `cargo build -p bekoedit --release` | `________` |
 | `./target/release/bekoedit --headless-smoke` | `________` |
 
 ## CI gates
