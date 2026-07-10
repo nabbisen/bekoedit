@@ -52,7 +52,20 @@ impl AppState {
                 .to_path_buf();
             self.open_document(&rel)?;
         }
-        let _ = self.recovery.remove(&snapshot.original_path);
+        let session_path = self
+            .session
+            .as_ref()
+            .ok_or(StoreError::NoDocument)?
+            .path
+            .clone();
+        if session_path != snapshot.original_path {
+            return Err(StoreError::SaveFailed(
+                "recovery snapshot path does not match open document".into(),
+            ));
+        }
+        self.recovery
+            .remove(&snapshot.original_path)
+            .map_err(|e| StoreError::SaveFailed(e.to_string()))?;
         self.restore_history(
             &bekoedit_fs::HistoryEntry {
                 original_path: snapshot.original_path.clone(),

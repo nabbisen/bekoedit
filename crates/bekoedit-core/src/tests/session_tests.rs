@@ -285,6 +285,30 @@ fn recovery_restore_preserves_dirty_recovery_snapshot() {
 }
 
 #[test]
+fn recovery_restore_without_session_keeps_snapshot() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = test_state(dir.path());
+    let snapshot = RecoverySnapshot {
+        original_path: dir.path().join("doc.md"),
+        text: "# recovered\n".into(),
+        revision: 7,
+        created_at_secs: 1,
+    };
+    state.recovery.save(&snapshot).unwrap();
+
+    assert_eq!(
+        state
+            .restore_recovery_snapshot(&snapshot, 3000)
+            .unwrap_err(),
+        StoreError::NoDocument
+    );
+
+    let snapshots = state.recovery_store().list();
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(snapshots[0].text, "# recovered\n");
+}
+
+#[test]
 fn conflict_resolution_keep_mine() {
     let (dir, mut state) = workspace_with_doc("# v1\n");
     let rev = state.session.as_ref().unwrap().revision;
