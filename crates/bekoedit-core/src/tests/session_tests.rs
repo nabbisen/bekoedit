@@ -285,27 +285,55 @@ fn recovery_restore_preserves_dirty_recovery_snapshot() {
 }
 
 #[test]
-fn recovery_restore_without_session_keeps_snapshot() {
+fn cold_start_recovery_restore_opens_dirty_session() {
     let dir = tempfile::tempdir().unwrap();
     let mut state = test_state(dir.path());
+    let original_path = dir.path().join("doc.md");
     let snapshot = RecoverySnapshot {
-        original_path: dir.path().join("doc.md"),
+        original_path: original_path.clone(),
         text: "# recovered\n".into(),
         revision: 7,
         created_at_secs: 1,
     };
     state.recovery.save(&snapshot).unwrap();
 
-    assert_eq!(
-        state
-            .restore_recovery_snapshot(&snapshot, 3000)
-            .unwrap_err(),
-        StoreError::NoDocument
-    );
+    state.restore_recovery_snapshot(&snapshot, 3000).unwrap();
 
+    let session = state.session.as_ref().unwrap();
+    assert_eq!(session.path, original_path);
+    assert_eq!(session.canonical_text, "# recovered\n");
+    assert!(session.dirty);
+    assert_eq!(
+        state.save_state,
+        SaveState::AutoSaveScheduled { due_at_ms: 3100 }
+    );
     let snapshots = state.recovery_store().list();
     assert_eq!(snapshots.len(), 1);
     assert_eq!(snapshots[0].text, "# recovered\n");
+}
+
+#[test]
+fn cold_start_recovery_restore_preserves_empty_snapshot_as_dirty() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = test_state(dir.path());
+    let snapshot = RecoverySnapshot {
+        original_path: dir.path().join("empty.md"),
+        text: String::new(),
+        revision: 1,
+        created_at_secs: 1,
+    };
+    state.recovery.save(&snapshot).unwrap();
+
+    state.restore_recovery_snapshot(&snapshot, 4000).unwrap();
+
+    let session = state.session.as_ref().unwrap();
+    assert_eq!(session.canonical_text, "");
+    assert!(session.dirty);
+    assert_eq!(
+        state.save_state,
+        SaveState::AutoSaveScheduled { due_at_ms: 4100 }
+    );
+    assert_eq!(state.recovery_store().list()[0].text, "");
 }
 
 #[test]

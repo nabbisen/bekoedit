@@ -133,6 +133,12 @@ impl DocumentSession {
         Ok(())
     }
 
+    /// Restore update: loads a saved/recovery snapshot as a new dirty edit.
+    pub fn apply_restored_snapshot(&mut self, text: String) {
+        self.canonical_text = text;
+        self.after_mutation();
+    }
+
     fn after_mutation(&mut self) {
         self.revision += 1;
         self.dirty = true;

@@ -81,6 +81,12 @@ impl AppState {
         &self.recovery
     }
 
+    pub(crate) fn allocate_document_id(&mut self) -> u64 {
+        let id = self.next_document_id;
+        self.next_document_id += 1;
+        id
+    }
+
     /// Opens a folder as the active workspace and records it as recent.
     pub fn open_workspace(&mut self, root: &Path, now_secs: u64) -> Result<(), StoreError> {
         let workspace = Workspace::open(root)?;
@@ -116,8 +122,7 @@ impl AppState {
         let root = self.workspace_root()?.to_path_buf();
         let absolute =
             bekoedit_fs::resolve_in_workspace(&root, relative).map_err(FileOpError::Path)?;
-        let id = self.next_document_id;
-        self.next_document_id += 1;
+        let id = self.allocate_document_id();
         let session = DocumentSession::load(id, &absolute)?;
         self.session = Some(session);
         self.save_state = SaveState::Clean;
@@ -308,8 +313,7 @@ impl AppState {
     /// Returns `StoreError::Untitled` from `save_now()` so the UI knows
     /// to show a "Save As" dialog.
     pub fn new_untitled(&mut self) {
-        let id = self.next_document_id;
-        self.next_document_id += 1;
+        let id = self.allocate_document_id();
         self.session = Some(DocumentSession::new_untitled(id));
         self.save_state = SaveState::Dirty;
         self.conflict = crate::conflict::ConflictState::None;

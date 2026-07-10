@@ -20,6 +20,7 @@ use crate::components::{
     history_panel::HistoryPanel,
     outline_panel::OutlinePanel,
     preview_mode::PreviewMode,
+    recovery_screen::RecoveryScreen,
     search_panel::SearchPanel,
     settings_screen::SettingsScreen,
     split_mode::SplitMode,
@@ -56,6 +57,7 @@ pub fn App() -> Element {
     use_context_provider(|| Signal::new(false_val())); // backlinks panel open
     use_context_provider(|| Signal::new(false_val())); // history panel open
     use_context_provider(|| Signal::new(Vec::<Toast>::new()));
+    let recovery_dismissed = use_signal(|| false);
 
     // Background: native fs watcher + autosave + external-change poll.
     use_future(move || {
@@ -130,6 +132,7 @@ pub fn App() -> Element {
         }
     });
 
+    let has_recovery = !*recovery_dismissed.read() && has_pending_recovery(&state.read());
     let workspace_open = state.read().workspace.is_some() || state.read().session.is_some();
     let settings_open = *use_context::<Signal<bool>>().read();
 
@@ -140,6 +143,8 @@ pub fn App() -> Element {
         AppBar {}
         if settings_open {
             SettingsScreen {}
+        } else if has_recovery {
+            RecoveryScreen { dismissed: recovery_dismissed }
         } else if workspace_open {
             MainShell {}
         } else {
@@ -150,6 +155,10 @@ pub fn App() -> Element {
 
 fn false_val() -> bool {
     false
+}
+
+pub(crate) fn has_pending_recovery(state: &AppState) -> bool {
+    !state.recovery.list().is_empty()
 }
 
 #[component]

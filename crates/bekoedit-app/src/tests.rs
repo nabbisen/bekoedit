@@ -40,6 +40,12 @@ mod app_tests {
             "history.label",
             "history.restore",
             "history.restored",
+            "recovery.title",
+            "recovery.description",
+            "recovery.restore",
+            "recovery.discard",
+            "recovery.skip_all",
+            "recovery.restored",
             "templates.label",
             "templates.empty",
             "templates.blank",
@@ -67,5 +73,27 @@ mod app_tests {
             "i18n coverage gaps:\n{}",
             missing.join("\n")
         );
+    }
+
+    #[test]
+    fn pending_recovery_is_detected_for_startup_screen() {
+        use bekoedit_core::AppState;
+        use bekoedit_fs::{RecoverySnapshot, RecoveryStore};
+
+        let dir = tempfile::tempdir().unwrap();
+        let recovery = RecoveryStore::at(dir.path().join(".recovery"));
+        let state = AppState::new(recovery.clone(), dir.path().join(".recent.json"), 100);
+        assert!(!crate::app::has_pending_recovery(&state));
+
+        recovery
+            .save(&RecoverySnapshot {
+                original_path: dir.path().join("doc.md"),
+                text: "# recovered\n".into(),
+                revision: 2,
+                created_at_secs: 1,
+            })
+            .unwrap();
+
+        assert!(crate::app::has_pending_recovery(&state));
     }
 }

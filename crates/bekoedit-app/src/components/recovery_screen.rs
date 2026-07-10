@@ -10,7 +10,7 @@ use crate::components::toast::{ToastKind, push_toast};
 use crate::i18n::{Lang, tr};
 
 #[component]
-pub fn RecoveryScreen() -> Element {
+pub fn RecoveryScreen(mut dismissed: Signal<bool>) -> Element {
     let mut state = use_context::<Signal<AppState>>();
     let lang = *use_context::<Signal<Lang>>().read();
     let mut toasts = use_context::<Signal<Vec<crate::components::toast::Toast>>>();
@@ -43,11 +43,14 @@ pub fn RecoveryScreen() -> Element {
                                                 &snap,
                                                 crate::state::now_ms(),
                                             ) {
-                                                Ok(()) => push_toast(
-                                                    &mut toasts,
-                                                    ToastKind::Info,
-                                                    tr(lang, "recovery.restored"),
-                                                ),
+                                                Ok(()) => {
+                                                    dismissed.set(true);
+                                                    push_toast(
+                                                        &mut toasts,
+                                                        ToastKind::Info,
+                                                        tr(lang, "recovery.restored"),
+                                                    );
+                                                }
                                                 Err(err) => push_toast(
                                                     &mut toasts,
                                                     ToastKind::Error,
@@ -76,11 +79,11 @@ pub fn RecoveryScreen() -> Element {
                 button {
                     class: "btn-ghost recovery-skip",
                     onclick: move |_| {
-                        // Dismiss without acting — user can recover later via History panel
                         let s = state.write();
                         for snap in s.recovery.list() {
                             let _ = s.recovery.remove(&snap.original_path);
                         }
+                        dismissed.set(true);
                     },
                     {tr(lang, "recovery.skip_all")}
                 }

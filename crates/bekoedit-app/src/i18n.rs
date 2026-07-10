@@ -92,6 +92,14 @@ fn tr_en(key: &str) -> &'static str {
         "settings.reopen" => "Reopen last workspace on start",
         "settings.autosave_ms" => "Autosave delay",
         "settings.prefer_trash" => "Move deleted files to trash",
+        "recovery.title" => "Recover unsaved changes",
+        "recovery.description" => {
+            "bekoedit found unsaved recovery snapshots from a previous session."
+        }
+        "recovery.restore" => "Restore",
+        "recovery.discard" => "Discard",
+        "recovery.skip_all" => "Discard all",
+        "recovery.restored" => "Recovery restored",
         "editor.toolbar_label" => "Editor toolbar",
         "editor.mode_label" => "Editing mode",
         "explorer.region_label" => "Workspace explorer",
@@ -163,6 +171,14 @@ fn tr_ja(key: &str) -> &'static str {
         "settings.reopen" => "起動時に最後のワークスペースを再開",
         "settings.autosave_ms" => "自動保存の遅延",
         "settings.prefer_trash" => "削除したファイルをゴミ箱に移動",
+        "recovery.title" => "未保存の変更を復元",
+        "recovery.description" => {
+            "前回のセッションで保存されなかった復元スナップショットが見つかりました。"
+        }
+        "recovery.restore" => "復元",
+        "recovery.discard" => "破棄",
+        "recovery.skip_all" => "すべて破棄",
+        "recovery.restored" => "復元しました",
         "editor.toolbar_label" => "エディタツールバー",
         "editor.mode_label" => "編集モード",
         "explorer.region_label" => "ワークスペースエクスプローラ",

@@ -24,8 +24,7 @@ impl AppState {
             return Err(StoreError::ConflictPending);
         }
         let session = self.session.as_mut().ok_or(StoreError::NoDocument)?;
-        // Use the next revision as base so any current edit is superseded.
-        session.apply_text_snapshot(session.revision, entry.text.clone())?;
+        session.apply_restored_snapshot(entry.text.clone());
         self.after_edit(now_ms);
         Ok(())
     }
@@ -51,6 +50,18 @@ impl AppState {
                 .map_err(|e| StoreError::SaveFailed(e.to_string()))?
                 .to_path_buf();
             self.open_document(&rel)?;
+        }
+        if self.session.is_none() {
+            let id = self.allocate_document_id();
+            self.session = Some(crate::session::DocumentSession::from_text(
+                id,
+                snapshot.original_path.clone(),
+                String::new(),
+            ));
+            self.save_state = crate::save::SaveState::Clean;
+            self.conflict = crate::conflict::ConflictState::None;
+            self.autosave.resume();
+            self.autosave.clear();
         }
         let session_path = self
             .session
