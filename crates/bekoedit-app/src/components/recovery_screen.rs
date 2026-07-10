@@ -39,20 +39,21 @@ pub fn RecoveryScreen() -> Element {
                                     onclick: {
                                         let snap = snap.clone();
                                         move |_| {
-                                            let mut s = state.write();
-                                            if let Some(ws) = s.workspace.as_ref().map(|w| w.root_path.clone())
-                                                && let Ok(rel) = snap.original_path.strip_prefix(&ws) {
-                                                let _ = s.open_document(rel);
+                                            match state.write().restore_recovery_snapshot(
+                                                &snap,
+                                                crate::state::now_ms(),
+                                            ) {
+                                                Ok(()) => push_toast(
+                                                    &mut toasts,
+                                                    ToastKind::Info,
+                                                    tr(lang, "recovery.restored"),
+                                                ),
+                                                Err(err) => push_toast(
+                                                    &mut toasts,
+                                                    ToastKind::Error,
+                                                    err.to_string(),
+                                                ),
                                             }
-                                            let _ = s.restore_history(&bekoedit_fs::HistoryEntry {
-                                                original_path: snap.original_path.clone(),
-                                                text: snap.text.clone(),
-                                                saved_at_secs: snap.created_at_secs,
-                                                revision: snap.revision,
-                                            });
-                                            let _ = s.recovery.remove(&snap.original_path);
-                                            push_toast(&mut toasts, ToastKind::Info,
-                                                tr(lang, "recovery.restored"));
                                         }
                                     },
                                     {tr(lang, "recovery.restore")}

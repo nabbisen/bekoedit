@@ -131,7 +131,7 @@ impl AppState {
         self.session.as_mut().ok_or(StoreError::NoDocument)
     }
 
-    fn after_edit(&mut self, now_ms: u64) {
+    pub(crate) fn after_edit(&mut self, now_ms: u64) {
         self.autosave.note_edit(now_ms);
         self.save_state = match self.autosave.due_at() {
             Some(due_at_ms) => SaveState::AutoSaveScheduled { due_at_ms },

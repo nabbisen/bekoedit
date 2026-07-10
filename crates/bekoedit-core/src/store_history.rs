@@ -15,13 +15,52 @@ impl AppState {
 
     /// Restores a history entry as the current document state, creating a
     /// new dirty edit. Does not write to disk automatically.
-    pub fn restore_history(&mut self, entry: &bekoedit_fs::HistoryEntry) -> Result<(), StoreError> {
+    pub fn restore_history(
+        &mut self,
+        entry: &bekoedit_fs::HistoryEntry,
+        now_ms: u64,
+    ) -> Result<(), StoreError> {
         if self.conflict.requires_user_decision() {
             return Err(StoreError::ConflictPending);
         }
         let session = self.session.as_mut().ok_or(StoreError::NoDocument)?;
         // Use the next revision as base so any current edit is superseded.
         session.apply_text_snapshot(session.revision, entry.text.clone())?;
+        self.after_edit(now_ms);
         Ok(())
+    }
+
+    /// Restores a crash-recovery snapshot as a dirty edit.
+    ///
+    /// The stale startup snapshot is removed before the normal dirty-edit
+    /// lifecycle runs; `after_edit` then writes the fresh recovery snapshot for
+    /// the restored text, so the recovery channel remains protected if the app
+    /// exits before save.
+    pub fn restore_recovery_snapshot(
+        &mut self,
+        snapshot: &bekoedit_fs::RecoverySnapshot,
+        now_ms: u64,
+    ) -> Result<(), StoreError> {
+        if self.conflict.requires_user_decision() {
+            return Err(StoreError::ConflictPending);
+        }
+        if let Some(ws) = self.workspace.as_ref().map(|w| w.root_path.clone()) {
+            let rel = snapshot
+                .original_path
+                .strip_prefix(&ws)
+                .map_err(|e| StoreError::SaveFailed(e.to_string()))?
+                .to_path_buf();
+            self.open_document(&rel)?;
+        }
+        let _ = self.recovery.remove(&snapshot.original_path);
+        self.restore_history(
+            &bekoedit_fs::HistoryEntry {
+                original_path: snapshot.original_path.clone(),
+                text: snapshot.text.clone(),
+                saved_at_secs: snapshot.created_at_secs,
+                revision: snapshot.revision,
+            },
+            now_ms,
+        )
     }
 }

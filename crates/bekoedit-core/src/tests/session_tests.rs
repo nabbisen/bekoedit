@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use bekoedit_fs::{DeleteStrategy, HistoryEntry, RecoveryStore};
+use bekoedit_fs::{DeleteStrategy, HistoryEntry, RecoverySnapshot, RecoveryStore};
 use bekoedit_markdown::{FormBlockEdit, FormEditCommand};
 
 use crate::conflict::{ConflictResolution, ConflictState};
@@ -227,10 +227,61 @@ fn pending_conflict_blocks_history_restore() {
         saved_at_secs: 0,
     };
     assert_eq!(
-        state.restore_history(&entry).unwrap_err(),
+        state.restore_history(&entry, 1).unwrap_err(),
         StoreError::ConflictPending
     );
     assert_eq!(state.session.as_ref().unwrap().canonical_text, local_text);
+}
+
+#[test]
+fn history_restore_runs_dirty_lifecycle() {
+    let (_dir, mut state) = workspace_with_doc("# current\n");
+    let entry = HistoryEntry {
+        original_path: state.session.as_ref().unwrap().path.clone(),
+        text: "# restored\n".into(),
+        revision: 1,
+        saved_at_secs: 0,
+    };
+
+    state.restore_history(&entry, 2000).unwrap();
+
+    let session = state.session.as_ref().unwrap();
+    assert_eq!(session.canonical_text, "# restored\n");
+    assert!(session.dirty);
+    assert_eq!(session.revision, 2);
+    assert_eq!(
+        state.save_state,
+        SaveState::AutoSaveScheduled { due_at_ms: 2100 }
+    );
+    assert_eq!(state.recovery_store().list()[0].text, "# restored\n");
+}
+
+#[test]
+fn recovery_restore_preserves_dirty_recovery_snapshot() {
+    let (dir, mut state) = workspace_with_doc("# current\n");
+    let original_path = dir.path().canonicalize().unwrap().join("doc.md");
+    let snapshot = RecoverySnapshot {
+        original_path: original_path.clone(),
+        text: "# recovered\n".into(),
+        revision: 7,
+        created_at_secs: 1,
+    };
+    state.recovery.save(&snapshot).unwrap();
+
+    state.restore_recovery_snapshot(&snapshot, 3000).unwrap();
+
+    let session = state.session.as_ref().unwrap();
+    assert_eq!(session.canonical_text, "# recovered\n");
+    assert!(session.dirty);
+    assert_eq!(
+        state.save_state,
+        SaveState::AutoSaveScheduled { due_at_ms: 3100 }
+    );
+    let snapshots = state.recovery_store().list();
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(snapshots[0].original_path, original_path);
+    assert_eq!(snapshots[0].text, "# recovered\n");
+    assert_eq!(snapshots[0].created_at_secs, 3);
 }
 
 #[test]

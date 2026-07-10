@@ -64,7 +64,7 @@ pub fn HistoryPanel() -> Element {
                                 onclick: {
                                     let e = entry.clone();
                                     move |_| {
-                                        match state.write().restore_history(&e) {
+                                        match state.write().restore_history(&e, crate::state::now_ms()) {
                                             Ok(()) => push_toast(
                                                 &mut toasts, ToastKind::Info,
                                                 tr(lang, "history.restored"),
