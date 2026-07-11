@@ -76,6 +76,10 @@ bekoedit-<version>-<target>.zip.sha256
 ## Manual release walkthrough
 
 Manual testing belongs here so it stays separate from automated gate evidence.
+Use the [Manual Release Checklist](manual-release-checklist.md) for the
+detailed reusable checklist. Copy that checklist into the per-release evidence
+record, fill it with observed results, and keep release-instance evidence
+separate from this template.
 
 | Area | Evidence |
 |------|----------|

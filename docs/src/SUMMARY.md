@@ -18,4 +18,5 @@
 
 - [Distribution & unsigned binaries](distribution.md)
 - [Release Evidence Log](release-evidence.md)
+- [Manual Release Checklist](manual-release-checklist.md)
 - [MVP Acceptance Checklist](mvp-acceptance.md)
