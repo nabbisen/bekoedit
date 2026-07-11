@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.12.0] - 2026-07-11
+
+### Added
+- Release evidence template and sign-off workflow covering local gates,
+  remote CI, release artifacts, checksums, and manual walkthrough evidence.
+- Security audit and release checksum gates for release readiness evidence.
+
+### Changed
+- CI smoke testing is now blocking, and release archives unpack directly into
+  the destination root.
+- Release tags now use bare SemVer, for example `0.12.0`, matching Rust
+  release convention.
+- Startup recovery now presents pending dirty snapshots through the app shell
+  with explicit recover and discard actions.
+- Readiness docs now separate observed local evidence, owner-provided remote
+  CI evidence, and release-artifact evidence still required after tagging.
+
+### Fixed
+- Pending conflict guards now block section moves and history restore, closing
+  stale-baseline source-safety gaps.
+- Recovery restore APIs preserve dirty/recovery lifecycle state and reject
+  ambiguous restore targets.
+- The CI ELOC check no longer fails when no files exceed the limit.
+- Cross-platform recents persistence tests now compare canonical workspace
+  roots, fixing macOS and Windows CI failures.
+
+[0.12.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.12.0
+
 ## [0.11.5] - 2026-07-07
 
 - Crate attributes.
