@@ -49,9 +49,9 @@ fn recent_workspaces_persist_across_restart() {
         !loaded_recents.entries.is_empty(),
         "recent workspaces must persist to disk"
     );
+    let expected_root = dir.path().canonicalize().unwrap();
     assert_eq!(
-        loaded_recents.entries[0].root_path,
-        dir.path(),
+        loaded_recents.entries[0].root_path, expected_root,
         "most-recently-used workspace must be first"
     );
 }
