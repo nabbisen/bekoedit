@@ -31,6 +31,7 @@ use crate::components::{
 };
 use crate::i18n::{Lang, tr};
 use crate::settings::AppSettings;
+use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
 use crate::state::{create_app_state, now_ms};
 
 const STYLE: Asset = asset!("/assets/style.css");
@@ -57,6 +58,7 @@ pub fn App() -> Element {
     use_context_provider(|| Signal::new(false_val())); // backlinks panel open
     use_context_provider(|| Signal::new(false_val())); // history panel open
     use_context_provider(|| Signal::new(Vec::<Toast>::new()));
+    let source_sync = use_context_provider(|| Signal::new(SourceSyncState::default()));
     let recovery_dismissed = use_signal(|| false);
 
     // Background: native fs watcher + autosave + external-change poll.
@@ -105,9 +107,28 @@ pub fn App() -> Element {
         }
     });
 
+    // Source sync timeout: protected commands must not wait forever if the
+    // WebView bridge stops responding.
+    let mut sync_for_timeout = source_sync;
+    let mut timeout_toasts = use_context::<Signal<Vec<Toast>>>();
+    use_future(move || async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            if sync_for_timeout.write().expire_pending(now_ms()).is_some() {
+                crate::components::toast::push_toast(
+                    &mut timeout_toasts,
+                    crate::components::toast::ToastKind::Error,
+                    crate::source_sync::SourceSyncError::Timeout.to_string(),
+                );
+            }
+        }
+    });
+
     // Global keyboard shortcut relay.
-    let mut mode_sig = use_context::<Signal<EditorMode>>();
-    let mut app_st: Signal<AppState> = state;
+    let mode_sig = use_context::<Signal<EditorMode>>();
+    let app_st: Signal<AppState> = state;
+    let source_sync_for_shortcuts = source_sync;
+    let toasts_for_shortcuts = use_context::<Signal<Vec<Toast>>>();
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
         // Auto-restarting shortcut relay (RFC-002 hardening).
         for _ in 0..bridge::MAX_RELAY_RESTARTS {
@@ -117,12 +138,42 @@ pub fn App() -> Element {
                 if let Ok(AppMsg::Shortcut { key }) = serde_json::from_value(raw) {
                     match key.as_str() {
                         "save" => {
-                            let _ = app_st.write().save_now(now_ms());
+                            submit_source_command(
+                                source_sync_for_shortcuts,
+                                app_st,
+                                mode_sig,
+                                toasts_for_shortcuts,
+                                SourceCommand::SaveNow,
+                            );
                         }
-                        "mode_text" => mode_sig.set(EditorMode::Text),
-                        "mode_form" => mode_sig.set(EditorMode::Form),
-                        "mode_preview" => mode_sig.set(EditorMode::Preview),
-                        "mode_split" => mode_sig.set(EditorMode::Split),
+                        "mode_text" => submit_source_command(
+                            source_sync_for_shortcuts,
+                            app_st,
+                            mode_sig,
+                            toasts_for_shortcuts,
+                            SourceCommand::SwitchMode(EditorMode::Text),
+                        ),
+                        "mode_form" => submit_source_command(
+                            source_sync_for_shortcuts,
+                            app_st,
+                            mode_sig,
+                            toasts_for_shortcuts,
+                            SourceCommand::SwitchMode(EditorMode::Form),
+                        ),
+                        "mode_preview" => submit_source_command(
+                            source_sync_for_shortcuts,
+                            app_st,
+                            mode_sig,
+                            toasts_for_shortcuts,
+                            SourceCommand::SwitchMode(EditorMode::Preview),
+                        ),
+                        "mode_split" => submit_source_command(
+                            source_sync_for_shortcuts,
+                            app_st,
+                            mode_sig,
+                            toasts_for_shortcuts,
+                            SourceCommand::SwitchMode(EditorMode::Split),
+                        ),
                         _ => {}
                     }
                 }

@@ -7,13 +7,18 @@
 use dioxus::prelude::*;
 
 use bekoedit_core::AppState;
+use bekoedit_ui_contract::EditorMode;
 
+use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
-use crate::state::now_ms;
+use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
 
 #[component]
 pub fn OutlinePanel() -> Element {
-    let mut state = use_context::<Signal<AppState>>();
+    let state = use_context::<Signal<AppState>>();
+    let mode_sig = use_context::<Signal<EditorMode>>();
+    let source_sync = use_context::<Signal<SourceSyncState>>();
+    let toasts = use_context::<Signal<Vec<Toast>>>();
     let lang = *use_context::<Signal<Lang>>().read();
 
     let headings = state
@@ -70,7 +75,13 @@ pub fn OutlinePanel() -> Element {
                                     title: tr(lang, "outline.move_up"),
                                     aria_label: tr(lang, "outline.move_up"),
                                     onclick: move |_| {
-                                        let _ = state.write().move_section_up(idx, now_ms());
+                                        submit_source_command(
+                                            source_sync,
+                                            state,
+                                            mode_sig,
+                                            toasts,
+                                            SourceCommand::MoveSectionUp(idx),
+                                        );
                                     },
                                     "↑"
                                 }
@@ -82,7 +93,13 @@ pub fn OutlinePanel() -> Element {
                                     title: tr(lang, "outline.move_down"),
                                     aria_label: tr(lang, "outline.move_down"),
                                     onclick: move |_| {
-                                        let _ = state.write().move_section_down(idx, now_ms());
+                                        submit_source_command(
+                                            source_sync,
+                                            state,
+                                            mode_sig,
+                                            toasts,
+                                            SourceCommand::MoveSectionDown(idx),
+                                        );
                                     },
                                     "↓"
                                 }

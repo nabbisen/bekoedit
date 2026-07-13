@@ -7,13 +7,18 @@
 use dioxus::prelude::*;
 
 use bekoedit_core::AppState;
+use bekoedit_ui_contract::EditorMode;
 
+use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
-use crate::state::now_ms;
+use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
 
 #[component]
 pub fn AppBar() -> Element {
-    let mut state = use_context::<Signal<AppState>>();
+    let state = use_context::<Signal<AppState>>();
+    let mode_sig = use_context::<Signal<EditorMode>>();
+    let source_sync = use_context::<Signal<SourceSyncState>>();
+    let toasts = use_context::<Signal<Vec<Toast>>>();
     let mut lang_sig = use_context::<Signal<Lang>>();
     let ui_lang = *lang_sig.read();
     let mut settings_open = use_context::<Signal<bool>>();
@@ -30,7 +35,13 @@ pub fn AppBar() -> Element {
                 onclick: move |_| {
                     let o = *menu_open.read();
                     if o { menu_open.set(false); }
-                    state.write().close_workspace();
+                    submit_source_command(
+                        source_sync,
+                        state,
+                        mode_sig,
+                        toasts,
+                        SourceCommand::CloseWorkspace,
+                    );
                 },
                 "bekoedit"
             }
@@ -62,13 +73,22 @@ pub fn AppBar() -> Element {
                             role: "menuitem",
                             onclick: move |_| {
                                 menu_open.set(false);
-                                let mut st = state;
+                                let st = state;
+                                let sync = source_sync;
+                                let mode = mode_sig;
+                                let toast_sig = toasts;
                                 spawn(async move {
                                     if let Some(h) = rfd::AsyncFileDialog::new()
                                         .set_title("Select workspace folder")
                                         .pick_folder().await
                                     {
-                                        let _ = st.write().open_workspace(h.path(), now_ms());
+                                        submit_source_command(
+                                            sync,
+                                            st,
+                                            mode,
+                                            toast_sig,
+                                            SourceCommand::OpenWorkspace(h.path().to_path_buf()),
+                                        );
                                     }
                                 });
                             },
@@ -81,7 +101,13 @@ pub fn AppBar() -> Element {
                             role: "menuitem",
                             onclick: move |_| {
                                 menu_open.set(false);
-                                state.write().new_untitled();
+                                submit_source_command(
+                                    source_sync,
+                                    state,
+                                    mode_sig,
+                                    toasts,
+                                    SourceCommand::NewUntitled,
+                                );
                             },
                             "📝  " {tr(ui_lang, "start.new_file")}
                         }
@@ -94,7 +120,13 @@ pub fn AppBar() -> Element {
                                 role: "menuitem",
                                 onclick: move |_| {
                                     menu_open.set(false);
-                                    state.write().close_workspace();
+                                    submit_source_command(
+                                        source_sync,
+                                        state,
+                                        mode_sig,
+                                        toasts,
+                                        SourceCommand::CloseWorkspace,
+                                    );
                                 },
                                 {tr(ui_lang, "menu.close_workspace")}
                             }

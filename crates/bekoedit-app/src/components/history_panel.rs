@@ -8,9 +8,11 @@ use dioxus::prelude::*;
 
 use bekoedit_core::AppState;
 use bekoedit_fs::HistoryEntry;
+use bekoedit_ui_contract::EditorMode;
 
-use crate::components::toast::{ToastKind, push_toast};
+use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
+use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
 
 fn format_time(secs: u64) -> String {
     // Simple formatting: show relative time for recent entries.
@@ -32,9 +34,11 @@ fn format_time(secs: u64) -> String {
 
 #[component]
 pub fn HistoryPanel() -> Element {
-    let mut state = use_context::<Signal<AppState>>();
+    let state = use_context::<Signal<AppState>>();
+    let mode_sig = use_context::<Signal<EditorMode>>();
+    let source_sync = use_context::<Signal<SourceSyncState>>();
     let lang = *use_context::<Signal<Lang>>().read();
-    let mut toasts = use_context::<Signal<Vec<crate::components::toast::Toast>>>();
+    let toasts = use_context::<Signal<Vec<Toast>>>();
 
     let entries: Vec<HistoryEntry> = state.read().list_history();
 
@@ -64,16 +68,13 @@ pub fn HistoryPanel() -> Element {
                                 onclick: {
                                     let e = entry.clone();
                                     move |_| {
-                                        match state.write().restore_history(&e, crate::state::now_ms()) {
-                                            Ok(()) => push_toast(
-                                                &mut toasts, ToastKind::Info,
-                                                tr(lang, "history.restored"),
-                                            ),
-                                            Err(err) => push_toast(
-                                                &mut toasts, ToastKind::Error,
-                                                err.to_string(),
-                                            ),
-                                        }
+                                        submit_source_command(
+                                            source_sync,
+                                            state,
+                                            mode_sig,
+                                            toasts,
+                                            SourceCommand::RestoreHistory(e.clone()),
+                                        );
                                     }
                                 },
                                 {tr(lang, "history.restore")}

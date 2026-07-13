@@ -2,13 +2,13 @@
  * bekoedit CodeMirror 6 adapter (RFC-011).
  *
  * Exposes window.__bk:
- *   init(containerId, text, docId, revision)  — create/replace the editor
- *   setDoc(text, docId, revision)             — external content update
+ *   init(containerId, text, docId, revision, editorId, relayName, epoch)
+ *   setDoc(text, docId, revision, epoch)      — external content update
+ *   requestSnapshot(requestId, editorId, docId, epoch)
  *   focus()                                   — programmatic focus
  *
- * Sends to Dioxus via window.__bk_relay(JSON):
- *   {type:"change", docId, revision, text}    — user edits (100 ms debounce,
- *                                               suppressed during IME composition)
+ * Sends to the active relay via window[relayName](JSON):
+ *   {type:"change", editorId, docId, epoch, seq, text, composing}
  *   {type:"ready"}                            — editor mounted and ready
  *   {type:"scrollFraction", fraction}         — scroll position for Split sync
  *
@@ -37,17 +37,31 @@ import {
 
 let view = null;
 let currentDocId = null;
-let currentRevision = 0;
+let currentEditorId = "text";
+let currentRelayName = "__bk_text_relay";
+let currentEpoch = 0;
+let seq = 0;
 let sendTimer = null;
 let skipNextSend = false;   // suppress send when Rust pushes setDoc
 let compositionActive = false; // true during CJK / IME composition
 
+function sendToRust(payload) {
+  window[currentRelayName]?.(JSON.stringify(payload));
+}
+
 function sendChange() {
   if (!view || skipNextSend) return;
   const text = view.state.doc.toString();
-  window.__bk_relay?.(
-    JSON.stringify({ type: "change", docId: currentDocId, revision: currentRevision, text })
-  );
+  seq += 1;
+  sendToRust({
+    type: "change",
+    editorId: currentEditorId,
+    docId: currentDocId,
+    epoch: currentEpoch,
+    seq,
+    text,
+    composing: false,
+  });
 }
 
 function scheduleSend(immediate) {
@@ -124,9 +138,7 @@ function buildExtensions() {
         const max = scroller.scrollHeight - scroller.clientHeight;
         if (max > 0) {
           const fraction = scroller.scrollTop / max;
-          window.__bk_relay?.(
-            JSON.stringify({ type: "scrollFraction", fraction })
-          );
+          sendToRust({ type: "scroll", fraction });
         }
       },
     }),
@@ -135,9 +147,12 @@ function buildExtensions() {
 
 // --- Public API -------------------------------------------------------------
 
-function init(containerId, text, docId, revision) {
+function init(containerId, text, docId, revision, editorId = "text", relayName = "__bk_text_relay", epoch = 0) {
   currentDocId = docId;
-  currentRevision = revision;
+  currentEditorId = editorId;
+  currentRelayName = relayName;
+  currentEpoch = epoch;
+  seq = 0;
   compositionActive = false;
 
   const parent = document.getElementById(containerId);
@@ -153,15 +168,16 @@ function init(containerId, text, docId, revision) {
     parent,
   });
 
-  window.__bk_relay?.(JSON.stringify({ type: "ready" }));
+  sendToRust({ type: "ready", editorId: currentEditorId, docId: currentDocId, epoch: currentEpoch });
 }
 
-function setDoc(text, docId, revision) {
-  currentRevision = revision;
+function setDoc(text, docId, revision, epoch = currentEpoch) {
   if (!view) return;
 
   const isSameDoc = docId === currentDocId;
   currentDocId = docId;
+  currentEpoch = epoch;
+  seq = 0;
   compositionActive = false; // external update always clears composition state
 
   skipNextSend = true;
@@ -179,6 +195,33 @@ function setDoc(text, docId, revision) {
   Promise.resolve().then(() => { skipNextSend = false; });
 }
 
+function requestSnapshot(requestId, editorId, docId, epoch) {
+  if (!view) {
+    sendToRust({ type: "snapshotBlocked", requestId, editorId, docId, epoch, reason: "editorUnavailable" });
+    return;
+  }
+  if (editorId !== currentEditorId || docId !== currentDocId || epoch !== currentEpoch) {
+    sendToRust({ type: "snapshotBlocked", requestId, editorId, docId, epoch, reason: "identityMismatch" });
+    return;
+  }
+  if (compositionActive) {
+    sendToRust({ type: "snapshotBlocked", requestId, editorId, docId, epoch, reason: "compositionActive" });
+    return;
+  }
+  clearTimeout(sendTimer);
+  seq += 1;
+  sendToRust({
+    type: "snapshot",
+    requestId,
+    editorId,
+    docId,
+    epoch,
+    seq,
+    text: view.state.doc.toString(),
+    composing: false,
+  });
+}
+
 function focus() { view?.focus(); }
 
 function undo() {
@@ -191,5 +234,5 @@ function redo() {
     import("@codemirror/commands").then(({ redo: _redo }) => _redo(view));
 }
 
-window.__bk = { init, setDoc, focus, undo, redo, get _view() { return view; } };
-export { init, setDoc, focus, undo, redo };
+window.__bk = { init, setDoc, requestSnapshot, focus, undo, redo, get _view() { return view; } };
+export { init, setDoc, requestSnapshot, focus, undo, redo };

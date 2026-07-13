@@ -7,6 +7,7 @@ mod error_keys;
 mod i18n;
 mod settings;
 mod smoke_test;
+mod source_sync;
 mod state;
 
 fn dioxus_config() -> dioxus::desktop::Config {

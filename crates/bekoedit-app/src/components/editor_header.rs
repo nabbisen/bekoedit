@@ -12,14 +12,15 @@ use dioxus::prelude::*;
 use bekoedit_core::{AppState, SaveState};
 use bekoedit_ui_contract::EditorMode;
 
-use crate::components::toast::{Toast, ToastKind, push_toast};
+use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
-use crate::state::now_ms;
+use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
 
 #[component]
 pub fn EditorHeader() -> Element {
-    let mut state = use_context::<Signal<AppState>>();
-    let mut mode_sig = use_context::<Signal<EditorMode>>();
+    let state = use_context::<Signal<AppState>>();
+    let mode_sig = use_context::<Signal<EditorMode>>();
+    let source_sync = use_context::<Signal<SourceSyncState>>();
     let mode = *mode_sig.read();
     let mut collapsed = use_context::<Signal<bool>>();
     // advanced panel signals (3rd–7th bools)
@@ -27,7 +28,7 @@ pub fn EditorHeader() -> Element {
     let mut search_open = use_context::<Signal<bool>>();
     let mut backlinks_open = use_context::<Signal<bool>>();
     let mut history_open = use_context::<Signal<bool>>();
-    let mut toasts = use_context::<Signal<Vec<Toast>>>();
+    let toasts = use_context::<Signal<Vec<Toast>>>();
     let ui_lang = *use_context::<Signal<Lang>>().read();
 
     let session = state.read();
@@ -83,7 +84,15 @@ pub fn EditorHeader() -> Element {
                             class: if mode == m { "mode-tab active" } else { "mode-tab" },
                             role: "tab",
                             aria_selected: "{mode == m}",
-                            onclick: move |_| mode_sig.set(m),
+                            onclick: move |_| {
+                                submit_source_command(
+                                    source_sync,
+                                    state,
+                                    mode_sig,
+                                    toasts,
+                                    SourceCommand::SwitchMode(m),
+                                );
+                            },
                             {tr(ui_lang, key)}
                         }
                     }
@@ -92,7 +101,15 @@ pub fn EditorHeader() -> Element {
                         class: if mode == EditorMode::Form { "mode-tab active" } else { "mode-tab mode-tab-secondary" },
                         role: "tab",
                         aria_selected: "{mode == EditorMode::Form}",
-                        onclick: move |_| mode_sig.set(EditorMode::Form),
+                        onclick: move |_| {
+                            submit_source_command(
+                                source_sync,
+                                state,
+                                mode_sig,
+                                toasts,
+                                SourceCommand::SwitchMode(EditorMode::Form),
+                            );
+                        },
                         {tr(ui_lang, "mode.form")}
                     }
                 }
@@ -113,18 +130,24 @@ pub fn EditorHeader() -> Element {
                         class: "btn-secondary save-as-btn",
                         title: tr(ui_lang, "editor.save_as"),
                         onclick: move |_| {
-                            let mut st = state;
                             let lv = ui_lang;
+                            let sync = source_sync;
+                            let st = state;
+                            let mode = mode_sig;
+                            let toast_sig = toasts;
                             spawn(async move {
                                 if let Some(h) = rfd::AsyncFileDialog::new()
                                     .set_title(tr(lv, "editor.save_as_title"))
                                     .add_filter("Markdown", &["md","markdown"])
                                     .save_file().await
                                 {
-                                    match st.write().save_as(h.path().to_path_buf(), now_ms()) {
-                                        Ok(()) => push_toast(&mut use_context::<Signal<Vec<Toast>>>(), ToastKind::Success, tr(lv, "save.saved")),
-                                        Err(e) => push_toast(&mut use_context::<Signal<Vec<Toast>>>(), ToastKind::Error, e.to_string()),
-                                    }
+                                    submit_source_command(
+                                        sync,
+                                        st,
+                                        mode,
+                                        toast_sig,
+                                        SourceCommand::SaveAs(h.path().to_path_buf()),
+                                    );
                                 }
                             });
                         },
@@ -135,10 +158,13 @@ pub fn EditorHeader() -> Element {
                         class: "btn-primary",
                         aria_label: tr(ui_lang, "editor.save"),
                         onclick: move |_| {
-                            match state.write().save_now(now_ms()) {
-                                Ok(())  => push_toast(&mut toasts, ToastKind::Success, tr(ui_lang, "save.saved")),
-                                Err(e)  => push_toast(&mut toasts, ToastKind::Error,   e.to_string()),
-                            }
+                            submit_source_command(
+                                source_sync,
+                                state,
+                                mode_sig,
+                                toasts,
+                                SourceCommand::SaveNow,
+                            );
                         },
                         {tr(ui_lang, "editor.save")}
                     }
@@ -157,7 +183,16 @@ pub fn EditorHeader() -> Element {
                         // Split
                         button {
                             class: if mode == EditorMode::Split { "dropdown-item active" } else { "dropdown-item" },
-                            onclick: move |_| { mode_sig.set(EditorMode::Split); adv_open.set(false); },
+                            onclick: move |_| {
+                                submit_source_command(
+                                    source_sync,
+                                    state,
+                                    mode_sig,
+                                    toasts,
+                                    SourceCommand::SwitchMode(EditorMode::Split),
+                                );
+                                adv_open.set(false);
+                            },
                             {tr(ui_lang, "mode.split")}
                         }
                         hr { class: "dropdown-sep" }

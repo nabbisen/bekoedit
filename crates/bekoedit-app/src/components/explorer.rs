@@ -17,15 +17,19 @@ use dioxus::prelude::*;
 use dioxus_swdir_tree::{DirectoryTree, ThreadExecutor, use_scan_driver};
 
 use bekoedit_core::AppState;
+use bekoedit_ui_contract::EditorMode;
 
-use crate::components::toast::{Toast, ToastKind, push_toast};
+use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
+use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
 
 use dioxus_swdir_tree::{ScanRequest, TreeNode};
 
 #[component]
 pub fn Explorer() -> Element {
     let mut state = use_context::<Signal<AppState>>();
+    let mode_sig = use_context::<Signal<EditorMode>>();
+    let source_sync = use_context::<Signal<SourceSyncState>>();
     let ui_lang = *use_context::<Signal<Lang>>().read();
     let toasts = use_context::<Signal<Vec<Toast>>>();
 
@@ -152,6 +156,8 @@ pub fn Explorer() -> Element {
                         tree_sig,
                         scan_ch,
                         state,
+                        mode_sig,
+                        source_sync,
                         toasts,
                     }
                 }
@@ -168,6 +174,8 @@ struct TreeRowItemProps {
     tree_sig: Signal<DirectoryTree>,
     scan_ch: Coroutine<ScanRequest>,
     state: Signal<AppState>,
+    mode_sig: Signal<EditorMode>,
+    source_sync: Signal<SourceSyncState>,
     toasts: Signal<Vec<Toast>>,
 }
 
@@ -179,8 +187,10 @@ fn TreeRowItem(props: TreeRowItemProps) -> Element {
         root,
         mut tree_sig,
         scan_ch,
-        mut state,
-        mut toasts,
+        state,
+        mode_sig,
+        source_sync,
+        toasts,
     } = props;
 
     let indent_px = depth * 16;
@@ -214,10 +224,13 @@ fn TreeRowItem(props: TreeRowItemProps) -> Element {
                     let rel = path.strip_prefix(&root)
                         .map(|r| r.to_path_buf())
                         .unwrap_or_else(|_| path.clone());
-                    match state.write().open_document(&rel) {
-                        Ok(()) => {}
-                        Err(e) => push_toast(&mut toasts, ToastKind::Error, e.to_string()),
-                    }
+                    submit_source_command(
+                        source_sync,
+                        state,
+                        mode_sig,
+                        toasts,
+                        SourceCommand::OpenDocument(rel),
+                    );
                 }
             },
             span { class: "tree-icon", "{icon} " }

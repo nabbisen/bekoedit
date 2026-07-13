@@ -12,23 +12,72 @@ use dioxus::prelude::*;
 use serde::Deserialize;
 
 use bekoedit_core::AppState;
+use bekoedit_ui_contract::EditorMode;
 
-use crate::state::now_ms;
+use crate::bridge;
+use crate::source_sync::{
+    EditorSnapshot, SnapshotBlockReason, SnapshotBlocked, SourceEditorId, SourceSyncState,
+    handle_editor_snapshot, handle_snapshot_blocked,
+};
 
 const CM_SPLIT_ID: &str = "cm-split";
 const PREVIEW_SPLIT_ID: &str = "preview-split";
+const SPLIT_RELAY: &str = "__bk_split_relay";
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum SplitMsg {
-    Change { revision: u64, text: String },
-    Scroll { fraction: f64 },
+    Change {
+        #[serde(rename = "editorId")]
+        editor_id: String,
+        #[serde(rename = "docId")]
+        doc_id: u64,
+        epoch: u64,
+        seq: u64,
+        text: String,
+        composing: bool,
+    },
+    Snapshot {
+        request_id: u64,
+        #[serde(rename = "editorId")]
+        editor_id: String,
+        #[serde(rename = "docId")]
+        doc_id: u64,
+        epoch: u64,
+        seq: u64,
+        text: String,
+        composing: bool,
+    },
+    SnapshotBlocked {
+        request_id: u64,
+        #[serde(rename = "editorId")]
+        editor_id: String,
+        #[serde(rename = "docId")]
+        doc_id: u64,
+        epoch: u64,
+        reason: SnapshotBlockReasonWire,
+    },
+    Scroll {
+        fraction: f64,
+    },
     Ready,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum SnapshotBlockReasonWire {
+    CompositionActive,
+    EditorUnavailable,
+    IdentityMismatch,
+    BridgeError,
 }
 
 #[component]
 pub fn SplitMode() -> Element {
-    let mut app_state = use_context::<Signal<AppState>>();
+    let app_state = use_context::<Signal<AppState>>();
+    let mut source_sync = use_context::<Signal<SourceSyncState>>();
+    let mode_sig = use_context::<Signal<EditorMode>>();
+    let toasts = use_context::<Signal<Vec<crate::components::toast::Toast>>>();
 
     let mut cm_revision = use_signal(|| 0u64);
     let mut cm_doc_id = use_signal(|| 0u64);
@@ -49,12 +98,21 @@ pub fn SplitMode() -> Element {
     // Init CM6 in the split container.
     let text_init = text.clone();
     use_effect(move || {
+        let active = source_sync.write().register_editor(
+            SourceEditorId::Split,
+            EditorMode::Split,
+            doc_id,
+            revision,
+        );
         let js = format!(
-            "if(window.__bk){{window.__bk.init({},{},{},{});}}",
+            "if(window.__bk){{window.__bk.init({},{},{},{},{},{},{});}}",
             serde_json::to_string(CM_SPLIT_ID).unwrap(),
             serde_json::to_string(&text_init).unwrap(),
             doc_id,
             revision,
+            serde_json::to_string(SourceEditorId::Split.as_str()).unwrap(),
+            serde_json::to_string(SPLIT_RELAY).unwrap(),
+            active.epoch,
         );
         document::eval(&js);
         cm_doc_id.set(doc_id);
@@ -67,44 +125,91 @@ pub fn SplitMode() -> Element {
         if *cm_doc_id.read() == doc_id && revision <= *cm_revision.read() + 1 {
             return;
         }
+        let active = source_sync.write().register_editor(
+            SourceEditorId::Split,
+            EditorMode::Split,
+            doc_id,
+            revision,
+        );
         let js = format!(
-            "if(window.__bk){{window.__bk.setDoc({},{},{});}}",
+            "if(window.__bk){{window.__bk.setDoc({},{},{},{});}}",
             serde_json::to_string(&text_sync).unwrap(),
             doc_id,
             revision,
+            active.epoch,
         );
         document::eval(&js);
         cm_doc_id.set(doc_id);
         cm_revision.set(revision);
     });
 
+    let text_refresh = text.clone();
+    use_effect(move || {
+        let request = source_sync
+            .read()
+            .pending_refresh_for(SourceEditorId::Split);
+        if let Some(request) = request {
+            let js = format!(
+                "if(window.__bk){{window.__bk.setDoc({},{},{},{});}}",
+                serde_json::to_string(&text_refresh).unwrap(),
+                request.document_id,
+                request.revision,
+                request.epoch,
+            );
+            document::eval(&js);
+            cm_doc_id.set(request.document_id);
+            cm_revision.set(request.revision);
+            source_sync
+                .write()
+                .clear_refresh(SourceEditorId::Split, request.epoch);
+        }
+    });
+
+    use_effect(move || {
+        let request = source_sync.read().unsent_request_for(SourceEditorId::Split);
+        if let Some(request) = request {
+            let js = format!(
+                "if(window.__bk){{window.__bk.requestSnapshot({},{},{},{});}}",
+                request.request_id,
+                serde_json::to_string(SourceEditorId::Split.as_str()).unwrap(),
+                request.document_id,
+                request.epoch,
+            );
+            document::eval(&js);
+            source_sync.write().mark_request_sent(request.request_id);
+        }
+    });
+
     // Relay: receives CM6 changes AND scroll events.
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
-        let relay_js = r#"
-            window.__bk_split_relay = (msg) => dioxus.send(msg);
-            // Install scroll listener once CM6 is ready.
-            const installScroll = () => {
-                const scroller = document.querySelector(`#cm-split .cm-scroller`);
-                if (!scroller) { setTimeout(installScroll, 100); return; }
-                scroller.addEventListener('scroll', () => {
-                    const frac = scroller.scrollHeight > scroller.clientHeight
-                        ? scroller.scrollTop / (scroller.scrollHeight - scroller.clientHeight)
-                        : 0;
-                    window.__bk_split_relay?.(JSON.stringify({type:'scroll', fraction: frac}));
-                }, { passive: true });
-            };
-            setTimeout(installScroll, 200);
-            (async () => { while(true) { await new Promise(r => setTimeout(r, 86_400_000)); } })();
-        "#;
-        let mut relay = document::eval(relay_js);
+        let relay_js = bridge::relay_js(SPLIT_RELAY);
+        let mut relay = document::eval(&relay_js);
         while let Ok(raw) = relay.recv().await {
             if let Ok(msg) = serde_json::from_value::<SplitMsg>(raw) {
                 match msg {
                     SplitMsg::Change {
-                        revision: base,
+                        editor_id,
+                        doc_id,
+                        epoch,
+                        seq,
                         text: new_text,
+                        composing,
                     } => {
-                        let _ = app_state.write().edit_text(base, new_text, now_ms());
+                        handle_editor_snapshot(
+                            source_sync,
+                            app_state,
+                            mode_sig,
+                            toasts,
+                            EditorSnapshot {
+                                request_id: None,
+                                editor_id: parse_editor_id(&editor_id),
+                                document_id: doc_id,
+                                epoch,
+                                seq,
+                                text: new_text,
+                                composing,
+                            },
+                        );
                         let rev = app_state
                             .read()
                             .session
@@ -113,6 +218,55 @@ pub fn SplitMode() -> Element {
                             .unwrap_or(0);
                         cm_revision.set(rev);
                     }
+                    SplitMsg::Snapshot {
+                        request_id,
+                        editor_id,
+                        doc_id,
+                        epoch,
+                        seq,
+                        text,
+                        composing,
+                    } => {
+                        handle_editor_snapshot(
+                            source_sync,
+                            app_state,
+                            mode_sig,
+                            toasts,
+                            EditorSnapshot {
+                                request_id: Some(request_id),
+                                editor_id: parse_editor_id(&editor_id),
+                                document_id: doc_id,
+                                epoch,
+                                seq,
+                                text,
+                                composing,
+                            },
+                        );
+                        let rev = app_state
+                            .read()
+                            .session
+                            .as_ref()
+                            .map(|s| s.revision)
+                            .unwrap_or(0);
+                        cm_revision.set(rev);
+                    }
+                    SplitMsg::SnapshotBlocked {
+                        request_id,
+                        editor_id,
+                        doc_id,
+                        epoch,
+                        reason,
+                    } => handle_snapshot_blocked(
+                        source_sync,
+                        toasts,
+                        SnapshotBlocked {
+                            request_id,
+                            editor_id: parse_editor_id(&editor_id),
+                            document_id: doc_id,
+                            epoch,
+                            reason: reason.into(),
+                        },
+                    ),
                     SplitMsg::Scroll { fraction } => {
                         // Mirror fractional scroll position to the preview pane.
                         let js = format!(
@@ -152,6 +306,24 @@ pub fn SplitMode() -> Element {
                 class: "split-right preview",
                 dangerous_inner_html: "{html}",
             }
+        }
+    }
+}
+
+fn parse_editor_id(value: &str) -> SourceEditorId {
+    match value {
+        "split" => SourceEditorId::Split,
+        _ => SourceEditorId::Text,
+    }
+}
+
+impl From<SnapshotBlockReasonWire> for SnapshotBlockReason {
+    fn from(value: SnapshotBlockReasonWire) -> Self {
+        match value {
+            SnapshotBlockReasonWire::CompositionActive => Self::CompositionActive,
+            SnapshotBlockReasonWire::EditorUnavailable => Self::EditorUnavailable,
+            SnapshotBlockReasonWire::IdentityMismatch => Self::IdentityMismatch,
+            SnapshotBlockReasonWire::BridgeError => Self::BridgeError,
         }
     }
 }

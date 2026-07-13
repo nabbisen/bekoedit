@@ -6,12 +6,18 @@ use dioxus::prelude::*;
 
 use bekoedit_core::AppState;
 use bekoedit_fs::{BacklinkEntry, find_backlinks};
+use bekoedit_ui_contract::EditorMode;
 
+use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
+use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
 
 #[component]
 pub fn BacklinksPanel() -> Element {
-    let mut state = use_context::<Signal<AppState>>();
+    let state = use_context::<Signal<AppState>>();
+    let mode_sig = use_context::<Signal<EditorMode>>();
+    let source_sync = use_context::<Signal<SourceSyncState>>();
+    let toasts = use_context::<Signal<Vec<Toast>>>();
     let lang = *use_context::<Signal<Lang>>().read();
 
     let links: Signal<Vec<BacklinkEntry>> = use_signal(Vec::new);
@@ -59,7 +65,13 @@ pub fn BacklinksPanel() -> Element {
                                 onclick: {
                                     let path = entry.source_path.clone();
                                     move |_| {
-                                        let _ = state.write().open_document(&path);
+                                        submit_source_command(
+                                            source_sync,
+                                            state,
+                                            mode_sig,
+                                            toasts,
+                                            SourceCommand::OpenDocument(path.clone()),
+                                        );
                                     }
                                 },
                                 span { class: "match-file",
