@@ -5,7 +5,7 @@
 **Track:** Source safety / WebView lifecycle
 **Priority:** Critical
 **Date:** 2026-07-14
-**Revision:** 2 — resolves the 2026-07-14 initial architecture review
+**Revision:** 3 — resolves the 2026-07-14 initial review and first rereview
 **Related RFCs:** [RFC-002](../done/RFC-002-runtime-architecture-and-webview-boundary.md), [RFC-011](../done/RFC-011-text-mode-with-codemirror-6.md), [RFC-019](../done/RFC-019-mode-switching-and-projection-synchronization.md)
 **Implementation handoff:** [RFC-041 implementation handoff](../handoffs/041-source-editor-lifecycle-and-synchronization-controller/implementation-handoff.md)
 
@@ -27,6 +27,10 @@ Revision 2 fixes the controller host above all controlled screen replacement,
 adds acknowledged canonical refresh/rebase, serializes singleton replacement,
 and defines the incompatible bridge protocol version 2 with operation-specific
 deadlines and first-terminal-wins semantics.
+
+Revision 3 makes the post-snapshot barrier hold a total, deadline-bounded
+lifecycle. It adds explicit `BarrierHeld` and `ResumePending` states and defines
+the success/failure disposition of every protected command.
 
 ## 2. Incident and root cause
 
@@ -171,6 +175,15 @@ enum SourceEditorLifecycle {
         editor: ReadyEditor,
         request: SnapshotRequest,
     },
+    BarrierHeld {
+        editor: HeldEditor,
+        command: SourceCommand,
+        snapshot_operation: OperationId,
+    },
+    ResumePending {
+        editor: ResumeEditor,
+        request: ResumeRequest,
+    },
     RefreshPending {
         editor: RefreshingEditor,
         request: RefreshRequest,
@@ -192,6 +205,11 @@ The controller allocates both without process-lifetime reuse. An instance ID
 identifies one physical view ownership lifetime. An epoch identifies one
 accepted canonical document stream within that instance and changes on a
 canonical refresh/rebase.
+
+`HeldEditor` means Rust received a Snapshot proving JavaScript entered the
+named hold. `ResumeEditor` records either `ConfirmedHold(snapshot_operation)`
+or `PossibleHold(snapshot_operation)`; the latter is used when a snapshot
+response was lost after dispatch. Neither type is Ready.
 
 ### 6.3 Controller host lifetime
 
@@ -271,7 +289,7 @@ does not reconstruct the view and re-emits the matching `EditorReady` result
 with `reused = true`. An init using the same instance ID with different
 identity fields is rejected. An init for a different instance while an old
 instance remains active is rejected with `InstanceAlreadyActive` unless it
-carries the one-use takeover permit defined in section 7.6.
+carries the one-use takeover permit defined in section 7.7.
 
 ### 7.2 Protected command while mounting
 
@@ -333,17 +351,102 @@ Suggested messages:
 Blocked reasons include `compositionActive`, `editorUnavailable`,
 `identityMismatch`, and `bridgeError`.
 
-Snapshot acceptance or no-op acceptance completes the protected command.
-Blocked, rejected, unavailable, or timeout results clear the pending command
-without executing it.
+Snapshot acceptance or no-op acceptance enters `BarrierHeld` and authorizes the
+protected-command effect; the command is not lifecycle-complete until its
+disposition is chosen. Blocked, rejected, unavailable, or timeout results
+terminalize the protected command without executing it, then resolve any
+confirmed or possible hold through the table below.
 
-After JavaScript captures a snapshot for a protected command, it places that
-instance in a short barrier hold: user document transactions are disabled until
-the controller sends one of `ResumeEditing`, `ApplyDocument`, or `Destroy`.
-This prevents input entered after the accepted snapshot from racing a mode
-switch or canonical Rust mutation. A blocked snapshot does not enter the hold.
+JavaScript processes a valid snapshot request atomically in this order:
 
-### 7.5 Canonical refresh and rebase
+1. Verify the complete instance/document/epoch/request identity.
+2. If composition is active, emit `SnapshotBlocked` and do not enter hold.
+3. Cancel the ordinary-change debounce timer.
+4. Enter an input hold bound to the snapshot operation ID.
+5. Capture text and sequence.
+6. Emit `Snapshot`.
+
+The hold rejects document-changing transactions; it does not queue them. View,
+selection, and read-only copy remain available. JavaScript stays held until a
+matching `ResumeEditing`, `ApplyDocument`, or `DestroyEditor` terminalizes that
+hold. This closes the post-snapshot typing race without publishing partial IME
+text.
+
+Rust remains in `SnapshotPending` until a terminal snapshot event arrives.
+Receiving a valid `Snapshot` means JavaScript is held even if Rust subsequently
+rejects the snapshot. After Rust accepts the snapshot, the reducer enters
+`BarrierHeld` before emitting the protected-command execution effect. `Ready`
+must never describe an instance that may still be held.
+
+### 7.5 Hold release and resume
+
+`BarrierHeld` must transition through exactly one disposition:
+
+- `ResumePending` when the same mounted stream can continue;
+- `RefreshPending` when Rust canonical text changed but the instance remains;
+- `Unmounting` when the successful command replaces/unmounts the surface;
+- `Unavailable` when the resulting identity/revision is ambiguous or invalid.
+
+`ResumePending` owns a new resume operation ID, references the snapshot
+operation ID, and records whether the hold is confirmed or only possible.
+JavaScript accepts `ResumeEditing` only when the full current
+identity matches and either:
+
+- the named hold is active; or
+- no hold exists and no newer hold exists, making a duplicate/lost-request
+  recovery an idempotent no-op.
+
+It rejects resume when another hold is active. A successful resume clears the
+hold, re-enables document transactions, and emits `EditingResumed` with
+`wasHeld`. Rust returns to Ready only after validating instance, document,
+epoch, canonical revision, resume operation, and held snapshot operation.
+
+First-terminal-wins applies to resume. Duplicate `ResumeEditing` for the same
+already-released hold re-emits the same idempotent result without changing the
+view. Resume failure or timeout enters `Unavailable`; it never guesses that
+input was enabled. Retry invalidates/destroys the old instance and creates a
+fresh mount from Rust canonical text.
+
+Snapshot terminal outcomes are total:
+
+| Snapshot outcome | Hold disposition |
+|---|---|
+| `SnapshotBlocked` during composition/identity check | No hold was entered; clear command and remain Ready if identity is current |
+| Accepted snapshot/no-op | Enter `BarrierHeld`, then use the command disposition table |
+| Rust rejects snapshot but the exact pre-request stream is still provably current | Enter `ResumePending`; command remains unexecuted |
+| Rust rejects snapshot and stream validity is ambiguous | Enter `Unavailable`; command remains unexecuted |
+| Snapshot timeout while the same instance may have received the request | Enter `ResumePending`; command remains unexecuted |
+| Snapshot timeout after instance invalidation/drop | Enter `Unavailable` or `Unmounting`; never Ready |
+
+“Provably current” requires exact instance, editor, document, epoch, and Rust
+canonical revision equality with the pre-request Ready state and no conflict or
+external mutation that invalidated the stream. Clearing the command alone is
+never sufficient after a request that may have entered hold.
+
+#### Protected-command disposition table
+
+After snapshot acceptance, command execution returns a typed result plus a
+pre/post session fingerprint containing document ID, canonical revision, and
+source identity. The reducer, not `commands.rs`, chooses the next lifecycle:
+
+| Protected command | Success | Failure with provably unchanged old session/source | Ambiguous or partially changed identity/revision |
+|---|---|---|---|
+| Save / Save As | `ResumePending` after save result | `ResumePending` | `Unavailable` |
+| History restore | `RefreshPending` with new epoch/text | `ResumePending` | `Unavailable` |
+| Outline move up/down | `RefreshPending` with new epoch/text | `ResumePending` | `Unavailable` |
+| Switch mode, including Text/Split replacement | `Unmounting` / matched destroy | `ResumePending` | `Unavailable` |
+| Open Settings | `Unmounting` / matched destroy | `ResumePending` if navigation did not occur | `Unavailable` |
+| Open document | `Unmounting` / matched destroy | `ResumePending` | `Unavailable` |
+| New document | `Unmounting` / matched destroy | `ResumePending` | `Unavailable` |
+| Open/close workspace or Home | `Unmounting` / matched destroy | `ResumePending` | `Unavailable` |
+
+Save/Save As success may change path/save metadata but may resume only when the
+document ID, canonical revision/text, and editor stream remain current. A
+failed replacement may resume only when the old session and surface are proven
+intact. Any command not listed here must define its disposition before joining
+the protected inventory.
+
+### 7.6 Canonical refresh and rebase
 
 Some protected commands mutate canonical Rust text while Text/Split remains
 mounted, including History restore and Outline section moves. After the command
@@ -389,12 +492,11 @@ blocked the preceding snapshot; if composition is nevertheless reported at
 refresh dispatch, refresh fails closed and remounts from canonical text rather
 than publishing or preserving partial composition text.
 
-Save operations that do not change canonical text release the barrier hold
-with `ResumeEditing` only after save completion, provided instance, epoch, and
-revision remain current. Mode, Settings, document, and workspace transitions
-proceed to matched destroy instead of resuming.
+Save operations follow the section 7.5 disposition table. Mode, Settings,
+document, and workspace transitions proceed to matched destroy after success
+instead of resuming.
 
-### 7.6 Unmount, destroy, and serialized replacement
+### 7.7 Unmount, destroy, and serialized replacement
 
 Component drop submits `Unmount(instance_id)`.
 
@@ -507,7 +609,7 @@ The protocol contains these operations and correlated results:
 `InstanceAlreadyActive`, identity mismatch, and bridge error. Refresh and
 destroy failures likewise carry operation and instance identity. A
 `TakeoverPermit` is accepted only as part of `InitEditor` and only under section
-7.6 rules.
+7.7 rules.
 
 Dispatch/eval queuing is not delivery proof and never constitutes an operation
 result. Missing delivery ends through the matching deadline as unavailable or
@@ -530,6 +632,7 @@ Use separate named deadline classes, initially:
 ```text
 MOUNT_DEADLINE_MS = 5_000
 SNAPSHOT_DEADLINE_MS = 2_000
+RESUME_DEADLINE_MS = 1_000
 REFRESH_DEADLINE_MS = 2_000
 DESTROY_DEADLINE_MS = 1_000
 ```
@@ -537,8 +640,11 @@ DESTROY_DEADLINE_MS = 1_000
 - Mount timeout: enter `Unavailable`, reject the mount-bound protected command,
   and offer fresh-instance Retry.
 - Snapshot timeout: return the current Ready instance from barrier hold if the
-  adapter can acknowledge resume; otherwise enter `Unavailable`; never execute
-  the protected command.
+  adapter can acknowledge resume through `ResumePending`; otherwise enter
+  `Unavailable`; never execute the protected command.
+- Resume timeout: enter `Unavailable`, retain Rust canonical text, keep the
+  command terminalized, and require a fresh mount; never describe the editor as
+  Ready while JavaScript input state is unknown.
 - Refresh timeout: enter `Unavailable`, retain Rust canonical text, reject old
   epoch messages, and require remount from canonical text.
 - Destroy timeout: keep the retired identity invalid and either finish without
@@ -646,8 +752,21 @@ than duplicate init, refresh, snapshot, relay, and teardown effects.
 - no-op snapshots complete commands without revision bumps;
 - ordinary debounced change racing a forced snapshot preserves ordering;
 - barrier hold prevents post-snapshot input from racing command execution;
+- JavaScript cancels debounce and enters hold before emitting Snapshot;
+- active composition emits SnapshotBlocked without entering hold;
+- accepted snapshot enters BarrierHeld before command execution;
+- Rust-rejected snapshot resumes only a provably current old stream;
+- rejected snapshot with ambiguous stream validity enters Unavailable;
+- lost snapshot response after JavaScript hold enters ResumePending on timeout;
+- Save and Save As success/failure use the disposition table;
+- every replacement and mutation command success/failure uses the disposition
+  table, including ambiguous partial-change fallback;
+- matching EditingResumed is the only ResumePending -> Ready transition;
+- resume failure and timeout enter Unavailable and permit fresh-mount Retry;
+- duplicate/late resume result is a first-terminal-wins stale no-op;
 - first matching terminal event wins over duplicate result/timeout races;
-- mount, snapshot, refresh, and destroy deadlines have distinct outcomes;
+- mount, snapshot, resume, refresh, and destroy deadlines have distinct
+  outcomes;
 - composition blocks protected commands without publishing partial text;
 - all existing protected commands execute only after accepted synchronization;
 - Settings open synchronizes before unmount;
@@ -664,7 +783,13 @@ than duplicate init, refresh, snapshot, relay, and teardown effects.
 - a valid one-use takeover permit replaces only its named retired instance;
 - requestSnapshot always returns a terminal result;
 - a successful protected snapshot enters barrier hold;
+- the hold rejects rather than queues document-changing transactions;
+- IME SnapshotBlocked never enters hold;
+- ResumeEditing is identity/hold-bound and idempotent for matching duplicate or
+  no-hold lost-request recovery;
+- ResumeEditing rejects a different/newer active hold;
 - ResumeEditing and ApplyDocument release hold only after matched processing;
+- resume failure/timeout recovery can destroy and remount from canonical text;
 - ApplyDocument returns correlated DocumentApplied and installs the new epoch;
 - destroy clears timers, composition, view, and identity;
 - stale destroy/request cannot affect the current instance;
@@ -676,6 +801,12 @@ than duplicate init, refresh, snapshot, relay, and teardown effects.
 - Click Preview immediately after New; it waits or completes without error.
 - Type -> immediately Preview shows the final text.
 - Repeated Preview clicks do not create busy/timeout toast loops.
+- Snapshot rejection or lost response never leaves the editor permanently
+  input-disabled.
+- Save/Save As failure returns the same valid source editor to editable Ready.
+- Failed open/navigation returns to editable Ready when the old session remains
+  intact.
+- Failed/ambiguous resume shows one recovery status and Retry remounts.
 - Settings -> return behaves the same as the first mount.
 - Type -> Settings -> return preserves typed text.
 - Text -> Split and Split -> Preview preserve final text.
@@ -751,7 +882,8 @@ The 2026-07-14 initial architecture review resolved the original questions:
 - Linux gains an actual WebView regression, while macOS/Windows retain manual
   candidate and IME evidence until equivalent automation exists.
 
-Revision 2 requests focused confirmation that:
+Revision 3 retains the resolved initial findings and requests final focused
+confirmation that:
 
 1. application-root hosting and separate application-exit shutdown close the
    controller lifetime gap;
@@ -765,7 +897,12 @@ Revision 2 requests focused confirmation that:
 5. barrier hold/resume prevents post-snapshot input races without weakening
    IME safety;
 6. reducer-only mutation authority keeps one lifecycle owner after module
-   separation.
+   separation;
+7. `BarrierHeld` and deadline-bounded `ResumePending` make JavaScript hold
+   terminal across snapshot rejection, command success/failure, lost response,
+   resume failure, and timeout;
+8. the protected-command disposition table covers every existing command
+   without allowing Ready while JavaScript may remain held.
 
 Implementation must not begin until rereview confirms the blocking findings
 are resolved.

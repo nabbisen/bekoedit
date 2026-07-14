@@ -20,7 +20,9 @@ The handoff covers:
 - relay-before-init and validated Ready handshake;
 - existing source-sync barrier integration;
 - explicit snapshot terminal results;
-- barrier hold/resume around protected command execution;
+- explicit BarrierHeld and deadline-bounded ResumePending around protected
+  command execution;
+- total post-snapshot command success/failure disposition table;
 - acknowledged canonical refresh/rebase with epoch rollover;
 - serialized singleton destroy/init and one-use takeover;
 - bridge protocol version 2 and first-terminal-wins deadlines;
@@ -46,6 +48,7 @@ Design-stage files created or updated:
 - `rfcs/README.md`
 - `.git-exclude/review-request/2026-07-14-rfc-041-source-editor-lifecycle-design.md`
 - `.git-exclude/review-request/2026-07-14-rfc-041-source-editor-lifecycle-design-rereview.md`
+- `.git-exclude/review-request/2026-07-14-rfc-041-source-editor-lifecycle-design-final-rereview.md`
 
 Expected implementation areas after approval:
 
@@ -61,10 +64,11 @@ Expected implementation areas after approval:
 - app, protocol, and lifecycle tests.
 - CI/release app-test gates and a Linux real-WebView regression harness.
 
-The prior source-sync and diagnostic application changes are committed in
-`776dd26`; the initial RFC package is committed in `67ea8dc`. The revision-2
-worktree changes only RFC/handoff documents. Future implementation must still
-decide, file by file, which diagnostic behavior to retain or replace.
+The source-sync barrier is committed in `776dd26`; the eight tracing/diagnostic
+application changes and initial RFC package are committed in `67ea8dc`. The
+revision-2 package is committed in `e92cbfe`. Revision 3 changes only RFC/handoff
+documents. Future implementation must still decide, file by file, which
+diagnostic behavior to retain or replace.
 
 ## 4. Design decisions and assumptions
 
@@ -88,9 +92,13 @@ decide, file by file, which diagnostic behavior to retain or replace.
 - Bridge schema version 2 is an incompatible, exact-match protocol whose typed
   source-editor family lives in `bekoedit-ui-contract`.
 - Every operation uses first-terminal-wins reducer semantics with separate
-  mount, snapshot, refresh, and destroy deadlines.
+  mount, snapshot, resume, refresh, and destroy deadlines.
 - A successful protected snapshot holds editor input until Resume, canonical
   ApplyDocument acknowledgement, or Destroy.
+- Ready never describes an instance whose hold state is unknown; failed/lost
+  snapshot and resume paths terminalize through ResumePending or Unavailable.
+- Every protected command maps success, unchanged-session failure, and
+  ambiguous/partial change to Resume, Refresh, Destroy, or Unavailable.
 - History/Outline canonical mutation invalidates the old epoch and becomes
   Ready only after correlated DocumentApplied.
 - Singleton replacement waits for matched Destroyed or uses one correlated,
@@ -140,6 +148,7 @@ claim lifecycle acceptance from headless tests alone.
 - This implementation handoff.
 - Architecture review request for the design package.
 - Focused architecture rereview request for revision 2.
+- Final focused architecture rereview request for revision 3.
 
 No binary, package, release archive, commit, tag, or push was generated.
 
@@ -159,7 +168,7 @@ No binary, package, release archive, commit, tag, or push was generated.
 
 ## 8. Recommended next step
 
-Obtain architecture rereview of RFC-041 revision 2 and this handoff. After an
-acceptable verdict, implement in the RFC rollout order, beginning with bridge
-version types and the pure lifecycle reducer rather than editing the current
-Dioxus effects in place.
+Obtain final architecture rereview of RFC-041 revision 3 and this handoff. After
+an acceptable verdict, implement in the RFC rollout order, beginning with
+bridge version types and the pure lifecycle reducer rather than editing the
+current Dioxus effects in place.
