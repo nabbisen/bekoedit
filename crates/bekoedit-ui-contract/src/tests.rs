@@ -3,6 +3,13 @@
 
 use std::path::PathBuf;
 
+use crate::{
+    BRIDGE_SCHEMA_VERSION,
+    source_editor::{
+        EditorIdentity, EditorInstanceId, OperationId, SourceEditorEvent, SourceEditorId,
+        SourceEditorRequest, SourceEpoch,
+    },
+};
 use crate::{EditorMode, UiToCoreCommand};
 
 #[test]
@@ -38,4 +45,46 @@ fn open_workspace_path_round_trips() {
     };
     let json = serde_json::to_string(&cmd).unwrap();
     assert_eq!(serde_json::from_str::<UiToCoreCommand>(&json).unwrap(), cmd);
+}
+
+#[test]
+fn source_editor_protocol_is_version_two() {
+    assert_eq!(BRIDGE_SCHEMA_VERSION, 2);
+    let probe = SourceEditorRequest::current_probe(OperationId(9));
+    assert_eq!(probe.protocol_version(), 2);
+}
+
+#[test]
+fn source_editor_messages_round_trip_with_camel_case_fields() {
+    let identity = EditorIdentity {
+        instance_id: EditorInstanceId(3),
+        editor_id: SourceEditorId::Text,
+        document_id: 4,
+        epoch: SourceEpoch(5),
+    };
+    let event = SourceEditorEvent::Snapshot {
+        protocol_version: BRIDGE_SCHEMA_VERSION,
+        operation_id: OperationId(6),
+        identity,
+        seq: 7,
+        text: "# 日本語\n".into(),
+        composing: false,
+    };
+    let json = serde_json::to_string(&event).unwrap();
+    assert!(json.contains("\"type\":\"snapshot\""));
+    assert!(json.contains("\"protocolVersion\":2"));
+    assert!(json.contains("\"operationId\":6"));
+    assert_eq!(
+        serde_json::from_str::<SourceEditorEvent>(&json).unwrap(),
+        event
+    );
+}
+
+#[test]
+fn unsupported_source_editor_event_version_is_detectable() {
+    let event = SourceEditorEvent::BundleReady {
+        protocol_version: 1,
+        operation_id: OperationId(1),
+    };
+    assert!(!event.has_supported_version());
 }

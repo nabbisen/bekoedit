@@ -15,6 +15,8 @@ use dioxus::prelude::*;
 use crate::components::toast::{Toast, ToastKind, push_toast};
 use crate::state::now_ms;
 
+pub mod lifecycle;
+
 pub const SNAPSHOT_TIMEOUT_MS: u64 = 2_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

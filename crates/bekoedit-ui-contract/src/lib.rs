@@ -16,7 +16,9 @@ use bekoedit_fs::{DeleteStrategy, FileTreeIndex, RecentWorkspaceEntry};
 use bekoedit_markdown::{FormEditCommand, HeadingNode, MarkdownDiagnostic};
 
 /// Bridge schema version; bumped on incompatible payload changes.
-pub const BRIDGE_SCHEMA_VERSION: u32 = 1;
+pub const BRIDGE_SCHEMA_VERSION: u32 = 2;
+
+pub mod source_editor;
 
 /// Commands from the WebView UI to the Rust core (RFC-002 §7).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
