@@ -49,8 +49,9 @@ impl LifecycleReducer {
         if *operation_id != operation.operation_id
             || *identity != editor.identity
             || *composing
-            || *seq <= editor.last_seq
+            || *seq < editor.last_seq
             || before.document_id != Some(identity.document_id)
+            || before.revision != Some(accepted_revision)
         {
             return Err(TransitionError::Stale);
         }
@@ -169,7 +170,11 @@ impl LifecycleReducer {
                 SourceCommand::RestoreHistory(_)
                 | SourceCommand::MoveSectionUp(_)
                 | SourceCommand::MoveSectionDown(_)
-                    if after.document_id == before.document_id && after.revision.is_some() =>
+                    if after.document_id == before.document_id
+                        && after.source_token == before.source_token
+                        && before.revision.is_some()
+                        && after.revision.is_some()
+                        && after.revision > before.revision =>
                 {
                     CommandDisposition::Refresh {
                         revision: after.revision.unwrap_or_default(),
@@ -186,7 +191,7 @@ impl LifecycleReducer {
         let effect = match disposition {
             CommandDisposition::Resume => Some(self.start_resume(editor, now_ms)),
             CommandDisposition::Refresh { revision } => {
-                Some(self.start_refresh(editor, revision, now_ms))
+                Some(self.start_refresh(editor, revision, now_ms)?)
             }
             CommandDisposition::Destroy => {
                 Some(self.start_destroy(editor.ready.identity, None, now_ms)?)
@@ -280,9 +285,7 @@ impl LifecycleReducer {
                 operation_id,
                 identity,
                 ..
-            } if *operation_id == operation.operation_id
-                && identity.instance_id == editor.ready.identity.instance_id =>
-            {
+            } if *operation_id == operation.operation_id && *identity == editor.ready.identity => {
                 self.state = LifecycleState::Unavailable {
                     retired: Some(editor.ready.identity),
                 };
@@ -370,5 +373,25 @@ impl LifecycleReducer {
             }
             _ => Err(TransitionError::Stale),
         }
+    }
+    fn start_refresh(
+        &mut self,
+        editor: HeldEditor,
+        revision: u64,
+        now_ms: u64,
+    ) -> Result<LifecycleEffect, TransitionError> {
+        let new_epoch = self.allocate_epoch()?;
+        let operation = self.operation(now_ms, REFRESH_DEADLINE_MS);
+        self.state = LifecycleState::RefreshPending {
+            editor,
+            new_epoch,
+            revision,
+            operation,
+        };
+        Ok(LifecycleEffect::ApplyDocument(
+            editor.ready.identity,
+            new_epoch,
+            operation.operation_id,
+        ))
     }
 }

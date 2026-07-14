@@ -33,16 +33,20 @@ fn ready_reducer() -> LifecycleReducer {
         unreachable!()
     };
     let init = reducer
-        .handle_relay_event(&SourceEditorEvent::RelayReady {
-            protocol_version: BRIDGE_SCHEMA_VERSION,
-            operation_id: relay_operation,
-            identity,
-        })
+        .handle_relay_event(
+            &SourceEditorEvent::RelayReady {
+                protocol_version: BRIDGE_SCHEMA_VERSION,
+                operation_id: relay_operation,
+                identity,
+            },
+            20,
+        )
         .unwrap()
         .unwrap();
     let LifecycleEffect::Init(identity, init_operation, _) = init else {
         unreachable!()
     };
+    assert_ne!(relay_operation, init_operation);
     reducer
         .handle_init_event(&SourceEditorEvent::EditorReady {
             protocol_version: BRIDGE_SCHEMA_VERSION,
@@ -103,16 +107,31 @@ fn init_validates_operation_identity_and_revision() {
         unreachable!()
     };
     let LifecycleEffect::Init(_, init_operation, _) = reducer
-        .handle_relay_event(&SourceEditorEvent::RelayReady {
-            protocol_version: BRIDGE_SCHEMA_VERSION,
-            operation_id: relay_operation,
-            identity,
-        })
+        .handle_relay_event(
+            &SourceEditorEvent::RelayReady {
+                protocol_version: BRIDGE_SCHEMA_VERSION,
+                operation_id: relay_operation,
+                identity,
+            },
+            20,
+        )
         .unwrap()
         .unwrap()
     else {
         unreachable!()
     };
+    assert_ne!(relay_operation, init_operation);
+    assert_eq!(
+        reducer.handle_relay_event(
+            &SourceEditorEvent::RelayReady {
+                protocol_version: BRIDGE_SCHEMA_VERSION,
+                operation_id: relay_operation,
+                identity,
+            },
+            21,
+        ),
+        Err(TransitionError::InvalidState)
+    );
     assert_eq!(
         reducer.handle_init_event(&SourceEditorEvent::EditorReady {
             protocol_version: BRIDGE_SCHEMA_VERSION,
@@ -318,4 +337,123 @@ fn composition_blocked_never_holds_and_rejected_snapshot_resumes_confirmed_hold(
             ..
         }
     ));
+}
+
+#[test]
+fn protected_snapshot_accepts_equal_seq_but_rejects_regression_and_revision_mismatch() {
+    let mut equal = ready_reducer();
+    let LifecycleEffect::RequestSnapshot(identity, operation_id) =
+        equal.begin_snapshot(SourceCommand::SaveNow, 100).unwrap()
+    else {
+        unreachable!()
+    };
+    equal
+        .accept_snapshot(
+            &SourceEditorEvent::Snapshot {
+                protocol_version: BRIDGE_SCHEMA_VERSION,
+                operation_id,
+                identity,
+                seq: 0,
+                text: String::new(),
+                composing: false,
+            },
+            3,
+            fingerprint(3, 2),
+        )
+        .unwrap();
+    assert!(matches!(equal.state, LifecycleState::BarrierHeld { .. }));
+
+    let mut lower = ready_reducer();
+    if let LifecycleState::Ready(editor) = &mut lower.state {
+        editor.last_seq = 2;
+    }
+    let LifecycleEffect::RequestSnapshot(identity, operation_id) =
+        lower.begin_snapshot(SourceCommand::SaveNow, 100).unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        lower.accept_snapshot(
+            &SourceEditorEvent::Snapshot {
+                protocol_version: BRIDGE_SCHEMA_VERSION,
+                operation_id,
+                identity,
+                seq: 1,
+                text: String::new(),
+                composing: false,
+            },
+            3,
+            fingerprint(3, 2),
+        ),
+        Err(TransitionError::Stale)
+    );
+
+    let mut mismatch = ready_reducer();
+    let LifecycleEffect::RequestSnapshot(identity, operation_id) = mismatch
+        .begin_snapshot(SourceCommand::SaveNow, 100)
+        .unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        mismatch.accept_snapshot(
+            &SourceEditorEvent::Snapshot {
+                protocol_version: BRIDGE_SCHEMA_VERSION,
+                operation_id,
+                identity,
+                seq: 0,
+                text: String::new(),
+                composing: false,
+            },
+            4,
+            fingerprint(3, 2),
+        ),
+        Err(TransitionError::Stale)
+    );
+}
+
+#[test]
+fn history_refresh_fails_closed_for_changed_source_identity_or_invalid_revision() {
+    let mut changed_token = held_reducer(
+        SourceCommand::RestoreHistory(bekoedit_fs::HistoryEntry {
+            original_path: std::path::PathBuf::from("doc.md"),
+            text: "old".into(),
+            saved_at_secs: 1,
+            revision: 1,
+        }),
+        3,
+    );
+    assert_eq!(
+        changed_token
+            .command_completed(true, fingerprint(4, 99), 120)
+            .unwrap()
+            .0,
+        CommandDisposition::Unavailable
+    );
+
+    let mut missing_revision = held_reducer(SourceCommand::MoveSectionDown(0), 3);
+    assert_eq!(
+        missing_revision
+            .command_completed(
+                true,
+                SessionFingerprint {
+                    document_id: Some(7),
+                    revision: None,
+                    source_token: 2,
+                },
+                120,
+            )
+            .unwrap()
+            .0,
+        CommandDisposition::Unavailable
+    );
+
+    let mut non_advanced = held_reducer(SourceCommand::MoveSectionUp(0), 3);
+    assert_eq!(
+        non_advanced
+            .command_completed(true, fingerprint(3, 2), 120)
+            .unwrap()
+            .0,
+        CommandDisposition::Unavailable
+    );
 }

@@ -20,6 +20,8 @@ pub const DESTROY_DEADLINE_MS: u64 = 1_000;
 pub struct SessionFingerprint {
     pub document_id: Option<u64>,
     pub revision: Option<u64>,
+    /// Stable identity of one AppState document/session stream. It does not
+    /// change merely because canonical text/revision changes.
     pub source_token: u64,
 }
 
@@ -215,6 +217,7 @@ impl LifecycleReducer {
     pub fn handle_relay_event(
         &mut self,
         event: &SourceEditorEvent,
+        now_ms: u64,
     ) -> Result<Option<LifecycleEffect>, TransitionError> {
         self.require_version(event)?;
         let LifecycleState::Mounting {
@@ -239,7 +242,7 @@ impl LifecycleReducer {
                     let identity = *identity;
                     let revision = intent.revision;
                     let takeover = takeover.clone();
-                    let operation = *relay;
+                    let operation = self.operation(now_ms, MOUNT_DEADLINE_MS);
                     self.state = LifecycleState::Initializing {
                         identity,
                         revision,
@@ -267,11 +270,11 @@ impl LifecycleReducer {
         }
     }
 
-    pub fn continue_mount_after_bundle(&mut self) -> Option<LifecycleEffect> {
+    pub fn continue_mount_after_bundle(&mut self, now_ms: u64) -> Option<LifecycleEffect> {
         let LifecycleState::Mounting {
             identity,
             intent,
-            relay,
+            relay: _,
             relay_ready: true,
             bundle_ready: true,
             takeover,
@@ -279,11 +282,15 @@ impl LifecycleReducer {
         else {
             return None;
         };
-        let effect = LifecycleEffect::Init(*identity, relay.operation_id, takeover.clone());
+        let identity = *identity;
+        let revision = intent.revision;
+        let takeover = takeover.clone();
+        let operation = self.operation(now_ms, MOUNT_DEADLINE_MS);
+        let effect = LifecycleEffect::Init(identity, operation.operation_id, takeover);
         self.state = LifecycleState::Initializing {
-            identity: *identity,
-            revision: intent.revision,
-            operation: *relay,
+            identity,
+            revision,
+            operation,
         };
         Some(effect)
     }
@@ -405,18 +412,6 @@ impl LifecycleReducer {
             editor.snapshot_operation,
             operation.operation_id,
         )
-    }
-
-    fn start_refresh(&mut self, editor: HeldEditor, revision: u64, now_ms: u64) -> LifecycleEffect {
-        let new_epoch = self.allocate_epoch().unwrap_or(editor.ready.identity.epoch);
-        let operation = self.operation(now_ms, REFRESH_DEADLINE_MS);
-        self.state = LifecycleState::RefreshPending {
-            editor,
-            new_epoch,
-            revision,
-            operation,
-        };
-        LifecycleEffect::ApplyDocument(editor.ready.identity, new_epoch, operation.operation_id)
     }
 
     fn start_destroy(
