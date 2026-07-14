@@ -174,7 +174,7 @@ impl LifecycleReducer {
                         && after.source_token == before.source_token
                         && before.revision.is_some()
                         && after.revision.is_some()
-                        && after.revision > before.revision =>
+                        && after.revision >= before.revision =>
                 {
                     CommandDisposition::Refresh {
                         revision: after.revision.unwrap_or_default(),

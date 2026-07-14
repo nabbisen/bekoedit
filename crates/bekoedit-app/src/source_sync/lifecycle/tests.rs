@@ -413,7 +413,7 @@ fn protected_snapshot_accepts_equal_seq_but_rejects_regression_and_revision_mism
 }
 
 #[test]
-fn history_refresh_fails_closed_for_changed_source_identity_or_invalid_revision() {
+fn history_refresh_accepts_no_op_revision_and_fails_closed_for_invalid_identity() {
     let mut changed_token = held_reducer(
         SourceCommand::RestoreHistory(bekoedit_fs::HistoryEntry {
             original_path: std::path::PathBuf::from("doc.md"),
@@ -448,10 +448,37 @@ fn history_refresh_fails_closed_for_changed_source_identity_or_invalid_revision(
         CommandDisposition::Unavailable
     );
 
-    let mut non_advanced = held_reducer(SourceCommand::MoveSectionUp(0), 3);
+    let mut no_op = held_reducer(SourceCommand::MoveSectionUp(0), 3);
+    let (disposition, effect) = no_op
+        .command_completed(true, fingerprint(3, 2), 120)
+        .unwrap();
+    assert_eq!(disposition, CommandDisposition::Refresh { revision: 3 });
+    let LifecycleEffect::ApplyDocument(identity, new_epoch, operation_id) = effect.unwrap() else {
+        unreachable!()
+    };
+    assert_ne!(new_epoch, identity.epoch);
+    let refreshed_identity = bekoedit_ui_contract::source_editor::EditorIdentity {
+        epoch: new_epoch,
+        ..identity
+    };
+    no_op
+        .handle_document_event(&SourceEditorEvent::DocumentApplied {
+            protocol_version: BRIDGE_SCHEMA_VERSION,
+            operation_id,
+            identity: refreshed_identity,
+            revision: 3,
+        })
+        .unwrap();
+    assert!(matches!(
+        no_op.state,
+        LifecycleState::Ready(editor)
+            if editor.identity == refreshed_identity && editor.revision == 3
+    ));
+
+    let mut regressed = held_reducer(SourceCommand::MoveSectionDown(0), 3);
     assert_eq!(
-        non_advanced
-            .command_completed(true, fingerprint(3, 2), 120)
+        regressed
+            .command_completed(true, fingerprint(2, 2), 120)
             .unwrap()
             .0,
         CommandDisposition::Unavailable
