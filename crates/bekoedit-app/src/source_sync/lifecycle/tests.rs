@@ -1,67 +1,178 @@
-use bekoedit_ui_contract::source_editor::{OperationId, SourceEditorId, SourceEpoch};
+use bekoedit_ui_contract::{
+    BRIDGE_SCHEMA_VERSION,
+    source_editor::{OperationId, SourceEditorEvent, SourceEditorId},
+};
 
-use super::{HoldCertainty, LifecycleEffect, LifecycleReducer, LifecycleState, RESUME_DEADLINE_MS};
+use crate::source_sync::SourceCommand;
+
+use super::{
+    CommandDisposition, HoldCertainty, LifecycleEffect, LifecycleReducer, LifecycleState,
+    MountIntent, RESUME_DEADLINE_MS, SNAPSHOT_DEADLINE_MS, SessionFingerprint, TransitionError,
+};
+
+fn intent(document_id: u64) -> MountIntent {
+    MountIntent {
+        editor_id: SourceEditorId::Text,
+        document_id,
+        revision: 3,
+    }
+}
 
 fn ready_reducer() -> LifecycleReducer {
     let mut reducer = LifecycleReducer::default();
-    reducer.begin_mount(SourceEditorId::Text, 7, 3, 10);
-    assert!(reducer.mark_bundle_ready().is_none());
-    let instance = match reducer.state {
-        LifecycleState::Mounting { identity, .. } => identity.instance_id,
-        ref other => panic!("expected mounting, got {other:?}"),
+    let probe = reducer.begin_bundle_probe(0);
+    reducer
+        .handle_bundle_event(&SourceEditorEvent::BundleReady {
+            protocol_version: BRIDGE_SCHEMA_VERSION,
+            operation_id: probe,
+        })
+        .unwrap();
+    let LifecycleEffect::InstallRelay(identity, relay_operation) =
+        reducer.begin_mount(intent(7), 10).unwrap()
+    else {
+        unreachable!()
     };
-    let init = reducer.mark_relay_ready(instance).unwrap();
-    let (identity, operation) = match init {
-        LifecycleEffect::Init(identity, operation) => (identity, operation),
-        other => panic!("expected init, got {other:?}"),
+    let init = reducer
+        .handle_relay_event(&SourceEditorEvent::RelayReady {
+            protocol_version: BRIDGE_SCHEMA_VERSION,
+            operation_id: relay_operation,
+            identity,
+        })
+        .unwrap()
+        .unwrap();
+    let LifecycleEffect::Init(identity, init_operation, _) = init else {
+        unreachable!()
     };
-    assert!(reducer.editor_ready(identity, operation));
+    reducer
+        .handle_init_event(&SourceEditorEvent::EditorReady {
+            protocol_version: BRIDGE_SCHEMA_VERSION,
+            operation_id: init_operation,
+            identity,
+            revision: 3,
+            reused: false,
+        })
+        .unwrap();
+    reducer
+}
+
+fn fingerprint(revision: u64, token: u64) -> SessionFingerprint {
+    SessionFingerprint {
+        document_id: Some(7),
+        revision: Some(revision),
+        source_token: token,
+    }
+}
+
+fn held_reducer(command: SourceCommand, accepted_revision: u64) -> LifecycleReducer {
+    let mut reducer = ready_reducer();
+    let LifecycleEffect::RequestSnapshot(identity, operation_id) =
+        reducer.begin_snapshot(command, 100).unwrap()
+    else {
+        unreachable!()
+    };
+    reducer
+        .accept_snapshot(
+            &SourceEditorEvent::Snapshot {
+                protocol_version: BRIDGE_SCHEMA_VERSION,
+                operation_id,
+                identity,
+                seq: 1,
+                text: "typed".into(),
+                composing: false,
+            },
+            accepted_revision,
+            fingerprint(accepted_revision, 2),
+        )
+        .unwrap();
     reducer
 }
 
 #[test]
-fn mount_is_not_ready_until_both_prerequisites_and_matching_ready() {
+fn init_validates_operation_identity_and_revision() {
     let mut reducer = LifecycleReducer::default();
-    reducer.begin_mount(SourceEditorId::Text, 7, 3, 10);
-    assert!(!matches!(reducer.state, LifecycleState::Ready(_)));
-    assert!(reducer.mark_bundle_ready().is_none());
-    let instance = match reducer.state {
-        LifecycleState::Mounting { identity, .. } => identity.instance_id,
-        _ => unreachable!(),
-    };
-    let init = reducer.mark_relay_ready(instance).unwrap();
-    let LifecycleEffect::Init(identity, operation) = init else {
+    let probe = reducer.begin_bundle_probe(0);
+    reducer
+        .handle_bundle_event(&SourceEditorEvent::BundleReady {
+            protocol_version: BRIDGE_SCHEMA_VERSION,
+            operation_id: probe,
+        })
+        .unwrap();
+    let LifecycleEffect::InstallRelay(identity, relay_operation) =
+        reducer.begin_mount(intent(7), 10).unwrap()
+    else {
         unreachable!()
     };
-    assert!(!reducer.editor_ready(identity, OperationId(operation.0 + 1)));
-    assert!(reducer.editor_ready(identity, operation));
+    let LifecycleEffect::Init(_, init_operation, _) = reducer
+        .handle_relay_event(&SourceEditorEvent::RelayReady {
+            protocol_version: BRIDGE_SCHEMA_VERSION,
+            operation_id: relay_operation,
+            identity,
+        })
+        .unwrap()
+        .unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        reducer.handle_init_event(&SourceEditorEvent::EditorReady {
+            protocol_version: BRIDGE_SCHEMA_VERSION,
+            operation_id: init_operation,
+            identity,
+            revision: 4,
+            reused: false,
+        }),
+        Err(TransitionError::Stale)
+    );
 }
 
 #[test]
-fn snapshot_hold_requires_acknowledged_resume_before_ready() {
-    let mut reducer = ready_reducer();
-    let request = reducer.begin_snapshot(100).unwrap();
-    let LifecycleEffect::RequestSnapshot(_, snapshot_operation) = request else {
+fn accepted_snapshot_updates_revision_before_resume() {
+    let mut reducer = held_reducer(SourceCommand::SaveNow, 4);
+    let (disposition, effect) = reducer
+        .command_completed(true, fingerprint(4, 2), 120)
+        .unwrap();
+    assert_eq!(disposition, CommandDisposition::Resume);
+    let LifecycleEffect::Resume(identity, snapshot_operation_id, operation_id) = effect.unwrap()
+    else {
         unreachable!()
     };
-    assert!(reducer.snapshot_received(snapshot_operation, 4));
-    assert!(matches!(reducer.state, LifecycleState::BarrierHeld(_)));
-    let resume = reducer.begin_resume(110).unwrap();
-    let LifecycleEffect::Resume(_, held_operation, resume_operation) = resume else {
-        unreachable!()
-    };
-    assert_eq!(held_operation, snapshot_operation);
-    assert!(!matches!(reducer.state, LifecycleState::Ready(_)));
-    assert!(reducer.editing_resumed(resume_operation, held_operation));
-    assert!(matches!(reducer.state, LifecycleState::Ready(_)));
+    assert_eq!(
+        reducer.handle_resume_event(&SourceEditorEvent::EditingResumed {
+            protocol_version: BRIDGE_SCHEMA_VERSION,
+            operation_id,
+            identity,
+            snapshot_operation_id,
+            revision: 3,
+            was_held: true,
+        }),
+        Err(TransitionError::Stale)
+    );
+    reducer
+        .handle_resume_event(&SourceEditorEvent::EditingResumed {
+            protocol_version: BRIDGE_SCHEMA_VERSION,
+            operation_id,
+            identity,
+            snapshot_operation_id,
+            revision: 4,
+            was_held: true,
+        })
+        .unwrap();
+    assert!(matches!(reducer.state, LifecycleState::Ready(editor) if editor.revision == 4));
 }
 
 #[test]
-fn lost_snapshot_response_uses_possible_hold_and_resume_deadline() {
+fn snapshot_timeout_creates_possible_hold_then_resume_timeout_is_unavailable() {
     let mut reducer = ready_reducer();
-    reducer.begin_snapshot(100).unwrap();
-    let resume = reducer.begin_resume(1000).unwrap();
-    let LifecycleEffect::Resume(_, _, resume_operation) = resume else {
+    let LifecycleEffect::RequestSnapshot(_, snapshot_operation) =
+        reducer.begin_snapshot(SourceCommand::SaveNow, 100).unwrap()
+    else {
+        unreachable!()
+    };
+    let LifecycleEffect::Resume(_, _, resume_operation) = reducer
+        .timeout(snapshot_operation, 100 + SNAPSHOT_DEADLINE_MS)
+        .unwrap()
+        .unwrap()
+    else {
         unreachable!()
     };
     assert!(matches!(
@@ -74,49 +185,137 @@ fn lost_snapshot_response_uses_possible_hold_and_resume_deadline() {
             ..
         }
     ));
-    assert!(!reducer.expire(resume_operation, 1000 + RESUME_DEADLINE_MS - 1));
-    assert!(reducer.expire(resume_operation, 1000 + RESUME_DEADLINE_MS));
-    assert_eq!(reducer.state, LifecycleState::Unavailable);
-}
-
-#[test]
-fn refresh_rolls_epoch_only_after_matching_acknowledgement() {
-    let mut reducer = ready_reducer();
-    let old_epoch = match reducer.state {
-        LifecycleState::Ready(editor) => editor.identity.epoch,
-        _ => unreachable!(),
-    };
-    let LifecycleEffect::RequestSnapshot(_, snapshot_operation) =
-        reducer.begin_snapshot(100).unwrap()
-    else {
-        unreachable!()
-    };
-    reducer.snapshot_received(snapshot_operation, 1);
-    let LifecycleEffect::ApplyDocument(_, new_epoch, refresh_operation) =
-        reducer.begin_refresh(4, 120).unwrap()
-    else {
-        unreachable!()
-    };
-    assert_ne!(old_epoch, new_epoch);
-    assert!(!reducer.document_applied(refresh_operation, SourceEpoch(new_epoch.0 + 1), 4));
-    assert!(reducer.document_applied(refresh_operation, new_epoch, 4));
+    reducer
+        .timeout(
+            resume_operation,
+            100 + SNAPSHOT_DEADLINE_MS + RESUME_DEADLINE_MS,
+        )
+        .unwrap();
     assert!(matches!(
         reducer.state,
-        LifecycleState::Ready(editor) if editor.identity.epoch == new_epoch && editor.revision == 4
+        LifecycleState::Unavailable { retired: Some(_) }
     ));
 }
 
 #[test]
-fn destroy_requires_matching_instance_and_operation() {
-    let mut reducer = ready_reducer();
-    let identity = match reducer.state {
-        LifecycleState::Ready(editor) => editor.identity,
+fn command_disposition_is_total_for_save_mutation_and_replacement() {
+    let mut save = held_reducer(SourceCommand::SaveNow, 3);
+    assert_eq!(
+        save.command_completed(false, fingerprint(3, 2), 120)
+            .unwrap()
+            .0,
+        CommandDisposition::Resume
+    );
+
+    let mut mutation = held_reducer(SourceCommand::MoveSectionUp(0), 3);
+    assert_eq!(
+        mutation
+            .command_completed(true, fingerprint(4, 2), 120)
+            .unwrap()
+            .0,
+        CommandDisposition::Refresh { revision: 4 }
+    );
+
+    let mut replacement = held_reducer(
+        SourceCommand::OpenDocument(std::path::PathBuf::from("other.md")),
+        3,
+    );
+    assert_eq!(
+        replacement
+            .command_completed(true, fingerprint(3, 1), 120)
+            .unwrap()
+            .0,
+        CommandDisposition::Destroy
+    );
+}
+
+#[test]
+fn unavailable_retry_destroys_retired_before_waiting_mount() {
+    let mut reducer = held_reducer(SourceCommand::SaveNow, 3);
+    reducer.state = match reducer.state {
+        LifecycleState::BarrierHeld { editor, .. } => LifecycleState::Unavailable {
+            retired: Some(editor.ready.identity),
+        },
         _ => unreachable!(),
     };
-    let LifecycleEffect::Destroy(_, operation) = reducer.begin_destroy(200).unwrap() else {
+    let effect = reducer.begin_mount(intent(8), 200).unwrap();
+    assert!(matches!(effect, LifecycleEffect::Destroy(_, _)));
+    assert!(matches!(
+        reducer.state,
+        LifecycleState::Unmounting {
+            waiting: Some(_),
+            ..
+        }
+    ));
+}
+
+#[test]
+fn unsupported_version_and_stale_terminal_are_rejected() {
+    let mut reducer = ready_reducer();
+    assert_eq!(
+        reducer.handle_resume_event(&SourceEditorEvent::Trace {
+            protocol_version: 1,
+            instance_id: None,
+            event: "old".into(),
+        }),
+        Err(TransitionError::UnsupportedVersion)
+    );
+    assert_eq!(
+        reducer.timeout(OperationId::new(999), u64::MAX),
+        Err(TransitionError::Stale)
+    );
+}
+
+#[test]
+fn composition_blocked_never_holds_and_rejected_snapshot_resumes_confirmed_hold() {
+    use bekoedit_ui_contract::source_editor::BridgeFailureReason;
+
+    let mut blocked = ready_reducer();
+    let LifecycleEffect::RequestSnapshot(identity, operation_id) =
+        blocked.begin_snapshot(SourceCommand::SaveNow, 100).unwrap()
+    else {
         unreachable!()
     };
-    assert!(!reducer.destroyed(identity.instance_id, OperationId(operation.0 + 1)));
-    assert!(reducer.destroyed(identity.instance_id, operation));
-    assert_eq!(reducer.state, LifecycleState::Unmounted);
+    blocked
+        .handle_snapshot_blocked(&SourceEditorEvent::SnapshotBlocked {
+            protocol_version: BRIDGE_SCHEMA_VERSION,
+            operation_id,
+            identity,
+            reason: BridgeFailureReason::CompositionActive,
+        })
+        .unwrap();
+    assert!(matches!(blocked.state, LifecycleState::Ready(_)));
+
+    let mut rejected = ready_reducer();
+    let LifecycleEffect::RequestSnapshot(identity, operation_id) = rejected
+        .begin_snapshot(SourceCommand::SaveNow, 100)
+        .unwrap()
+    else {
+        unreachable!()
+    };
+    let effect = rejected
+        .reject_snapshot(
+            &SourceEditorEvent::Snapshot {
+                protocol_version: BRIDGE_SCHEMA_VERSION,
+                operation_id,
+                identity,
+                seq: 1,
+                text: "typed".into(),
+                composing: false,
+            },
+            true,
+            110,
+        )
+        .unwrap();
+    assert!(matches!(effect, Some(LifecycleEffect::Resume(_, _, _))));
+    assert!(matches!(
+        rejected.state,
+        LifecycleState::ResumePending {
+            editor: super::HeldEditor {
+                certainty: HoldCertainty::Confirmed,
+                ..
+            },
+            ..
+        }
+    ));
 }

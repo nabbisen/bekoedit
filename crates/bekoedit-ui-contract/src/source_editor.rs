@@ -10,7 +10,17 @@ macro_rules! opaque_id {
             Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
         )]
         #[serde(transparent)]
-        pub struct $name(pub u64);
+        pub struct $name(u64);
+
+        impl $name {
+            pub const fn new(value: u64) -> Self {
+                Self(value)
+            }
+
+            pub const fn get(self) -> u64 {
+                self.0
+            }
+        }
     };
 }
 
@@ -53,6 +63,11 @@ pub enum SourceEditorRequest {
         protocol_version: u32,
         operation_id: OperationId,
     },
+    InstallRelay {
+        protocol_version: u32,
+        operation_id: OperationId,
+        identity: EditorIdentity,
+    },
     InitEditor {
         protocol_version: u32,
         operation_id: OperationId,
@@ -93,6 +108,9 @@ impl SourceEditorRequest {
     pub fn protocol_version(&self) -> u32 {
         match self {
             Self::ProbeBundle {
+                protocol_version, ..
+            }
+            | Self::InstallRelay {
                 protocol_version, ..
             }
             | Self::InitEditor {
@@ -145,10 +163,21 @@ pub enum SourceEditorEvent {
         protocol_version: u32,
         operation_id: OperationId,
     },
+    BundleFailed {
+        protocol_version: u32,
+        operation_id: OperationId,
+        reason: BridgeFailureReason,
+    },
     RelayReady {
         protocol_version: u32,
         operation_id: OperationId,
-        instance_id: EditorInstanceId,
+        identity: EditorIdentity,
+    },
+    RelayFailed {
+        protocol_version: u32,
+        operation_id: OperationId,
+        identity: EditorIdentity,
+        reason: BridgeFailureReason,
     },
     EditorReady {
         protocol_version: u32,
@@ -156,6 +185,12 @@ pub enum SourceEditorEvent {
         identity: EditorIdentity,
         revision: u64,
         reused: bool,
+    },
+    InitFailed {
+        protocol_version: u32,
+        operation_id: OperationId,
+        identity: EditorIdentity,
+        reason: BridgeFailureReason,
     },
     Change {
         protocol_version: u32,
@@ -186,21 +221,34 @@ pub enum SourceEditorEvent {
         revision: u64,
         was_held: bool,
     },
+    ResumeFailed {
+        protocol_version: u32,
+        operation_id: OperationId,
+        identity: EditorIdentity,
+        snapshot_operation_id: OperationId,
+        reason: BridgeFailureReason,
+    },
     DocumentApplied {
         protocol_version: u32,
         operation_id: OperationId,
         identity: EditorIdentity,
         revision: u64,
     },
+    ApplyDocumentFailed {
+        protocol_version: u32,
+        operation_id: OperationId,
+        identity: EditorIdentity,
+        reason: BridgeFailureReason,
+    },
     Destroyed {
         protocol_version: u32,
         operation_id: OperationId,
-        instance_id: EditorInstanceId,
+        identity: EditorIdentity,
     },
-    Failed {
+    DestroyFailed {
         protocol_version: u32,
         operation_id: OperationId,
-        instance_id: Option<EditorInstanceId>,
+        identity: EditorIdentity,
         reason: BridgeFailureReason,
     },
     Trace {
@@ -216,10 +264,19 @@ impl SourceEditorEvent {
             Self::BundleReady {
                 protocol_version, ..
             }
+            | Self::BundleFailed {
+                protocol_version, ..
+            }
             | Self::RelayReady {
                 protocol_version, ..
             }
+            | Self::RelayFailed {
+                protocol_version, ..
+            }
             | Self::EditorReady {
+                protocol_version, ..
+            }
+            | Self::InitFailed {
                 protocol_version, ..
             }
             | Self::Change {
@@ -234,13 +291,19 @@ impl SourceEditorEvent {
             | Self::EditingResumed {
                 protocol_version, ..
             }
+            | Self::ResumeFailed {
+                protocol_version, ..
+            }
             | Self::DocumentApplied {
+                protocol_version, ..
+            }
+            | Self::ApplyDocumentFailed {
                 protocol_version, ..
             }
             | Self::Destroyed {
                 protocol_version, ..
             }
-            | Self::Failed {
+            | Self::DestroyFailed {
                 protocol_version, ..
             }
             | Self::Trace {

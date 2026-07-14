@@ -1,14 +1,34 @@
 //! Pure source-editor lifecycle reducer for RFC-041.
 
-use bekoedit_ui_contract::source_editor::{
-    EditorIdentity, EditorInstanceId, OperationId, SourceEditorId, SourceEpoch,
+use bekoedit_ui_contract::{
+    BRIDGE_SCHEMA_VERSION,
+    source_editor::{
+        EditorIdentity, EditorInstanceId, OperationId, SourceEditorEvent, SourceEditorId,
+        SourceEpoch, TakeoverPermit,
+    },
 };
+
+use super::SourceCommand;
 
 pub const MOUNT_DEADLINE_MS: u64 = 5_000;
 pub const SNAPSHOT_DEADLINE_MS: u64 = 2_000;
 pub const RESUME_DEADLINE_MS: u64 = 1_000;
 pub const REFRESH_DEADLINE_MS: u64 = 2_000;
 pub const DESTROY_DEADLINE_MS: u64 = 1_000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionFingerprint {
+    pub document_id: Option<u64>,
+    pub revision: Option<u64>,
+    pub source_token: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MountIntent {
+    pub editor_id: SourceEditorId,
+    pub document_id: u64,
+    pub revision: u64,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReadyEditor {
@@ -31,200 +51,364 @@ pub struct HeldEditor {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PendingOperation<T> {
+pub struct PendingOperation {
     pub operation_id: OperationId,
     pub deadline_ms: u64,
-    pub value: T,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum LifecycleState {
     #[default]
     Unmounted,
     Mounting {
+        intent: MountIntent,
         identity: EditorIdentity,
-        revision: u64,
+        relay: PendingOperation,
         relay_ready: bool,
         bundle_ready: bool,
-        operation: PendingOperation<()>,
+        takeover: Option<TakeoverPermit>,
     },
     Initializing {
         identity: EditorIdentity,
         revision: u64,
-        operation: PendingOperation<()>,
+        operation: PendingOperation,
     },
     Ready(ReadyEditor),
     SnapshotPending {
         editor: ReadyEditor,
-        operation: PendingOperation<()>,
+        command: SourceCommand,
+        operation: PendingOperation,
     },
-    BarrierHeld(HeldEditor),
+    BarrierHeld {
+        editor: HeldEditor,
+        command: SourceCommand,
+        before: SessionFingerprint,
+    },
     ResumePending {
         editor: HeldEditor,
-        operation: PendingOperation<()>,
+        operation: PendingOperation,
     },
     RefreshPending {
         editor: HeldEditor,
         new_epoch: SourceEpoch,
         revision: u64,
-        operation: PendingOperation<()>,
+        operation: PendingOperation,
     },
     Unmounting {
-        identity: EditorIdentity,
-        operation: PendingOperation<()>,
+        retired: EditorIdentity,
+        operation: PendingOperation,
+        waiting: Option<MountIntent>,
     },
-    Unavailable,
+    Unavailable {
+        retired: Option<EditorIdentity>,
+    },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LifecycleEffect {
-    InstallRelay(EditorIdentity),
-    Init(EditorIdentity, OperationId),
+    InstallRelay(EditorIdentity, OperationId),
+    Init(EditorIdentity, OperationId, Option<TakeoverPermit>),
     RequestSnapshot(EditorIdentity, OperationId),
+    ExecuteCommand(SourceCommand),
     Resume(EditorIdentity, OperationId, OperationId),
     ApplyDocument(EditorIdentity, SourceEpoch, OperationId),
     Destroy(EditorIdentity, OperationId),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransitionError {
+    Busy,
+    Stale,
+    UnsupportedVersion,
+    InvalidState,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandDisposition {
+    Resume,
+    Refresh { revision: u64 },
+    Destroy,
+    Unavailable,
+}
+
 #[derive(Debug, Default)]
 pub struct LifecycleReducer {
     pub state: LifecycleState,
+    bundle_ready: bool,
+    bundle_probe: Option<PendingOperation>,
     next_instance: u64,
     next_epoch: u64,
     next_operation: u64,
+    next_nonce: u64,
 }
 
 impl LifecycleReducer {
+    pub fn begin_bundle_probe(&mut self, now_ms: u64) -> OperationId {
+        let operation = self.operation(now_ms, MOUNT_DEADLINE_MS);
+        self.bundle_probe = Some(operation);
+        operation.operation_id
+    }
+
+    pub fn handle_bundle_event(
+        &mut self,
+        event: &SourceEditorEvent,
+    ) -> Result<(), TransitionError> {
+        self.require_version(event)?;
+        match event {
+            SourceEditorEvent::BundleReady { operation_id, .. } => {
+                let pending = self.bundle_probe.ok_or(TransitionError::Stale)?;
+                if pending.operation_id != *operation_id {
+                    return Err(TransitionError::Stale);
+                }
+                self.bundle_probe = None;
+                self.bundle_ready = true;
+                if let LifecycleState::Mounting { bundle_ready, .. } = &mut self.state {
+                    *bundle_ready = true;
+                }
+                Ok(())
+            }
+            SourceEditorEvent::BundleFailed { operation_id, .. } => {
+                self.match_bundle(*operation_id)?;
+                self.bundle_probe = None;
+                self.state = LifecycleState::Unavailable { retired: None };
+                Ok(())
+            }
+            _ => Err(TransitionError::InvalidState),
+        }
+    }
+
     pub fn begin_mount(
         &mut self,
-        editor_id: SourceEditorId,
-        document_id: u64,
-        revision: u64,
+        intent: MountIntent,
         now_ms: u64,
-    ) -> LifecycleEffect {
-        let identity = EditorIdentity {
-            instance_id: self.allocate_instance(),
-            editor_id,
-            document_id,
-            epoch: self.allocate_epoch(),
-        };
-        let operation = self.operation(now_ms, MOUNT_DEADLINE_MS);
-        self.state = LifecycleState::Mounting {
-            identity,
-            revision,
-            relay_ready: false,
-            bundle_ready: false,
-            operation,
-        };
-        LifecycleEffect::InstallRelay(identity)
-    }
-
-    pub fn mark_bundle_ready(&mut self) -> Option<LifecycleEffect> {
-        self.mark_mount_prerequisite(true)
-    }
-
-    pub fn mark_relay_ready(&mut self, instance: EditorInstanceId) -> Option<LifecycleEffect> {
-        let LifecycleState::Mounting { identity, .. } = self.state else {
-            return None;
-        };
-        if identity.instance_id != instance {
-            return None;
+    ) -> Result<LifecycleEffect, TransitionError> {
+        match self.state.clone() {
+            LifecycleState::Unmounted => self.start_mount(intent, now_ms, None),
+            LifecycleState::Unavailable { retired: None } => self.start_mount(intent, now_ms, None),
+            LifecycleState::Unavailable {
+                retired: Some(retired),
+            } => self.start_destroy(retired, Some(intent), now_ms),
+            LifecycleState::Ready(editor) => {
+                self.start_destroy(editor.identity, Some(intent), now_ms)
+            }
+            LifecycleState::BarrierHeld { editor, .. }
+            | LifecycleState::ResumePending { editor, .. }
+            | LifecycleState::RefreshPending { editor, .. } => {
+                self.start_destroy(editor.ready.identity, Some(intent), now_ms)
+            }
+            LifecycleState::Unmounting {
+                retired,
+                operation,
+                waiting: None,
+            } => {
+                self.state = LifecycleState::Unmounting {
+                    retired,
+                    operation,
+                    waiting: Some(intent),
+                };
+                Err(TransitionError::Busy)
+            }
+            _ => Err(TransitionError::Busy),
         }
-        self.mark_mount_prerequisite(false)
     }
 
-    pub fn editor_ready(&mut self, identity: EditorIdentity, operation_id: OperationId) -> bool {
+    pub fn handle_relay_event(
+        &mut self,
+        event: &SourceEditorEvent,
+    ) -> Result<Option<LifecycleEffect>, TransitionError> {
+        self.require_version(event)?;
+        let LifecycleState::Mounting {
+            identity,
+            intent,
+            relay,
+            relay_ready,
+            bundle_ready,
+            takeover,
+        } = &mut self.state
+        else {
+            return Err(TransitionError::InvalidState);
+        };
+        match event {
+            SourceEditorEvent::RelayReady {
+                operation_id,
+                identity: actual,
+                ..
+            } if *operation_id == relay.operation_id && actual == identity => {
+                *relay_ready = true;
+                if *bundle_ready {
+                    let identity = *identity;
+                    let revision = intent.revision;
+                    let takeover = takeover.clone();
+                    let operation = *relay;
+                    self.state = LifecycleState::Initializing {
+                        identity,
+                        revision,
+                        operation,
+                    };
+                    Ok(Some(LifecycleEffect::Init(
+                        identity,
+                        operation.operation_id,
+                        takeover,
+                    )))
+                } else {
+                    Ok(None)
+                }
+            }
+            SourceEditorEvent::RelayFailed {
+                operation_id,
+                identity: actual,
+                ..
+            } if *operation_id == relay.operation_id && actual == identity => {
+                let retired = Some(*identity);
+                self.state = LifecycleState::Unavailable { retired };
+                Ok(None)
+            }
+            _ => Err(TransitionError::Stale),
+        }
+    }
+
+    pub fn continue_mount_after_bundle(&mut self) -> Option<LifecycleEffect> {
+        let LifecycleState::Mounting {
+            identity,
+            intent,
+            relay,
+            relay_ready: true,
+            bundle_ready: true,
+            takeover,
+        } = &self.state
+        else {
+            return None;
+        };
+        let effect = LifecycleEffect::Init(*identity, relay.operation_id, takeover.clone());
+        self.state = LifecycleState::Initializing {
+            identity: *identity,
+            revision: intent.revision,
+            operation: *relay,
+        };
+        Some(effect)
+    }
+
+    pub fn handle_init_event(&mut self, event: &SourceEditorEvent) -> Result<(), TransitionError> {
+        self.require_version(event)?;
         let LifecycleState::Initializing {
-            identity: expected,
-            revision,
-            operation,
-        } = self.state
-        else {
-            return false;
-        };
-        if expected != identity || operation.operation_id != operation_id {
-            return false;
-        }
-        self.state = LifecycleState::Ready(ReadyEditor {
             identity,
             revision,
-            last_seq: 0,
-        });
-        true
-    }
-
-    pub fn begin_snapshot(&mut self, now_ms: u64) -> Option<LifecycleEffect> {
-        let LifecycleState::Ready(editor) = self.state else {
-            return None;
-        };
-        let operation = self.operation(now_ms, SNAPSHOT_DEADLINE_MS);
-        self.state = LifecycleState::SnapshotPending { editor, operation };
-        Some(LifecycleEffect::RequestSnapshot(
-            editor.identity,
-            operation.operation_id,
-        ))
-    }
-
-    pub fn snapshot_received(&mut self, operation_id: OperationId, seq: u64) -> bool {
-        let LifecycleState::SnapshotPending {
-            mut editor,
             operation,
         } = self.state
         else {
-            return false;
+            return Err(TransitionError::InvalidState);
         };
-        if operation.operation_id != operation_id {
-            return false;
+        match event {
+            SourceEditorEvent::EditorReady {
+                operation_id,
+                identity: actual,
+                revision: actual_revision,
+                ..
+            } if *operation_id == operation.operation_id
+                && *actual == identity
+                && *actual_revision == revision =>
+            {
+                self.state = LifecycleState::Ready(ReadyEditor {
+                    identity,
+                    revision,
+                    last_seq: 0,
+                });
+                Ok(())
+            }
+            SourceEditorEvent::InitFailed {
+                operation_id,
+                identity: actual,
+                ..
+            } if *operation_id == operation.operation_id && *actual == identity => {
+                self.state = LifecycleState::Unavailable {
+                    retired: Some(identity),
+                };
+                Ok(())
+            }
+            _ => Err(TransitionError::Stale),
         }
-        editor.last_seq = seq;
-        self.state = LifecycleState::BarrierHeld(HeldEditor {
-            ready: editor,
-            snapshot_operation: operation_id,
-            certainty: HoldCertainty::Confirmed,
-        });
-        true
     }
 
-    pub fn begin_resume(&mut self, now_ms: u64) -> Option<LifecycleEffect> {
-        let editor = match self.state {
-            LifecycleState::BarrierHeld(editor) => editor,
-            LifecycleState::SnapshotPending { editor, operation } => HeldEditor {
-                ready: editor,
-                snapshot_operation: operation.operation_id,
-                certainty: HoldCertainty::Possible,
-            },
-            _ => return None,
+    pub fn handle_destroy_event(
+        &mut self,
+        event: &SourceEditorEvent,
+        now_ms: u64,
+    ) -> Result<Option<LifecycleEffect>, TransitionError> {
+        self.require_version(event)?;
+        let LifecycleState::Unmounting {
+            retired,
+            operation,
+            waiting,
+        } = self.state.clone()
+        else {
+            return Err(TransitionError::InvalidState);
         };
+        match event {
+            SourceEditorEvent::Destroyed {
+                operation_id,
+                identity,
+                ..
+            } if *operation_id == operation.operation_id && *identity == retired => {
+                self.state = LifecycleState::Unmounted;
+                waiting
+                    .map(|intent| self.start_mount(intent, now_ms, None))
+                    .transpose()
+            }
+            SourceEditorEvent::DestroyFailed {
+                operation_id,
+                identity,
+                ..
+            } if *operation_id == operation.operation_id && *identity == retired => {
+                self.state = LifecycleState::Unavailable {
+                    retired: Some(retired),
+                };
+                Ok(None)
+            }
+            _ => Err(TransitionError::Stale),
+        }
+    }
+
+    fn start_mount(
+        &mut self,
+        intent: MountIntent,
+        now_ms: u64,
+        takeover: Option<TakeoverPermit>,
+    ) -> Result<LifecycleEffect, TransitionError> {
+        let identity = self.allocate_identity(&intent)?;
+        Ok(self.start_mount_with_identity(intent, identity, now_ms, takeover))
+    }
+
+    fn start_mount_with_identity(
+        &mut self,
+        intent: MountIntent,
+        identity: EditorIdentity,
+        now_ms: u64,
+        takeover: Option<TakeoverPermit>,
+    ) -> LifecycleEffect {
+        let relay = self.operation(now_ms, MOUNT_DEADLINE_MS);
+        self.state = LifecycleState::Mounting {
+            intent,
+            identity,
+            relay,
+            relay_ready: false,
+            bundle_ready: self.bundle_ready,
+            takeover,
+        };
+        LifecycleEffect::InstallRelay(identity, relay.operation_id)
+    }
+
+    fn start_resume(&mut self, editor: HeldEditor, now_ms: u64) -> LifecycleEffect {
         let operation = self.operation(now_ms, RESUME_DEADLINE_MS);
         self.state = LifecycleState::ResumePending { editor, operation };
-        Some(LifecycleEffect::Resume(
+        LifecycleEffect::Resume(
             editor.ready.identity,
             editor.snapshot_operation,
             operation.operation_id,
-        ))
+        )
     }
 
-    pub fn editing_resumed(
-        &mut self,
-        operation_id: OperationId,
-        snapshot_operation: OperationId,
-    ) -> bool {
-        let LifecycleState::ResumePending { editor, operation } = self.state else {
-            return false;
-        };
-        if operation.operation_id != operation_id || editor.snapshot_operation != snapshot_operation
-        {
-            return false;
-        }
-        self.state = LifecycleState::Ready(editor.ready);
-        true
-    }
-
-    pub fn begin_refresh(&mut self, revision: u64, now_ms: u64) -> Option<LifecycleEffect> {
-        let LifecycleState::BarrierHeld(editor) = self.state else {
-            return None;
-        };
-        let new_epoch = self.allocate_epoch();
+    fn start_refresh(&mut self, editor: HeldEditor, revision: u64, now_ms: u64) -> LifecycleEffect {
+        let new_epoch = self.allocate_epoch().unwrap_or(editor.ready.identity.epoch);
         let operation = self.operation(now_ms, REFRESH_DEADLINE_MS);
         self.state = LifecycleState::RefreshPending {
             editor,
@@ -232,147 +416,84 @@ impl LifecycleReducer {
             revision,
             operation,
         };
-        Some(LifecycleEffect::ApplyDocument(
-            editor.ready.identity,
-            new_epoch,
-            operation.operation_id,
-        ))
+        LifecycleEffect::ApplyDocument(editor.ready.identity, new_epoch, operation.operation_id)
     }
 
-    pub fn document_applied(
+    fn start_destroy(
         &mut self,
-        operation_id: OperationId,
-        epoch: SourceEpoch,
-        revision: u64,
-    ) -> bool {
-        let LifecycleState::RefreshPending {
-            editor,
-            new_epoch,
-            revision: expected_revision,
-            operation,
-        } = self.state
-        else {
-            return false;
-        };
-        if operation.operation_id != operation_id
-            || new_epoch != epoch
-            || expected_revision != revision
-        {
-            return false;
-        }
-        let mut identity = editor.ready.identity;
-        identity.epoch = new_epoch;
-        self.state = LifecycleState::Ready(ReadyEditor {
-            identity,
-            revision,
-            last_seq: 0,
-        });
-        true
-    }
-
-    pub fn begin_destroy(&mut self, now_ms: u64) -> Option<LifecycleEffect> {
-        let identity = match self.state {
-            LifecycleState::Ready(editor) => editor.identity,
-            LifecycleState::BarrierHeld(editor) => editor.ready.identity,
-            LifecycleState::ResumePending { editor, .. } => editor.ready.identity,
-            LifecycleState::RefreshPending { editor, .. } => editor.ready.identity,
-            LifecycleState::Unavailable => return None,
-            _ => return None,
-        };
+        retired: EditorIdentity,
+        waiting: Option<MountIntent>,
+        now_ms: u64,
+    ) -> Result<LifecycleEffect, TransitionError> {
         let operation = self.operation(now_ms, DESTROY_DEADLINE_MS);
         self.state = LifecycleState::Unmounting {
-            identity,
+            retired,
             operation,
+            waiting,
         };
-        Some(LifecycleEffect::Destroy(identity, operation.operation_id))
+        Ok(LifecycleEffect::Destroy(retired, operation.operation_id))
     }
 
-    pub fn destroyed(&mut self, instance: EditorInstanceId, operation_id: OperationId) -> bool {
-        let LifecycleState::Unmounting {
-            identity,
-            operation,
-        } = self.state
-        else {
-            return false;
-        };
-        if identity.instance_id != instance || operation.operation_id != operation_id {
-            return false;
-        }
-        self.state = LifecycleState::Unmounted;
-        true
+    fn allocate_identity(
+        &mut self,
+        intent: &MountIntent,
+    ) -> Result<EditorIdentity, TransitionError> {
+        self.next_instance = self
+            .next_instance
+            .checked_add(1)
+            .ok_or(TransitionError::InvalidState)?;
+        Ok(EditorIdentity {
+            instance_id: EditorInstanceId::new(self.next_instance),
+            editor_id: intent.editor_id,
+            document_id: intent.document_id,
+            epoch: self.allocate_epoch()?,
+        })
     }
 
-    pub fn expire(&mut self, operation_id: OperationId, now_ms: u64) -> bool {
-        let pending = match self.state {
-            LifecycleState::Mounting { operation, .. }
-            | LifecycleState::Initializing { operation, .. }
-            | LifecycleState::SnapshotPending { operation, .. }
-            | LifecycleState::ResumePending { operation, .. }
-            | LifecycleState::RefreshPending { operation, .. }
-            | LifecycleState::Unmounting { operation, .. } => operation,
-            _ => return false,
-        };
-        if pending.operation_id != operation_id || now_ms < pending.deadline_ms {
-            return false;
-        }
-        self.state = LifecycleState::Unavailable;
-        true
+    fn allocate_epoch(&mut self) -> Result<SourceEpoch, TransitionError> {
+        self.next_epoch = self
+            .next_epoch
+            .checked_add(1)
+            .ok_or(TransitionError::InvalidState)?;
+        Ok(SourceEpoch::new(self.next_epoch))
     }
 
-    fn mark_mount_prerequisite(&mut self, bundle: bool) -> Option<LifecycleEffect> {
-        let LifecycleState::Mounting {
-            identity,
-            revision,
-            mut relay_ready,
-            mut bundle_ready,
-            operation,
-        } = self.state
-        else {
-            return None;
-        };
-        if bundle {
-            bundle_ready = true;
-        } else {
-            relay_ready = true;
-        }
-        if relay_ready && bundle_ready {
-            self.state = LifecycleState::Initializing {
-                identity,
-                revision,
-                operation,
-            };
-            Some(LifecycleEffect::Init(identity, operation.operation_id))
-        } else {
-            self.state = LifecycleState::Mounting {
-                identity,
-                revision,
-                relay_ready,
-                bundle_ready,
-                operation,
-            };
-            None
-        }
-    }
-
-    fn allocate_instance(&mut self) -> EditorInstanceId {
-        self.next_instance += 1;
-        EditorInstanceId(self.next_instance)
-    }
-
-    fn allocate_epoch(&mut self) -> SourceEpoch {
-        self.next_epoch += 1;
-        SourceEpoch(self.next_epoch)
-    }
-
-    fn operation(&mut self, now_ms: u64, timeout_ms: u64) -> PendingOperation<()> {
-        self.next_operation += 1;
+    fn operation(&mut self, now_ms: u64, timeout: u64) -> PendingOperation {
+        self.next_operation = self
+            .next_operation
+            .checked_add(1)
+            .expect("operation id exhausted");
         PendingOperation {
-            operation_id: OperationId(self.next_operation),
-            deadline_ms: now_ms.saturating_add(timeout_ms),
-            value: (),
+            operation_id: OperationId::new(self.next_operation),
+            deadline_ms: now_ms.saturating_add(timeout),
         }
+    }
+
+    fn require_version(&self, event: &SourceEditorEvent) -> Result<(), TransitionError> {
+        if event.protocol_version() == BRIDGE_SCHEMA_VERSION {
+            Ok(())
+        } else {
+            Err(TransitionError::UnsupportedVersion)
+        }
+    }
+
+    fn match_bundle(&self, operation_id: OperationId) -> Result<(), TransitionError> {
+        if self
+            .bundle_probe
+            .is_some_and(|p| p.operation_id == operation_id)
+        {
+            Ok(())
+        } else {
+            Err(TransitionError::Stale)
+        }
+    }
+
+    fn expired(pending: PendingOperation, operation_id: OperationId, now_ms: u64) -> bool {
+        pending.operation_id == operation_id && now_ms >= pending.deadline_ms
     }
 }
+
+mod transitions;
 
 #[cfg(test)]
 mod tests;

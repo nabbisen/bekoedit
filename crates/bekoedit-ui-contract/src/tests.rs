@@ -50,21 +50,21 @@ fn open_workspace_path_round_trips() {
 #[test]
 fn source_editor_protocol_is_version_two() {
     assert_eq!(BRIDGE_SCHEMA_VERSION, 2);
-    let probe = SourceEditorRequest::current_probe(OperationId(9));
+    let probe = SourceEditorRequest::current_probe(OperationId::new(9));
     assert_eq!(probe.protocol_version(), 2);
 }
 
 #[test]
 fn source_editor_messages_round_trip_with_camel_case_fields() {
     let identity = EditorIdentity {
-        instance_id: EditorInstanceId(3),
+        instance_id: EditorInstanceId::new(3),
         editor_id: SourceEditorId::Text,
         document_id: 4,
-        epoch: SourceEpoch(5),
+        epoch: SourceEpoch::new(5),
     };
     let event = SourceEditorEvent::Snapshot {
         protocol_version: BRIDGE_SCHEMA_VERSION,
-        operation_id: OperationId(6),
+        operation_id: OperationId::new(6),
         identity,
         seq: 7,
         text: "# 日本語\n".into(),
@@ -84,7 +84,7 @@ fn source_editor_messages_round_trip_with_camel_case_fields() {
 fn unsupported_source_editor_event_version_is_detectable() {
     let event = SourceEditorEvent::BundleReady {
         protocol_version: 1,
-        operation_id: OperationId(1),
+        operation_id: OperationId::new(1),
     };
     assert!(!event.has_supported_version());
 }
