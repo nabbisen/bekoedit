@@ -15,10 +15,15 @@ status is inherited from the Proposed RFC.
 The handoff covers:
 
 - app-level editor bundle readiness;
+- application-root controller lifetime across all child-screen replacement;
 - per-mount Text/Split instance identity;
 - relay-before-init and validated Ready handshake;
 - existing source-sync barrier integration;
 - explicit snapshot terminal results;
+- barrier hold/resume around protected command execution;
+- acknowledged canonical refresh/rebase with epoch rollover;
+- serialized singleton destroy/init and one-use takeover;
+- bridge protocol version 2 and first-terminal-wins deadlines;
 - explicit unmount/destroy/abort;
 - Settings and other full-screen unmount paths;
 - shared Text/Split hosting;
@@ -40,10 +45,12 @@ Design-stage files created or updated:
 - `rfcs/handoffs/041-source-editor-lifecycle-and-synchronization-controller/implementation-handoff.md`
 - `rfcs/README.md`
 - `.git-exclude/review-request/2026-07-14-rfc-041-source-editor-lifecycle-design.md`
+- `.git-exclude/review-request/2026-07-14-rfc-041-source-editor-lifecycle-design-rereview.md`
 
 Expected implementation areas after approval:
 
 - `crates/bekoedit-app/src/source_sync.rs` and new `source_sync/` modules;
+- `crates/bekoedit-ui-contract/src/source_editor.rs` and bridge version tests;
 - `crates/bekoedit-app/src/components/text_mode.rs`;
 - `crates/bekoedit-app/src/components/split_mode.rs`;
 - a shared source-editor host/controller component or hook;
@@ -52,10 +59,12 @@ Expected implementation areas after approval:
 - `crates/bekoedit-app/js/src/editor.js`;
 - `crates/bekoedit-app/assets/editor-bundle.js` after the JS build;
 - app, protocol, and lifecycle tests.
+- CI/release app-test gates and a Linux real-WebView regression harness.
 
-The current worktree already contains owner/previous-developer changes in eight
-application and editor files. Preserve them until the implementation task
-explicitly decides, file by file, what to retain or replace.
+The prior source-sync and diagnostic application changes are committed in
+`776dd26`; the initial RFC package is committed in `67ea8dc`. The revision-2
+worktree changes only RFC/handoff documents. Future implementation must still
+decide, file by file, which diagnostic behavior to retain or replace.
 
 ## 4. Design decisions and assumptions
 
@@ -63,6 +72,8 @@ explicitly decides, file by file, what to retain or replace.
   Dioxus/JavaScript boundary is.
 - Keep one JavaScript adapter/view, but assign one Rust controller and a fresh
   identity to each mount.
+- Host that controller and its relay at app root so they survive MainShell,
+  mode, Settings, document, and workspace replacement.
 - Bundle readiness is application-level and persistent.
 - Editor readiness is instance-level and becomes true only after a validated
   JavaScript Ready message.
@@ -70,17 +81,27 @@ explicitly decides, file by file, what to retain or replace.
   relative completion order may vary.
 - `ActiveSourceEditor` means Ready and snapshot-capable, not merely intended to
   mount.
+- `EditorInstanceId` identifies a physical mount; `SourceEpoch` identifies a
+  canonical stream/rebase generation within that mount.
 - A protected command may wait for the current mount, but remains single-flight
   and bounded.
-- Every snapshot request has one terminal result; unmount clears requests owned
-  by that instance.
+- Bridge schema version 2 is an incompatible, exact-match protocol whose typed
+  source-editor family lives in `bekoedit-ui-contract`.
+- Every operation uses first-terminal-wins reducer semantics with separate
+  mount, snapshot, refresh, and destroy deadlines.
+- A successful protected snapshot holds editor input until Resume, canonical
+  ApplyDocument acknowledgement, or Destroy.
+- History/Outline canonical mutation invalidates the old epoch and becomes
+  Ready only after correlated DocumentApplied.
+- Singleton replacement waits for matched Destroyed or uses one correlated,
+  one-use takeover permit after destroy timeout.
 - Settings is protected because it unmounts `MainShell`.
 - Startup recovery remains a structural no-active-editor exception.
 - Rust lifecycle transitions must be pure-testable; WebView behavior still
   requires desktop evidence.
 
-Items requiring architecture review are listed in RFC-041 section 16. Do not
-silently choose different semantics during implementation; amend the RFC first.
+Rereview confirmations are listed in RFC-041 section 16. Do not silently choose
+different semantics during implementation; amend the RFC first.
 
 ## 5. Tests and gates run
 
@@ -118,6 +139,7 @@ claim lifecycle acceptance from headless tests alone.
 - Proposed RFC-041.
 - This implementation handoff.
 - Architecture review request for the design package.
+- Focused architecture rereview request for revision 2.
 
 No binary, package, release archive, commit, tag, or push was generated.
 
@@ -128,15 +150,16 @@ No binary, package, release archive, commit, tag, or push was generated.
 - Static code establishes the initial bundle/init false-readiness failure and
   the barrier timeout path. It does not distinguish every possible
   relay/identity timing branch after Settings remount.
-- The exact API shape for persistent bundle probing and controller-to-JS
-  dispatch remains an implementation detail, provided it satisfies RFC-041.
+- The exact Dioxus evaluator shape for the app-root controller remains an
+  implementation detail, provided it satisfies RFC-041 and its host-lifetime
+  test.
 - Cross-platform WebView timing cannot be proven by Rust unit tests.
 - The repository currently has other architect-review blockers outside this
   RFC's scope.
 
 ## 8. Recommended next step
 
-Obtain architecture review of RFC-041 and its handoff. Resolve all blocking
-findings in the RFC before implementation. After approval, implement in the
-RFC rollout order, beginning with pure lifecycle state and tests rather than
-editing the current Dioxus effects in place.
+Obtain architecture rereview of RFC-041 revision 2 and this handoff. After an
+acceptable verdict, implement in the RFC rollout order, beginning with bridge
+version types and the pure lifecycle reducer rather than editing the current
+Dioxus effects in place.

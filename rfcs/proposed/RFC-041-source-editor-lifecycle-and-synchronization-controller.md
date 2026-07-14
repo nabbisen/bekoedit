@@ -5,6 +5,7 @@
 **Track:** Source safety / WebView lifecycle
 **Priority:** Critical
 **Date:** 2026-07-14
+**Revision:** 2 — resolves the 2026-07-14 initial architecture review
 **Related RFCs:** [RFC-002](../done/RFC-002-runtime-architecture-and-webview-boundary.md), [RFC-011](../done/RFC-011-text-mode-with-codemirror-6.md), [RFC-019](../done/RFC-019-mode-switching-and-projection-synchronization.md)
 **Implementation handoff:** [RFC-041 implementation handoff](../handoffs/041-source-editor-lifecycle-and-synchronization-controller/implementation-handoff.md)
 
@@ -21,6 +22,11 @@ This RFC extends the accepted source-sync barrier design. It addresses the
 startup and remount failure where Rust registers an editor before
 `window.__bk.init(...)` can run, then waits for snapshots from a view that does
 not exist.
+
+Revision 2 fixes the controller host above all controlled screen replacement,
+adds acknowledged canonical refresh/rebase, serializes singleton replacement,
+and defines the incompatible bridge protocol version 2 with operation-specific
+deadlines and first-terminal-wins semantics.
 
 ## 2. Incident and root cause
 
@@ -165,6 +171,10 @@ enum SourceEditorLifecycle {
         editor: ReadyEditor,
         request: SnapshotRequest,
     },
+    RefreshPending {
+        editor: RefreshingEditor,
+        request: RefreshRequest,
+    },
     Unmounting(EditorIdentity),
     Unavailable {
         identity: Option<EditorIdentity>,
@@ -177,7 +187,36 @@ enum SourceEditorLifecycle {
 requires retaining the name, its construction must be private to the validated
 `EditorReady` transition.
 
-### 6.3 Component responsibilities
+`EditorInstanceId` and `SourceEpoch` are distinct opaque monotonic newtypes.
+The controller allocates both without process-lifetime reuse. An instance ID
+identifies one physical view ownership lifetime. An epoch identifies one
+accepted canonical document stream within that instance and changes on a
+canonical refresh/rebase.
+
+### 6.3 Controller host lifetime
+
+The sole controller, lifecycle reducer state, relay receiver, operation
+deadlines, and identity allocators are hosted at application-root scope. That
+scope must outlive:
+
+- `MainShell`;
+- Text, Split, Preview, and Form components;
+- Settings replacement and return;
+- document/session replacement;
+- workspace replacement.
+
+The root controller is created once for the running application. Child screens
+receive a controller handle through context and may submit typed intent only.
+They may not own relay coroutines, lifecycle state, request-dispatch effects,
+timeouts, or identity allocation.
+
+Editor-instance unmount does not shut down the controller. Application exit is
+the separate controller-shutdown boundary: reject all pending operations,
+invalidate the current instance, make one best-effort matched destroy request,
+close the relay/evaluator, and stop timers. Application shutdown must never
+execute a pending protected command.
+
+### 6.4 Component responsibilities
 
 TextMode and SplitMode:
 
@@ -197,6 +236,10 @@ The controller:
 - drives snapshot requests and protected-command completion;
 - owns lifecycle timeouts and failure recovery.
 
+Only the pure lifecycle reducer may mutate lifecycle or barrier state. The
+controller converts Dioxus, eval, relay, and timer inputs into typed reducer
+events, then executes the effects emitted by the reducer.
+
 JavaScript:
 
 - owns only the live CodeMirror view and UI-local editing mechanics;
@@ -213,14 +256,22 @@ JavaScript:
 4. The relay sends a persistent/observable `RelayReady` acknowledgement.
 5. The controller waits for both `RelayReady` and supported bundle readiness.
 6. Only then may the controller call JavaScript `init`.
-7. JavaScript validates the container, destroys any explicitly stale singleton
-   view, constructs exactly one view, then emits `EditorReady`.
+7. JavaScript validates that no different instance owns the singleton,
+   validates the container, constructs exactly one view, then emits
+   `EditorReady`.
 8. Rust validates the identity and transitions to `Ready`.
 9. The controller may focus the new editor after Ready.
 
 Initialization failure transitions to `Unavailable`, clears any queued
 protected command with visible failure, and leaves a retry path. It must not
 create an active editor record.
+
+An exact duplicate init for an already-live instance is idempotent: JavaScript
+does not reconstruct the view and re-emits the matching `EditorReady` result
+with `reused = true`. An init using the same instance ID with different
+identity fields is rejected. An init for a different instance while an old
+instance remains active is rejected with `InstanceAlreadyActive` unless it
+carries the one-use takeover permit defined in section 7.6.
 
 ### 7.2 Protected command while mounting
 
@@ -255,7 +306,7 @@ Suggested messages:
 ```json
 {
   "type": "requestSnapshot",
-  "protocolVersion": 1,
+  "protocolVersion": 2,
   "requestId": 99,
   "instanceId": 501,
   "editorId": "text",
@@ -267,7 +318,7 @@ Suggested messages:
 ```json
 {
   "type": "snapshot",
-  "protocolVersion": 1,
+  "protocolVersion": 2,
   "requestId": 99,
   "instanceId": 501,
   "editorId": "text",
@@ -286,7 +337,64 @@ Snapshot acceptance or no-op acceptance completes the protected command.
 Blocked, rejected, unavailable, or timeout results clear the pending command
 without executing it.
 
-### 7.5 Unmount and destroy
+After JavaScript captures a snapshot for a protected command, it places that
+instance in a short barrier hold: user document transactions are disabled until
+the controller sends one of `ResumeEditing`, `ApplyDocument`, or `Destroy`.
+This prevents input entered after the accepted snapshot from racing a mode
+switch or canonical Rust mutation. A blocked snapshot does not enter the hold.
+
+### 7.5 Canonical refresh and rebase
+
+Some protected commands mutate canonical Rust text while Text/Split remains
+mounted, including History restore and Outline section moves. After the command
+mutation succeeds, the old editor stream must not become Ready again with stale
+text.
+
+The transition is:
+
+```text
+Ready(old epoch)
+  -> SnapshotPending(barrier hold)
+  -> RefreshPending(old epoch invalid, new epoch allocated)
+  -> Ready(new epoch, acknowledged canonical revision)
+```
+
+Rules:
+
+1. Snapshot acceptance completes synchronization but retains the barrier hold.
+2. Rust executes the protected canonical mutation.
+3. Before dispatching refresh, the controller invalidates snapshot capability
+   for the old epoch and allocates a fresh `SourceEpoch` for the same instance.
+4. The controller sends `ApplyDocument` with operation ID, instance ID, editor
+   ID, document ID, old and new epoch, canonical revision, and canonical text.
+5. JavaScript verifies the current instance and old epoch, cancels pending
+   debounce/composition state, installs the canonical document without
+   publishing a user change, and replies `DocumentApplied` with the correlated
+   operation ID, new epoch, and canonical revision.
+6. Only a matching acknowledgement transitions to Ready and re-enables input.
+
+If canonical text is unchanged, the same acknowledged transition still rolls
+the epoch when a protected Rust mutation requested a refresh. This keeps one
+unambiguous rule; no local no-op shortcut may reactivate the old stream.
+
+Refresh failure or timeout transitions to `Unavailable`, retains Rust canonical
+text, clears the protected operation, and never accepts old-epoch changes.
+Retry performs a fresh instance mount from canonical text. A protected command
+submitted during `RefreshPending` remains single-flight busy and cannot extend
+the refresh deadline.
+
+Late old-epoch debounce, stale refresh acknowledgement, wrong revision, and
+wrong operation ID are traced stale no-ops. Active IME composition should have
+blocked the preceding snapshot; if composition is nevertheless reported at
+refresh dispatch, refresh fails closed and remounts from canonical text rather
+than publishing or preserving partial composition text.
+
+Save operations that do not change canonical text release the barrier hold
+with `ResumeEditing` only after save completion, provided instance, epoch, and
+revision remain current. Mode, Settings, document, and workspace transitions
+proceed to matched destroy instead of resuming.
+
+### 7.6 Unmount, destroy, and serialized replacement
 
 Component drop submits `Unmount(instance_id)`.
 
@@ -302,6 +410,20 @@ Component drop submits `Unmount(instance_id)`.
 
 `destroy` is idempotent for an already-destroyed matching instance. It must not
 destroy a newer instance.
+
+New ownership is serialized. A new mount normally waits for matched
+`Destroyed`. If the destroy deadline expires, Rust still keeps the old identity
+invalid and may issue a one-use `TakeoverPermit` containing the retired
+instance ID, replacement instance ID, and controller-allocated nonce. JavaScript
+accepts it only when its current singleton still matches the retired instance;
+it clears that view and consumes the permit before initializing the named
+replacement. A permit cannot authorize any other replacement.
+
+A late drop/destroy for the retired instance is a stale no-op after replacement.
+A new mount received during `Unmounting` is recorded as the sole waiting mount;
+it cannot initialize until destroy succeeds or the controller issues the
+takeover permit. Additional mounts replace neither owner nor waiting mount and
+fail visibly.
 
 ## 8. Settings and other screen transitions
 
@@ -333,12 +455,103 @@ same rule.
   stale canonical text after lifecycle failure.
 - Successful Ready should focus the editor when the mount originated from New
   or a source-mode switch, unless the user moved focus elsewhere meanwhile.
+- Focus requests carry a controller-allocated interaction token. Ready may
+  focus only when that token is still current and focus remains on the editor
+  launch surface; a late Ready must not steal focus from Settings, a recovery
+  action, a dialog, or another control.
+- Durable loading/failure/Retry UI is one lifecycle status surface keyed by
+  instance and operation. A toast may announce a transition once, but repeated
+  clicks must not create the durable state or duplicate announcements.
 
 ## 10. Protocol rules
 
-- Every message carries `protocolVersion` and the full applicable identity.
-- Rust rejects unsupported versions before state mutation.
-- JavaScript reports missing containers and missing views explicitly.
+### 10.1 Version and location
+
+RFC-041 is an incompatible bridge change and bumps the project bridge schema
+from 1 to 2.
+
+- Rust authority: `bekoedit_ui_contract::BRIDGE_SCHEMA_VERSION = 2`.
+- JavaScript authority: one exported `BRIDGE_SCHEMA_VERSION = 2` constant in
+  `js/src/editor.js`, included in the built bundle.
+- A contract test reads/queries both authorities and fails if they differ.
+
+The typed source-editor wire family lives in
+`crates/bekoedit-ui-contract/src/source_editor.rs`. TextMode and SplitMode use
+that family through the controller; they must not define local duplicate
+deserializers. JavaScript mirrors the same discriminants and fields, and its
+adapter tests serve as the cross-language compatibility gate.
+
+Every request and result carries `protocolVersion`, `operationId`, and the full
+identity applicable to that operation. Rust and JavaScript reject every version
+other than exactly 2 before lifecycle or document mutation. There is no
+version-1 compatibility fallback because the bundle and Rust binary ship
+together.
+
+### 10.2 Typed operation family
+
+The protocol contains these operations and correlated results:
+
+| Operation | Required result |
+|---|---|
+| `ProbeBundle` | `BundleReady` or `BundleFailed` |
+| `InstallRelay` | `RelayReady` or `RelayFailed` |
+| `InitEditor` | `EditorReady` or `InitFailed` |
+| `EditorChange` | inbound ordinary event; identity/sequence validated |
+| `RequestSnapshot` | `Snapshot` or `SnapshotBlocked` |
+| `ResumeEditing` | `EditingResumed` or `ResumeFailed` |
+| `ApplyDocument` | `DocumentApplied` or `ApplyDocumentFailed` |
+| `DestroyEditor` | `Destroyed` or `DestroyFailed` |
+| `Trace` | non-authoritative, content-safe diagnostic event |
+
+`InitFailed` includes at least unsupported version, missing container,
+`InstanceAlreadyActive`, identity mismatch, and bridge error. Refresh and
+destroy failures likewise carry operation and instance identity. A
+`TakeoverPermit` is accepted only as part of `InitEditor` and only under section
+7.6 rules.
+
+Dispatch/eval queuing is not delivery proof and never constitutes an operation
+result. Missing delivery ends through the matching deadline as unavailable or
+timeout.
+
+### 10.3 First-terminal-wins
+
+“One terminal result” describes controller state commitment, not the physical
+number of wire messages. For each operation ID, the reducer atomically accepts
+the first matching terminal event and removes/terminalizes the pending
+operation. Duplicate results, a JavaScript result arriving after timeout, and a
+timer arriving after a JavaScript result are stale no-ops recorded only through
+content-safe trace evidence. They cannot execute a command, change readiness,
+or extend a deadline twice.
+
+### 10.4 Deadlines
+
+Use separate named deadline classes, initially:
+
+```text
+MOUNT_DEADLINE_MS = 5_000
+SNAPSHOT_DEADLINE_MS = 2_000
+REFRESH_DEADLINE_MS = 2_000
+DESTROY_DEADLINE_MS = 1_000
+```
+
+- Mount timeout: enter `Unavailable`, reject the mount-bound protected command,
+  and offer fresh-instance Retry.
+- Snapshot timeout: return the current Ready instance from barrier hold if the
+  adapter can acknowledge resume; otherwise enter `Unavailable`; never execute
+  the protected command.
+- Refresh timeout: enter `Unavailable`, retain Rust canonical text, reject old
+  epoch messages, and require remount from canonical text.
+- Destroy timeout: keep the retired identity invalid and either finish without
+  replacement or use the single waiting mount's takeover permit.
+
+A second user action never extends an existing deadline. Tests use injected
+clock events; production orchestration owns timers at app-root controller
+scope.
+
+### 10.5 General rules
+
+- JavaScript reports missing containers, missing views, relay loss, and
+  identity conflicts explicitly whenever transport is available.
 - Relay disappearance is a controller failure, not a silent dropped message.
 - The controller is the only place allowed to translate bridge events into
   source-sync state transitions.
@@ -371,14 +584,20 @@ Implementation should separate responsibilities, for example:
 ```text
 source_sync.rs                  public facade and shared exports
 source_sync/state.rs            pure lifecycle and barrier state
-source_sync/protocol.rs         typed Rust/JS messages and validation
 source_sync/commands.rs         protected command execution
 source_sync/controller.rs       Dioxus/eval orchestration and timeouts
 source_sync/tests/              state, protocol, and command tests
+../bekoedit-ui-contract/src/source_editor.rs  typed bridge protocol
 ```
 
 Exact names may change, but lifecycle transition logic must remain testable
 without a WebView.
+
+Only transition methods in `state.rs` may mutate lifecycle/barrier state.
+`controller.rs` feeds typed events to the reducer and executes emitted effects.
+`commands.rs` executes approved post-barrier commands but cannot directly
+change lifecycle state. Apply the 300-ELOC guideline and 500-ELOC hard limit to
+every implementation and test file.
 
 TextMode and SplitMode should share a source-editor host/controller hook rather
 than duplicate init, refresh, snapshot, relay, and teardown effects.
@@ -387,6 +606,10 @@ than duplicate init, refresh, snapshot, relay, and teardown effects.
 
 ### 13.1 Pure lifecycle tests
 
+- controller identity survives Text -> Preview, Text -> Split, Settings ->
+  return, and workspace/session replacement;
+- editor instance identity changes across each controlled replacement;
+- application shutdown terminates pending work without executing its command;
 - mount intent is not Ready or active;
 - relay acknowledgement alone is not Ready;
 - bundle readiness alone is not Ready;
@@ -397,16 +620,34 @@ than duplicate init, refresh, snapshot, relay, and teardown effects.
 - mount failure/timeout rejects and clears the waiting command;
 - unmount invalidates the instance and clears its pending request;
 - destroy for an old instance cannot affect a new one;
+- a new mount waits during old-instance unmount;
+- matched destroy releases the single waiting mount;
+- destroy timeout authorizes only the correlated one-use takeover permit;
+- duplicate exact init is idempotent without reconstructing the view;
+- mismatched duplicate, stale init, and unauthorized takeover are rejected;
+- late drop and late destroy cannot affect the replacement instance;
+- History restore and both Outline moves enter RefreshPending;
+- refresh invalidates old snapshot capability before dispatch;
+- matching DocumentApplied activates the new epoch and canonical revision;
+- refresh no-op still rolls epoch and requires acknowledgement;
+- stale refresh acknowledgement, late old-epoch debounce, and wrong revision
+  cannot reactivate the editor;
+- refresh during composition and refresh timeout fail closed;
+- a protected command during refresh does not replace or extend it;
 - every blocked/rejected/timeout path returns to a retryable non-busy state.
 
 ### 13.2 Protocol and barrier tests
 
 - Text and Split route through their matching instance relay;
+- Rust and JavaScript protocol constants both equal version 2;
 - unsupported protocol versions are rejected;
 - missing/wrong instance, editor, document, epoch, sequence, and request IDs
   cannot mutate or complete current state;
 - no-op snapshots complete commands without revision bumps;
 - ordinary debounced change racing a forced snapshot preserves ordering;
+- barrier hold prevents post-snapshot input from racing command execution;
+- first matching terminal event wins over duplicate result/timeout races;
+- mount, snapshot, refresh, and destroy deadlines have distinct outcomes;
 - composition blocks protected commands without publishing partial text;
 - all existing protected commands execute only after accepted synchronization;
 - Settings open synchronizes before unmount;
@@ -416,9 +657,15 @@ than duplicate init, refresh, snapshot, relay, and teardown effects.
 
 - init reports missing container;
 - init creates one view and returns Ready;
-- duplicate init for the same instance is idempotent or explicitly rejected;
-- init for a new instance destroys the old instance through defined rules;
+- duplicate exact init returns idempotent Ready without rebuilding the view;
+- mismatched duplicate init is rejected;
+- init for a new instance returns InstanceAlreadyActive without a valid
+  takeover permit;
+- a valid one-use takeover permit replaces only its named retired instance;
 - requestSnapshot always returns a terminal result;
+- a successful protected snapshot enters barrier hold;
+- ResumeEditing and ApplyDocument release hold only after matched processing;
+- ApplyDocument returns correlated DocumentApplied and installs the new epoch;
 - destroy clears timers, composition, view, and identity;
 - stale destroy/request cannot affect the current instance;
 - relay absence produces explicit failure.
@@ -436,21 +683,33 @@ than duplicate init, refresh, snapshot, relay, and teardown effects.
 - IME composition/commit works; active composition blocks safely.
 - Run the critical sequence on Linux, macOS, and Windows release candidates.
 
+Before release, Linux CI must include at least one repeatable regression that
+launches the actual Dioxus/WebView surface and exercises New -> Ready -> type ->
+immediate Preview. The existing headless logic smoke does not satisfy this
+requirement. macOS and Windows retain candidate-specific manual lifecycle and
+IME evidence unless equivalent automation is added.
+
 Automated Rust tests alone are not acceptance evidence for WebView lifecycle
 ordering.
 
 ## 14. Rollout plan
 
 1. Review and approve RFC-041 before implementation.
-2. Split the source-sync module and introduce pure lifecycle types/tests.
-3. Move bundle ownership to app scope and implement persistent boot readiness.
-4. Implement the single controller and relay-before-init handshake.
-5. Implement explicit Ready, snapshot, destroy, and failure protocol.
-6. Migrate Text and Split to the shared host/controller boundary.
-7. Protect Settings and audit every source-editor unmount path.
-8. Rebuild the checked-in JavaScript bundle.
-9. Run focused tests, full repository gates, and desktop manual regression.
-10. Submit an implementation review package; move this RFC to `done/` only
+2. Add protocol version 2 types in `bekoedit-ui-contract` and adapter contract
+   tests.
+3. Split the source-sync module and introduce the pure reducer and tests.
+4. Host the controller/relay at app root and implement persistent bundle
+   readiness.
+5. Implement serialized init/destroy/takeover and relay-before-init handshake.
+6. Implement Ready, snapshot hold/resume, refresh/rebase, and first-terminal
+   deadline behavior.
+7. Migrate Text and Split to mount/drop intent and shared rendering host logic.
+8. Protect Settings and audit every source-editor unmount path.
+9. Rebuild the checked-in JavaScript bundle.
+10. Make app tests blocking in CI and add the Linux WebView regression.
+11. Run focused tests, full repository gates, and cross-platform desktop manual
+    regression.
+12. Submit an implementation review package; move this RFC to `done/` only
     when the reviewed implementation ships.
 
 ## 15. Alternatives considered
@@ -480,19 +739,33 @@ controllers recreate ambiguous ownership and duplicated lifecycle effects.
 Rejected. A singleton is acceptable only with one explicit owner and stale
 instance rejection.
 
-## 16. Review questions
+## 16. Initial review resolutions and rereview questions
 
-1. Is the separation between app-level bundle readiness and instance-level
-   editor readiness sufficient and minimal?
-2. Should an immediate protected command wait for mounting as proposed, or fail
-   immediately with an editor-loading message?
-3. Is one Rust-owned controller over a single JavaScript adapter preferable to
-   introducing independently allocated JavaScript adapter objects?
-4. Is Settings correctly classified as a protected command?
-5. Are instance ID plus epoch both justified, or should they be represented by
-   one typed generation identity?
-6. What minimum desktop automation is feasible for the New -> Text -> Preview
-   regression before release?
+The 2026-07-14 initial architecture review resolved the original questions:
 
-Implementation must not begin until the blocking answers are resolved in
-review.
+- bundle and instance readiness remain separate;
+- immediate protected commands wait within a bounded single-flight operation;
+- one singleton adapter remains under one root-surviving controller;
+- Settings is protected;
+- instance ID and epoch remain distinct opaque identities;
+- Linux gains an actual WebView regression, while macOS/Windows retain manual
+  candidate and IME evidence until equivalent automation exists.
+
+Revision 2 requests focused confirmation that:
+
+1. application-root hosting and separate application-exit shutdown close the
+   controller lifetime gap;
+2. `RefreshPending` plus `DocumentApplied` closes History/Outline stale-text
+   overwrite paths;
+3. matched destroy, waiting mount, and one-use takeover permit serialize every
+   singleton replacement;
+4. bridge schema version 2, the typed operation family, distinct deadlines,
+   and first-terminal-wins semantics close compatibility and terminalization
+   ambiguity;
+5. barrier hold/resume prevents post-snapshot input races without weakening
+   IME safety;
+6. reducer-only mutation authority keeps one lifecycle owner after module
+   separation.
+
+Implementation must not begin until rereview confirms the blocking findings
+are resolved.
