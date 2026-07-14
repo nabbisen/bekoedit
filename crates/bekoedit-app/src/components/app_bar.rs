@@ -21,7 +21,6 @@ pub fn AppBar() -> Element {
     let toasts = use_context::<Signal<Vec<Toast>>>();
     let mut lang_sig = use_context::<Signal<Lang>>();
     let ui_lang = *lang_sig.read();
-    let mut settings_open = use_context::<Signal<bool>>();
     let mut menu_open = use_signal(|| false);
 
     let has_workspace = state.read().workspace.is_some();
@@ -153,7 +152,13 @@ pub fn AppBar() -> Element {
                             onclick: move |_| {
                                 crate::bridge::trace("app_bar.settings.click", "");
                                 menu_open.set(false);
-                                settings_open.set(true);
+                                submit_source_command(
+                                    source_sync,
+                                    state,
+                                    mode_sig,
+                                    toasts,
+                                    SourceCommand::OpenSettings,
+                                );
                             },
                             "⚙  " {tr(ui_lang, "settings.title")}
                         }

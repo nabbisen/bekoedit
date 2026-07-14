@@ -10,7 +10,6 @@ const ctx = await esbuild.context({
   minify: !watch,
   sourcemap: watch ? "inline" : false,
   format: "iife",
-  globalName: "__bk",
   outfile: "../assets/editor-bundle.js",
   logLevel: "info",
 });

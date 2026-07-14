@@ -20,11 +20,17 @@ pub fn trace(event: &str, details: impl Display) {
 /// JavaScript that installs a named relay function and keeps the eval
 /// context alive. `relay_name` is the `window` property to set
 /// (e.g. `"__bk_relay"` or `"__bk_shortcut_relay"`).
-pub fn relay_js(relay_name: &str) -> String {
+pub fn relay_js(relay_name: &str, generation: u64) -> String {
     format!(
         r#"
-        window.{relay} = (msg) => dioxus.send(msg);
+        const relay = (msg) => dioxus.send(msg);
+        relay.__bkGeneration = {generation};
+        window.{relay} = relay;
         window.__bk_schema_version = {version};
+        dioxus.send(JSON.stringify({{
+            type: "relayGenerationReady",
+            generation: {generation}
+        }}));
         (async () => {{
             while (true) {{
                 await new Promise(r => setTimeout(r, 86_400_000));
@@ -32,19 +38,56 @@ pub fn relay_js(relay_name: &str) -> String {
         }})();
         "#,
         relay = relay_name,
+        generation = generation,
         version = BRIDGE_SCHEMA_VERSION,
     )
 }
 
-/// Wraps a relay setup + recv loop to auto-restart on eval failure.
-/// `setup_js` must be the output of `relay_js(name)`.
-/// The caller provides `handler` as a closure receiving raw JSON values.
-///
-/// Usage inside a `use_coroutine`:
-/// ```
-/// use_coroutine(|_: UnboundedReceiver<()>| async move {
-///     restart_relay("__bk_relay", |raw| { /* handle */ }).await;
-/// });
-/// ```
-#[allow(dead_code)]
-pub const MAX_RELAY_RESTARTS: usize = 10;
+/// Clears only the retired relay generation, never a newer replacement.
+pub fn clear_relay_js(relay_name: &str, generation: u64) -> String {
+    format!(
+        r#"
+        (() => {{
+            const relay = window.{relay};
+            if (relay && relay.__bkGeneration === {generation}) {{
+                delete window.{relay};
+            }}
+        }})();
+        "#,
+        relay = relay_name,
+        generation = generation,
+    )
+}
+
+pub const RELAY_RESTART_BASE_MS: u64 = 100;
+pub const RELAY_RESTART_CAP_MS: u64 = 400;
+
+/// Returns a capped retry delay without ever exhausting the relay owner.
+pub fn relay_restart_delay_ms(consecutive_failures: u32) -> u64 {
+    let shift = consecutive_failures.saturating_sub(1).min(2);
+    RELAY_RESTART_BASE_MS
+        .saturating_mul(1_u64 << shift)
+        .min(RELAY_RESTART_CAP_MS)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relay_backoff_caps_without_exhausting() {
+        let delays: Vec<_> = (1..=20).map(relay_restart_delay_ms).collect();
+        assert_eq!(&delays[..3], &[100, 200, 400]);
+        assert!(delays[3..].iter().all(|delay| *delay == 400));
+    }
+
+    #[test]
+    fn relay_scripts_bind_and_clear_only_the_exact_generation() {
+        let install = relay_js("__test_relay", 41);
+        let clear = clear_relay_js("__test_relay", 41);
+        assert!(install.contains("relay.__bkGeneration = 41"));
+        assert!(install.contains("relayGenerationReady"));
+        assert!(clear.contains("relay.__bkGeneration === 41"));
+        assert!(clear.contains("delete window.__test_relay"));
+    }
+}

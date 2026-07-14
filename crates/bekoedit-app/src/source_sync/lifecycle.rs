@@ -108,6 +108,7 @@ pub enum LifecycleState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LifecycleEffect {
+    ProbeBundle(OperationId),
     InstallRelay(EditorIdentity, OperationId),
     Init(EditorIdentity, OperationId, Option<TakeoverPermit>),
     RequestSnapshot(EditorIdentity, OperationId),
@@ -488,6 +489,7 @@ impl LifecycleReducer {
     }
 }
 
+mod controller_support;
 mod transitions;
 
 #[cfg(test)]

@@ -1,6 +1,33 @@
 use super::*;
 
 impl LifecycleReducer {
+    pub fn accept_change(
+        &mut self,
+        event: &SourceEditorEvent,
+        accepted_revision: u64,
+    ) -> Result<(), TransitionError> {
+        self.require_version(event)?;
+        let LifecycleState::Ready(mut editor) = self.state else {
+            return Err(TransitionError::InvalidState);
+        };
+        let SourceEditorEvent::Change {
+            identity,
+            seq,
+            composing,
+            ..
+        } = event
+        else {
+            return Err(TransitionError::InvalidState);
+        };
+        if *identity != editor.identity || *seq <= editor.last_seq || *composing {
+            return Err(TransitionError::Stale);
+        }
+        editor.last_seq = *seq;
+        editor.revision = accepted_revision;
+        self.state = LifecycleState::Ready(editor);
+        Ok(())
+    }
+
     pub fn begin_snapshot(
         &mut self,
         command: SourceCommand,
@@ -181,6 +208,7 @@ impl LifecycleReducer {
                     }
                 }
                 SourceCommand::SwitchMode(_)
+                | SourceCommand::OpenSettings
                 | SourceCommand::OpenDocument(_)
                 | SourceCommand::NewUntitled
                 | SourceCommand::OpenWorkspace(_)

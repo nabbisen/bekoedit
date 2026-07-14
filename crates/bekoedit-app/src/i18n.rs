@@ -50,6 +50,9 @@ fn tr_en(key: &str) -> &'static str {
         "mode.preview" => "Preview",
         "editor.save" => "Save",
         "editor.no_document" => "Select a Markdown file to start editing.",
+        "editor.loading" => "Loading editor…",
+        "editor.unavailable" => "Editor unavailable",
+        "editor.retry" => "Retry",
         "save.clean" => "No changes",
         "save.dirty" => "Unsaved changes",
         "save.scheduled" => "Autosave pending…",
@@ -129,6 +132,9 @@ fn tr_ja(key: &str) -> &'static str {
         "mode.preview" => "プレビュー",
         "editor.save" => "保存",
         "editor.no_document" => "編集するMarkdownファイルを選択してください。",
+        "editor.loading" => "エディタを読み込んでいます…",
+        "editor.unavailable" => "エディタを利用できません",
+        "editor.retry" => "再試行",
         "save.clean" => "変更なし",
         "save.dirty" => "未保存の変更があります",
         "save.scheduled" => "自動保存待機中…",
@@ -203,6 +209,9 @@ mod tests {
             "island.malformed_region",
             "conflict.keep_mine",
             "mode.form",
+            "editor.loading",
+            "editor.unavailable",
+            "editor.retry",
         ];
         for key in keys {
             assert!(!tr(Lang::En, key).is_empty(), "missing en: {key}");

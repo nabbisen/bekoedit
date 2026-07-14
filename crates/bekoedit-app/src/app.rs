@@ -31,6 +31,7 @@ use crate::components::{
 };
 use crate::i18n::{Lang, tr};
 use crate::settings::AppSettings;
+use crate::source_sync::host::SourceEditorControllerHost;
 use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
 use crate::state::{create_app_state, now_ms};
 
@@ -107,24 +108,6 @@ pub fn App() -> Element {
         }
     });
 
-    // Source sync timeout: protected commands must not wait forever if the
-    // WebView bridge stops responding.
-    let mut sync_for_timeout = source_sync;
-    let mut timeout_toasts = use_context::<Signal<Vec<Toast>>>();
-    use_future(move || async move {
-        loop {
-            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-            if sync_for_timeout.write().expire_pending(now_ms()).is_some() {
-                bridge::trace("app.source_sync.timeout", "");
-                crate::components::toast::push_toast(
-                    &mut timeout_toasts,
-                    crate::components::toast::ToastKind::Error,
-                    crate::source_sync::SourceSyncError::Timeout.to_string(),
-                );
-            }
-        }
-    });
-
     // Global keyboard shortcut relay.
     let mode_sig = use_context::<Signal<EditorMode>>();
     let app_st: Signal<AppState> = state;
@@ -132,10 +115,14 @@ pub fn App() -> Element {
     let toasts_for_shortcuts = use_context::<Signal<Vec<Toast>>>();
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
         // Auto-restarting shortcut relay (RFC-002 hardening).
-        for _ in 0..bridge::MAX_RELAY_RESTARTS {
-            let relay_js = bridge::relay_js("__bk_shortcut_relay");
+        let mut consecutive_failures = 0_u32;
+        let mut generation = 0_u64;
+        loop {
+            generation = generation.saturating_add(1);
+            let relay_js = bridge::relay_js("__bk_shortcut_relay", generation);
             let mut relay = document::eval(&relay_js);
             while let Ok(raw) = relay.recv().await {
+                consecutive_failures = 0;
                 if let Ok(AppMsg::Shortcut { key }) = serde_json::from_value(raw) {
                     match key.as_str() {
                         "save" => {
@@ -179,8 +166,10 @@ pub fn App() -> Element {
                     }
                 }
             }
-            // relay disconnected — restart after a brief pause
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            document::eval(&bridge::clear_relay_js("__bk_shortcut_relay", generation));
+            consecutive_failures = consecutive_failures.saturating_add(1);
+            let delay_ms = bridge::relay_restart_delay_ms(consecutive_failures);
+            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
         }
     });
 
@@ -197,6 +186,7 @@ pub fn App() -> Element {
     rsx! {
         document::Link { rel: "stylesheet", href: STYLE }
         document::Script { src: SHORTCUTS_JS }
+        SourceEditorControllerHost {}
         ToastLayer {}
         AppBar {}
         if settings_open {

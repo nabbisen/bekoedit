@@ -197,6 +197,18 @@ input[type="text"]:focus, textarea:focus { outline: 2px solid var(--accent); out
 .text-mode-cm { height: 100%; }
 .text-mode-cm .cm-editor { height: 100%; }
 .text-mode-cm .cm-editor.cm-focused { outline: none; }
+.source-editor-host { position: relative; height: 100%; min-height: 0; }
+.source-editor-status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.source-editor-status.unavailable {
+  gap: 8px;
+  pointer-events: auto;
+}
 
 /* --- accessibility: visible focus ring (RFC-021) --- */
 :focus-visible {

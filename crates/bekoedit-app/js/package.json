@@ -2,8 +2,10 @@
   "name": "bekoedit-editor-bundle",
   "version": "0.2.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "node build.mjs",
+    "test": "node --test --test-isolation=none test/*.test.mjs",
     "watch": "node build.mjs --watch"
   },
   "dependencies": {

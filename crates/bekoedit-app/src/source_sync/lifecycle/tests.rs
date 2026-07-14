@@ -59,6 +59,8 @@ fn ready_reducer() -> LifecycleReducer {
     reducer
 }
 
+mod controller_support;
+
 fn fingerprint(revision: u64, token: u64) -> SessionFingerprint {
     SessionFingerprint {
         document_id: Some(7),
@@ -242,6 +244,15 @@ fn command_disposition_is_total_for_save_mutation_and_replacement() {
     assert_eq!(
         replacement
             .command_completed(true, fingerprint(3, 1), 120)
+            .unwrap()
+            .0,
+        CommandDisposition::Destroy
+    );
+
+    let mut settings = held_reducer(SourceCommand::OpenSettings, 3);
+    assert_eq!(
+        settings
+            .command_completed(true, fingerprint(3, 2), 120)
             .unwrap()
             .0,
         CommandDisposition::Destroy

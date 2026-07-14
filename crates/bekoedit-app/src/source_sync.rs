@@ -1,9 +1,4 @@
-//! Source editor synchronization barrier.
-//!
-//! Text/Split CodeMirror state can be newer than Rust canonical state. UI
-//! commands that consume, mutate, save, or replace canonical source must pass
-//! through this barrier so the active source editor stays mounted until its
-//! latest snapshot is accepted or visibly rejected.
+//! Application-root source-editor lifecycle and synchronization controller.
 
 use std::path::PathBuf;
 
@@ -15,28 +10,19 @@ use dioxus::prelude::*;
 use crate::components::toast::{Toast, ToastKind, push_toast};
 use crate::state::now_ms;
 
+mod commands;
+mod controller;
+pub mod host;
 pub mod lifecycle;
 
-pub const SNAPSHOT_TIMEOUT_MS: u64 = 2_000;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SourceEditorId {
-    Text,
-    Split,
-}
-
-impl SourceEditorId {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Text => "text",
-            Self::Split => "split",
-        }
-    }
-}
+pub use bekoedit_ui_contract::source_editor::SourceEditorId;
+pub use controller::{EditorMountHandle, MountOutcome, SourceSyncState, SubmitOutcome};
+pub use lifecycle::MountIntent;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SourceCommand {
     SwitchMode(EditorMode),
+    OpenSettings,
     SaveNow,
     SaveAs(PathBuf),
     OpenDocument(PathBuf),
@@ -48,323 +34,67 @@ pub enum SourceCommand {
     MoveSectionDown(usize),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ActiveSourceEditor {
-    pub editor_id: SourceEditorId,
-    pub mode: EditorMode,
-    pub document_id: u64,
-    pub epoch: u64,
-    pub last_accepted_seq: u64,
-    pub last_accepted_revision: u64,
-    pub composing: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SnapshotRequest {
-    pub request_id: u64,
-    pub editor_id: SourceEditorId,
-    pub document_id: u64,
-    pub epoch: u64,
-    pub requested_at_ms: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PendingBarrier {
-    pub command: SourceCommand,
-    pub request: SnapshotRequest,
-    pub sent_to_js: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EditorRefreshRequest {
-    pub editor_id: SourceEditorId,
-    pub document_id: u64,
-    pub revision: u64,
-    pub epoch: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EditorSnapshot {
-    pub request_id: Option<u64>,
-    pub editor_id: SourceEditorId,
-    pub document_id: u64,
-    pub epoch: u64,
-    pub seq: u64,
-    pub text: String,
-    pub composing: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SnapshotBlockReason {
-    CompositionActive,
-    EditorUnavailable,
-    IdentityMismatch,
-    BridgeError,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SnapshotBlocked {
-    pub request_id: u64,
-    pub editor_id: SourceEditorId,
-    pub document_id: u64,
-    pub epoch: u64,
-    pub reason: SnapshotBlockReason,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SubmitOutcome {
-    ExecuteNow(SourceCommand),
-    SnapshotRequested(SnapshotRequest),
-    Busy,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SnapshotOutcome {
-    Accepted,
-    Complete(SourceCommand),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum SourceSyncError {
     NoDocument,
     ConflictPending,
-    NoActiveEditor,
     Busy,
-    EditorMismatch,
-    DocumentMismatch,
-    EpochMismatch,
-    RequestMismatch,
-    StaleSeq,
     RevisionDrift,
     CompositionActive,
     EditorUnavailable,
     IdentityMismatch,
-    BridgeError,
+    UnsupportedVersion,
     Timeout,
     Store(StoreError),
+    Transition(lifecycle::TransitionError),
 }
 
 pub fn submit_source_command(
     mut sync: Signal<SourceSyncState>,
     state: Signal<AppState>,
-    mode: Signal<EditorMode>,
-    toasts: Signal<Vec<Toast>>,
+    _mode: Signal<EditorMode>,
+    mut toasts: Signal<Vec<Toast>>,
     command: SourceCommand,
 ) {
-    let document_id = state.read().session.as_ref().map(|s| s.document_id);
-    crate::bridge::trace(
-        "source.submit_source_command",
-        format!("command={command:?} document_id={document_id:?}"),
-    );
-    let outcome = sync.write().submit(command, document_id, now_ms());
-    match outcome {
-        SubmitOutcome::ExecuteNow(command) => {
-            crate::bridge::trace(
-                "source.submit_source_command.execute_now",
-                format!("command={command:?}"),
-            );
-            execute_source_command(sync, state, mode, toasts, command);
-        }
-        SubmitOutcome::SnapshotRequested(request) => crate::bridge::trace(
-            "source.submit_source_command.snapshot_requested",
-            format!(
-                "request_id={} editor_id={:?} doc_id={} epoch={}",
-                request.request_id, request.editor_id, request.document_id, request.epoch
-            ),
-        ),
+    let document_id = state
+        .read()
+        .session
+        .as_ref()
+        .map(|session| session.document_id);
+    match sync.write().submit(command, document_id, now_ms()) {
+        SubmitOutcome::NoOp
+        | SubmitOutcome::ExecuteQueued
+        | SubmitOutcome::SnapshotRequested(_)
+        | SubmitOutcome::WaitingForReady => {}
         SubmitOutcome::Busy => {
-            crate::bridge::trace("source.submit_source_command.busy", "");
-            let mut toasts = toasts;
-            push_toast(
-                &mut toasts,
-                ToastKind::Warning,
-                SourceSyncError::Busy.to_string(),
-            );
+            crate::bridge::trace("source.controller.busy", "");
         }
-    }
-}
-
-pub fn handle_editor_snapshot(
-    mut sync: Signal<SourceSyncState>,
-    mut state: Signal<AppState>,
-    mode: Signal<EditorMode>,
-    toasts: Signal<Vec<Toast>>,
-    snapshot: EditorSnapshot,
-) {
-    crate::bridge::trace(
-        "source.handle_editor_snapshot.start",
-        format!(
-            "request_id={:?} editor_id={:?} doc_id={} epoch={} seq={} composing={} length={}",
-            snapshot.request_id,
-            snapshot.editor_id,
-            snapshot.document_id,
-            snapshot.epoch,
-            snapshot.seq,
-            snapshot.composing,
-            snapshot.text.len()
+        SubmitOutcome::Unavailable => push_toast(
+            &mut toasts,
+            ToastKind::Error,
+            SourceSyncError::EditorUnavailable.to_string(),
         ),
-    );
-    let result = {
-        let mut app = state.write();
-        sync.write().accept_snapshot(&mut app, snapshot, now_ms())
-    };
-    match result {
-        Ok(SnapshotOutcome::Accepted) => {
-            crate::bridge::trace("source.handle_editor_snapshot.accepted", "");
-        }
-        Ok(SnapshotOutcome::Complete(command)) => {
-            crate::bridge::trace(
-                "source.handle_editor_snapshot.complete",
-                format!("command={command:?}"),
-            );
-            execute_source_command(sync, state, mode, toasts, command);
-        }
-        Err(err) => {
-            crate::bridge::trace(
-                "source.handle_editor_snapshot.error",
-                format!("error={err:?}"),
-            );
-            let mut toasts = toasts;
-            push_toast(&mut toasts, ToastKind::Error, err.to_string());
-        }
     }
 }
 
-pub fn handle_snapshot_blocked(
+pub fn mount_source_editor(
     mut sync: Signal<SourceSyncState>,
-    mut toasts: Signal<Vec<Toast>>,
-    blocked: SnapshotBlocked,
-) {
-    crate::bridge::trace(
-        "source.handle_snapshot_blocked.start",
-        format!(
-            "request_id={} editor_id={:?} doc_id={} epoch={} reason={:?}",
-            blocked.request_id,
-            blocked.editor_id,
-            blocked.document_id,
-            blocked.epoch,
-            blocked.reason
-        ),
-    );
-    let err = match sync.write().handle_blocked(blocked) {
-        Ok(()) => return,
-        Err(err) => err,
-    };
-    crate::bridge::trace(
-        "source.handle_snapshot_blocked.error",
-        format!("error={err:?}"),
-    );
-    push_toast(&mut toasts, ToastKind::Error, err.to_string());
+    editor_id: SourceEditorId,
+    document_id: u64,
+    revision: u64,
+) -> MountOutcome {
+    sync.write().mount(
+        MountIntent {
+            editor_id,
+            document_id,
+            revision,
+        },
+        now_ms(),
+    )
 }
 
-pub fn execute_source_command(
-    mut sync: Signal<SourceSyncState>,
-    mut state: Signal<AppState>,
-    mut mode: Signal<EditorMode>,
-    mut toasts: Signal<Vec<Toast>>,
-    command: SourceCommand,
-) {
-    crate::bridge::trace(
-        "source.execute_command.start",
-        format!("command={command:?}"),
-    );
-    let result = match command {
-        SourceCommand::SwitchMode(target) => {
-            sync.write().clear_active();
-            mode.set(target);
-            Ok(None)
-        }
-        SourceCommand::SaveNow => state
-            .write()
-            .save_now(now_ms())
-            .map(|()| Some((ToastKind::Success, "Saved".to_string()))),
-        SourceCommand::SaveAs(path) => state
-            .write()
-            .save_as(path, now_ms())
-            .map(|()| Some((ToastKind::Success, "Saved".to_string()))),
-        SourceCommand::OpenDocument(path) => {
-            sync.write().clear_active();
-            state.write().open_document(&path).map(|()| None)
-        }
-        SourceCommand::NewUntitled => {
-            sync.write().clear_active();
-            state.write().new_untitled();
-            Ok(None)
-        }
-        SourceCommand::OpenWorkspace(path) => {
-            sync.write().clear_active();
-            state.write().open_workspace(&path, now_ms()).map(|()| None)
-        }
-        SourceCommand::CloseWorkspace => {
-            sync.write().clear_active();
-            state.write().close_workspace();
-            Ok(None)
-        }
-        SourceCommand::RestoreHistory(entry) => {
-            let result = state
-                .write()
-                .restore_history(&entry, now_ms())
-                .map(|()| Some((ToastKind::Info, "History restored".to_string())));
-            if result.is_ok() {
-                request_refresh_for_current_editor(sync, state);
-            }
-            result
-        }
-        SourceCommand::MoveSectionUp(idx) => {
-            let result = state.write().move_section_up(idx, now_ms()).map(|()| None);
-            if result.is_ok() {
-                request_refresh_for_current_editor(sync, state);
-            }
-            result
-        }
-        SourceCommand::MoveSectionDown(idx) => {
-            let result = state
-                .write()
-                .move_section_down(idx, now_ms())
-                .map(|()| None);
-            if result.is_ok() {
-                request_refresh_for_current_editor(sync, state);
-            }
-            result
-        }
-    };
-
-    match result {
-        Ok(Some((kind, message))) => {
-            crate::bridge::trace(
-                "source.execute_command.toast",
-                format!("kind={kind:?} message={message}"),
-            );
-            push_toast(&mut toasts, kind, message)
-        }
-        Ok(None) => crate::bridge::trace("source.execute_command.ok", ""),
-        Err(err) => {
-            crate::bridge::trace("source.execute_command.error", format!("error={err:?}"));
-            push_toast(&mut toasts, ToastKind::Error, err.to_string())
-        }
-    }
-}
-
-fn request_refresh_for_current_editor(mut sync: Signal<SourceSyncState>, state: Signal<AppState>) {
-    let Some(active) = sync.read().active.clone() else {
-        return;
-    };
-    let Some(session) = state.read().session.as_ref().map(|s| {
-        (
-            s.document_id,
-            s.revision,
-            s.document_id == active.document_id,
-        )
-    }) else {
-        return;
-    };
-    let (document_id, revision, same_document) = session;
-    if same_document {
-        sync.write()
-            .request_editor_refresh(active.editor_id, document_id, revision);
-    } else {
-        sync.write().clear_active();
-    }
+pub fn unmount_source_editor(mut sync: Signal<SourceSyncState>, handle: EditorMountHandle) {
+    sync.write().unmount(handle, now_ms());
 }
 
 impl std::fmt::Display for SourceSyncError {
@@ -372,23 +102,22 @@ impl std::fmt::Display for SourceSyncError {
         match self {
             Self::NoDocument => write!(f, "no document is open"),
             Self::ConflictPending => write!(f, "resolve the file conflict first"),
-            Self::NoActiveEditor => write!(f, "no active source editor is available"),
             Self::Busy => write!(f, "another source operation is still syncing"),
-            Self::EditorMismatch | Self::DocumentMismatch | Self::EpochMismatch => {
-                write!(f, "the source editor changed before the operation finished")
+            Self::RevisionDrift => {
+                write!(f, "the document changed before source sync finished")
             }
-            Self::RequestMismatch => write!(f, "the source sync response was stale"),
-            Self::StaleSeq => write!(f, "the source editor sent an old snapshot"),
-            Self::RevisionDrift => write!(f, "the document changed before source sync finished"),
             Self::CompositionActive => write!(f, "finish composing text before this action"),
-            Self::EditorUnavailable => write!(f, "the source editor is unavailable"),
+            Self::EditorUnavailable => write!(f, "the source editor is unavailable; retry"),
             Self::IdentityMismatch => write!(f, "the source editor identity did not match"),
-            Self::BridgeError => write!(f, "the source editor bridge failed"),
+            Self::UnsupportedVersion => {
+                write!(f, "the source editor bridge version is unsupported")
+            }
             Self::Timeout => write!(
                 f,
                 "the source editor did not respond; action was not completed"
             ),
-            Self::Store(err) => write!(f, "{err}"),
+            Self::Store(error) => write!(f, "{error}"),
+            Self::Transition(error) => write!(f, "source editor transition failed: {error:?}"),
         }
     }
 }
@@ -398,331 +127,7 @@ impl From<StoreError> for SourceSyncError {
         match value {
             StoreError::NoDocument => Self::NoDocument,
             StoreError::ConflictPending => Self::ConflictPending,
-            err => Self::Store(err),
+            error => Self::Store(error),
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct SourceSyncState {
-    pub active: Option<ActiveSourceEditor>,
-    pub pending: Option<PendingBarrier>,
-    pub refresh: Option<EditorRefreshRequest>,
-    next_epoch: u64,
-    next_request_id: u64,
-}
-
-impl Default for SourceSyncState {
-    fn default() -> Self {
-        Self {
-            active: None,
-            pending: None,
-            refresh: None,
-            next_epoch: 1,
-            next_request_id: 1,
-        }
-    }
-}
-
-impl SourceSyncState {
-    pub fn register_editor(
-        &mut self,
-        editor_id: SourceEditorId,
-        mode: EditorMode,
-        document_id: u64,
-        revision: u64,
-    ) -> ActiveSourceEditor {
-        let epoch = self.next_epoch;
-        self.next_epoch += 1;
-        let active = ActiveSourceEditor {
-            editor_id,
-            mode,
-            document_id,
-            epoch,
-            last_accepted_seq: 0,
-            last_accepted_revision: revision,
-            composing: false,
-        };
-        self.active = Some(active.clone());
-        crate::bridge::trace(
-            "source.register_editor",
-            format!(
-                "editor_id={editor_id:?} mode={mode:?} doc_id={document_id} revision={revision} epoch={epoch}"
-            ),
-        );
-        active
-    }
-
-    pub fn clear_active(&mut self) {
-        crate::bridge::trace(
-            "source.clear_active",
-            format!("active={:?} pending={:?}", self.active, self.pending),
-        );
-        self.active = None;
-        self.pending = None;
-    }
-
-    pub fn submit(
-        &mut self,
-        command: SourceCommand,
-        current_document_id: Option<u64>,
-        now_ms: u64,
-    ) -> SubmitOutcome {
-        if self.pending.is_some() {
-            crate::bridge::trace(
-                "source.submit.busy",
-                format!("command={command:?} pending={:?}", self.pending),
-            );
-            return SubmitOutcome::Busy;
-        }
-        let Some(active) = self.active.as_ref() else {
-            crate::bridge::trace(
-                "source.submit.no_active",
-                format!("command={command:?} document_id={current_document_id:?}"),
-            );
-            return SubmitOutcome::ExecuteNow(command);
-        };
-        if current_document_id != Some(active.document_id) {
-            crate::bridge::trace(
-                "source.submit.document_mismatch",
-                format!(
-                    "command={command:?} current_document_id={current_document_id:?} active_doc_id={}",
-                    active.document_id
-                ),
-            );
-            self.clear_active();
-            return SubmitOutcome::ExecuteNow(command);
-        }
-        let request = SnapshotRequest {
-            request_id: self.next_request_id,
-            editor_id: active.editor_id,
-            document_id: active.document_id,
-            epoch: active.epoch,
-            requested_at_ms: now_ms,
-        };
-        self.next_request_id += 1;
-        self.pending = Some(PendingBarrier {
-            command,
-            request: request.clone(),
-            sent_to_js: false,
-        });
-        crate::bridge::trace(
-            "source.submit.pending_created",
-            format!(
-                "request_id={} editor_id={:?} doc_id={} epoch={}",
-                request.request_id, request.editor_id, request.document_id, request.epoch
-            ),
-        );
-        SubmitOutcome::SnapshotRequested(request)
-    }
-
-    pub fn unsent_request_for(&self, editor_id: SourceEditorId) -> Option<SnapshotRequest> {
-        let pending = self.pending.as_ref()?;
-        if pending.sent_to_js || pending.request.editor_id != editor_id {
-            return None;
-        }
-        Some(pending.request.clone())
-    }
-
-    pub fn mark_request_sent(&mut self, request_id: u64) {
-        if let Some(pending) = self.pending.as_mut()
-            && pending.request.request_id == request_id
-        {
-            pending.sent_to_js = true;
-            crate::bridge::trace(
-                "source.mark_request_sent",
-                format!("request_id={request_id}"),
-            );
-        }
-    }
-
-    pub fn expire_pending(&mut self, now_ms: u64) -> Option<SourceCommand> {
-        let should_expire = self.pending.as_ref().is_some_and(|pending| {
-            now_ms.saturating_sub(pending.request.requested_at_ms) >= SNAPSHOT_TIMEOUT_MS
-        });
-        if should_expire {
-            crate::bridge::trace(
-                "source.expire_pending",
-                format!("pending={:?}", self.pending),
-            );
-            return self.pending.take().map(|pending| pending.command);
-        }
-        None
-    }
-
-    pub fn request_editor_refresh(
-        &mut self,
-        editor_id: SourceEditorId,
-        document_id: u64,
-        revision: u64,
-    ) -> EditorRefreshRequest {
-        let epoch = self.next_epoch;
-        self.next_epoch += 1;
-        let request = EditorRefreshRequest {
-            editor_id,
-            document_id,
-            revision,
-            epoch,
-        };
-        self.active = Some(ActiveSourceEditor {
-            editor_id,
-            mode: match editor_id {
-                SourceEditorId::Text => EditorMode::Text,
-                SourceEditorId::Split => EditorMode::Split,
-            },
-            document_id,
-            epoch,
-            last_accepted_seq: 0,
-            last_accepted_revision: revision,
-            composing: false,
-        });
-        self.refresh = Some(request.clone());
-        crate::bridge::trace(
-            "source.request_editor_refresh",
-            format!(
-                "editor_id={editor_id:?} doc_id={document_id} revision={revision} epoch={epoch}"
-            ),
-        );
-        request
-    }
-
-    pub fn pending_refresh_for(&self, editor_id: SourceEditorId) -> Option<EditorRefreshRequest> {
-        let request = self.refresh.as_ref()?;
-        if request.editor_id == editor_id {
-            Some(request.clone())
-        } else {
-            None
-        }
-    }
-
-    pub fn clear_refresh(&mut self, editor_id: SourceEditorId, epoch: u64) {
-        if self
-            .refresh
-            .as_ref()
-            .is_some_and(|request| request.editor_id == editor_id && request.epoch == epoch)
-        {
-            crate::bridge::trace(
-                "source.clear_refresh",
-                format!("editor_id={editor_id:?} epoch={epoch}"),
-            );
-            self.refresh = None;
-        }
-    }
-
-    pub fn handle_blocked(&mut self, blocked: SnapshotBlocked) -> Result<(), SourceSyncError> {
-        let pending = self
-            .pending
-            .as_ref()
-            .ok_or(SourceSyncError::RequestMismatch)?;
-        if pending.request.request_id != blocked.request_id {
-            return Err(SourceSyncError::RequestMismatch);
-        }
-        validate_identity(
-            self.active.as_ref(),
-            blocked.editor_id,
-            blocked.document_id,
-            blocked.epoch,
-        )?;
-        self.pending = None;
-        Err(match blocked.reason {
-            SnapshotBlockReason::CompositionActive => SourceSyncError::CompositionActive,
-            SnapshotBlockReason::EditorUnavailable => SourceSyncError::EditorUnavailable,
-            SnapshotBlockReason::IdentityMismatch => SourceSyncError::IdentityMismatch,
-            SnapshotBlockReason::BridgeError => SourceSyncError::BridgeError,
-        })
-    }
-
-    pub fn accept_snapshot(
-        &mut self,
-        app: &mut AppState,
-        snapshot: EditorSnapshot,
-        now_ms: u64,
-    ) -> Result<SnapshotOutcome, SourceSyncError> {
-        if snapshot.composing {
-            self.pending = None;
-            return Err(SourceSyncError::CompositionActive);
-        }
-        let active = match validate_identity(
-            self.active.as_ref(),
-            snapshot.editor_id,
-            snapshot.document_id,
-            snapshot.epoch,
-        ) {
-            Ok(active) => active,
-            Err(err) => {
-                self.pending = None;
-                return Err(err);
-            }
-        };
-        let completing_request = match snapshot.request_id {
-            Some(request_id) => {
-                let Some(pending) = self.pending.as_ref() else {
-                    return Err(SourceSyncError::RequestMismatch);
-                };
-                if pending.request.request_id != request_id {
-                    self.pending = None;
-                    return Err(SourceSyncError::RequestMismatch);
-                }
-                true
-            }
-            None => false,
-        };
-        if snapshot.seq <= active.last_accepted_seq && !completing_request {
-            self.pending = None;
-            return Err(SourceSyncError::StaleSeq);
-        }
-        let session = app.session.as_ref().ok_or(SourceSyncError::NoDocument)?;
-        if session.document_id != snapshot.document_id {
-            self.pending = None;
-            return Err(SourceSyncError::DocumentMismatch);
-        }
-        if session.revision != active.last_accepted_revision {
-            self.pending = None;
-            return Err(SourceSyncError::RevisionDrift);
-        }
-        let mut new_revision = active.last_accepted_revision;
-        if session.canonical_text != snapshot.text {
-            app.edit_text(active.last_accepted_revision, snapshot.text, now_ms)?;
-            new_revision = app
-                .session
-                .as_ref()
-                .map(|s| s.revision)
-                .ok_or(SourceSyncError::NoDocument)?;
-        }
-        let active = self
-            .active
-            .as_mut()
-            .ok_or(SourceSyncError::NoActiveEditor)?;
-        active.last_accepted_seq = snapshot.seq;
-        active.last_accepted_revision = new_revision;
-        active.composing = false;
-        if completing_request {
-            let pending = self
-                .pending
-                .take()
-                .ok_or(SourceSyncError::RequestMismatch)?;
-            Ok(SnapshotOutcome::Complete(pending.command))
-        } else {
-            Ok(SnapshotOutcome::Accepted)
-        }
-    }
-}
-
-fn validate_identity(
-    active: Option<&ActiveSourceEditor>,
-    editor_id: SourceEditorId,
-    document_id: u64,
-    epoch: u64,
-) -> Result<&ActiveSourceEditor, SourceSyncError> {
-    let active = active.ok_or(SourceSyncError::NoActiveEditor)?;
-    if active.editor_id != editor_id {
-        return Err(SourceSyncError::EditorMismatch);
-    }
-    if active.document_id != document_id {
-        return Err(SourceSyncError::DocumentMismatch);
-    }
-    if active.epoch != epoch {
-        return Err(SourceSyncError::EpochMismatch);
-    }
-    Ok(active)
 }

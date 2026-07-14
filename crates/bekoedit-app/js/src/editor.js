@@ -1,28 +1,7 @@
-/**
- * bekoedit CodeMirror 6 adapter (RFC-011).
- *
- * Exposes window.__bk:
- *   init(containerId, text, docId, revision, editorId, relayName, epoch)
- *   setDoc(text, docId, revision, epoch)      — external content update
- *   requestSnapshot(requestId, editorId, docId, epoch)
- *   focus()                                   — programmatic focus
- *
- * Sends to the active relay via window[relayName](JSON):
- *   {type:"change", editorId, docId, epoch, seq, text, composing}
- *   {type:"ready"}                            — editor mounted and ready
- *   {type:"scrollFraction", fraction}         — scroll position for Split sync
- *
- * IME composition safety (RFC-011 / MVP checklist):
- *   compositionstart → compositionActive = true; cancel pending timer
- *   compositionend   → compositionActive = false; flush immediately
- *   updateListener   → skips scheduling while compositionActive is true
- *
- * The Rust side owns authoritative revisions; JS revision fields are the
- * base the snapshot was taken from (RFC-011 snapshot strategy).
- */
+/** CodeMirror 6 protocol-v2 adapter for RFC-041. */
 
 import { EditorView, keymap, placeholder, drawSelection } from "@codemirror/view";
-import { EditorState, Transaction } from "@codemirror/state";
+import { EditorState } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { search, searchKeymap } from "@codemirror/search";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
@@ -33,64 +12,51 @@ import {
   indentOnInput,
 } from "@codemirror/language";
 
-// --- Editor state -----------------------------------------------------------
+import { BRIDGE_SCHEMA_VERSION, createLifecycleAdapter } from "./lifecycle.js";
+import { dispatchForRelayGeneration } from "./transport.js";
 
+const RELAY_NAME = "__bk_source_editor_relay";
 let view = null;
-let currentDocId = null;
-let currentEditorId = "text";
-let currentRelayName = "__bk_text_relay";
-let currentEpoch = 0;
-let seq = 0;
 let sendTimer = null;
-let skipNextSend = false;   // suppress send when Rust pushes setDoc
-let compositionActive = false; // true during CJK / IME composition
+let skipNextSend = false;
+let adapter = null;
 
-function sendToRust(payload) {
-  window[currentRelayName]?.(JSON.stringify(payload));
+function emit(payload) {
+  const relay = window[RELAY_NAME];
+  if (typeof relay !== "function") {
+    console.warn("bekoedit: source editor relay unavailable", payload.type);
+    return false;
+  }
+  relay(JSON.stringify(payload));
+  return true;
 }
 
-function trace(event, details = {}) {
-  sendToRust({
+function trace(name) {
+  const identity = adapter?.currentIdentity();
+  emit({
     type: "trace",
-    event,
-    editorId: currentEditorId,
-    docId: currentDocId,
-    epoch: currentEpoch,
-    details,
+    protocolVersion: BRIDGE_SCHEMA_VERSION,
+    instanceId: identity?.instanceId ?? null,
+    event: name,
   });
+}
+
+function cancelPendingChange() {
+  clearTimeout(sendTimer);
+  sendTimer = null;
 }
 
 function sendChange() {
-  if (!view || skipNextSend) {
-    trace("js.change.skipped", { hasView: Boolean(view), skipNextSend });
-    return;
-  }
-  const text = view.state.doc.toString();
-  seq += 1;
-  trace("js.change.send", { seq, length: text.length, composing: false });
-  sendToRust({
-    type: "change",
-    editorId: currentEditorId,
-    docId: currentDocId,
-    epoch: currentEpoch,
-    seq,
-    text,
-    composing: false,
-  });
+  sendTimer = null;
+  if (!view || skipNextSend) return;
+  adapter.publishChange(view.state.doc.toString());
 }
 
 function scheduleSend(immediate) {
-  clearTimeout(sendTimer);
-  // Never send during active IME composition — wait for compositionend.
-  if (compositionActive) {
-    trace("js.change.schedule.skipped_composition", { immediate });
-    return;
-  }
-  trace("js.change.schedule", { immediate });
+  cancelPendingChange();
+  if (!view || skipNextSend || adapter.isHeld()) return;
   sendTimer = setTimeout(sendChange, immediate ? 0 : 100);
 }
-
-// --- Theme ------------------------------------------------------------------
 
 const bekoeditTheme = EditorView.theme({
   "&": {
@@ -114,8 +80,6 @@ const bekoeditTheme = EditorView.theme({
   ".cm-foldPlaceholder": { backgroundColor: "#e7e3d8" },
 }, { dark: false });
 
-// --- Extensions -------------------------------------------------------------
-
 function buildExtensions() {
   return [
     history(),
@@ -133,150 +97,94 @@ function buildExtensions() {
     ]),
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     bekoeditTheme,
-    // Suppress sends during CJK/IME composition (RFC-011 IME safety).
+    EditorState.transactionFilter.of((transaction) => {
+      if (transaction.docChanged && adapter?.isHeld()) return [];
+      return transaction;
+    }),
     EditorView.domEventHandlers({
       compositionstart() {
-        compositionActive = true;
-        clearTimeout(sendTimer);
+        adapter.compositionStarted();
       },
       compositionend() {
-        compositionActive = false;
-        // Flush committed text immediately after composition finishes.
+        adapter.compositionEnded();
         scheduleSend(true);
+      },
+      scroll(_event, currentView) {
+        const scroller = currentView.scrollDOM;
+        const max = scroller.scrollHeight - scroller.clientHeight;
+        if (max > 0) emit({ type: "scroll", fraction: scroller.scrollTop / max });
       },
     }),
     EditorView.updateListener.of((update) => {
-      if (update.docChanged) {
-        scheduleSend(false);
-      }
-    }),
-    // Scroll-fraction reporter for Split Mode sync (RFC-012).
-    EditorView.domEventHandlers({
-      scroll(evt, view) {
-        const scroller = view.scrollDOM;
-        const max = scroller.scrollHeight - scroller.clientHeight;
-        if (max > 0) {
-          const fraction = scroller.scrollTop / max;
-          sendToRust({ type: "scroll", fraction });
-        }
-      },
+      if (update.docChanged && !skipNextSend) scheduleSend(false);
     }),
   ];
 }
 
-// --- Public API -------------------------------------------------------------
-
-function init(containerId, text, docId, revision, editorId = "text", relayName = "__bk_text_relay", epoch = 0) {
-  currentDocId = docId;
-  currentEditorId = editorId;
-  currentRelayName = relayName;
-  currentEpoch = epoch;
-  seq = 0;
-  compositionActive = false;
-  trace("js.init.start", { containerId, revision, length: text.length, relayName });
-
-  const parent = document.getElementById(containerId);
-  if (!parent) {
-    trace("js.init.container_missing", { containerId });
-    console.warn("bekoedit: container not found:", containerId);
-    return;
-  }
-
-  if (view) {
-    trace("js.init.destroy_previous", {});
-    view.destroy();
-    view = null;
-  }
-
-  view = new EditorView({
-    state: EditorState.create({ doc: text, extensions: buildExtensions() }),
-    parent,
-  });
-
-  trace("js.init.ready", { revision, length: text.length });
-  sendToRust({ type: "ready", editorId: currentEditorId, docId: currentDocId, epoch: currentEpoch });
-}
-
-function setDoc(text, docId, revision, epoch = currentEpoch) {
-  if (!view) {
-    trace("js.set_doc.skipped_no_view", { docId, revision, epoch });
-    return;
-  }
-
-  const isSameDoc = docId === currentDocId;
-  trace("js.set_doc.start", { docId, revision, epoch, isSameDoc, length: text.length });
-  currentDocId = docId;
-  currentEpoch = epoch;
-  seq = 0;
-  compositionActive = false; // external update always clears composition state
-
-  skipNextSend = true;
-  const current = view.state.doc.toString();
-  if (current !== text) {
-    if (isSameDoc) {
-      trace("js.set_doc.dispatch", { previousLength: current.length, length: text.length });
-      view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: text },
-        annotations: Transaction.userEvent.of("remote"),
-      });
-    } else {
-      trace("js.set_doc.set_state", { previousLength: current.length, length: text.length });
-      view.setState(EditorState.create({ doc: text, extensions: buildExtensions() }));
-    }
-  }
-  Promise.resolve().then(() => { skipNextSend = false; });
-}
-
-function requestSnapshot(requestId, editorId, docId, epoch) {
-  if (!view) {
-    trace("js.snapshot.blocked_no_view", { requestId, editorId, docId, epoch });
-    sendToRust({ type: "snapshotBlocked", requestId, editorId, docId, epoch, reason: "editorUnavailable" });
-    return;
-  }
-  if (editorId !== currentEditorId || docId !== currentDocId || epoch !== currentEpoch) {
-    trace("js.snapshot.blocked_identity", {
-      requestId,
-      editorId,
-      docId,
-      epoch,
-      currentEditorId,
-      currentDocId,
-      currentEpoch,
+adapter = createLifecycleAdapter({
+  emit,
+  getContainer: (containerId) => document.getElementById(containerId),
+  createView(parent, text) {
+    view = new EditorView({
+      state: EditorState.create({ doc: text, extensions: buildExtensions() }),
+      parent,
     });
-    sendToRust({ type: "snapshotBlocked", requestId, editorId, docId, epoch, reason: "identityMismatch" });
-    return;
+    return view;
+  },
+  destroyView(currentView) {
+    currentView.destroy();
+    if (view === currentView) view = null;
+  },
+  getText: (currentView) => currentView.state.doc.toString(),
+  replaceDocument(currentView, text) {
+    skipNextSend = true;
+    currentView.setState(EditorState.create({ doc: text, extensions: buildExtensions() }));
+    queueMicrotask(() => { skipNextSend = false; });
+  },
+  focusView: (currentView) => currentView.focus(),
+  cancelPendingChange,
+});
+
+function dispatch(request) {
+  try {
+    const parsed = typeof request === "string" ? JSON.parse(request) : request;
+    return adapter.dispatch(parsed);
+  } catch (_error) {
+    trace("js.dispatch.bridge_error");
+    return false;
   }
-  if (compositionActive) {
-    trace("js.snapshot.blocked_composition", { requestId, editorId, docId, epoch });
-    sendToRust({ type: "snapshotBlocked", requestId, editorId, docId, epoch, reason: "compositionActive" });
-    return;
-  }
-  clearTimeout(sendTimer);
-  seq += 1;
-  trace("js.snapshot.send", { requestId, seq, length: view.state.doc.length });
-  sendToRust({
-    type: "snapshot",
-    requestId,
-    editorId,
-    docId,
-    epoch,
-    seq,
-    text: view.state.doc.toString(),
-    composing: false,
-  });
 }
 
-function focus() { view?.focus(); }
+function dispatchForGeneration(request, generation) {
+  return dispatchForRelayGeneration(
+    window,
+    RELAY_NAME,
+    generation,
+    dispatch,
+    request,
+  );
+}
+
+function focus() { adapter.focus(); }
 
 function undo() {
-    if (!view) return;
-    import("@codemirror/commands").then(({ undo: _undo }) => _undo(view));
+  if (!view || adapter.isHeld()) return;
+  import("@codemirror/commands").then(({ undo: runUndo }) => runUndo(view));
 }
 
 function redo() {
-    if (!view) return;
-    import("@codemirror/commands").then(({ redo: _redo }) => _redo(view));
+  if (!view || adapter.isHeld()) return;
+  import("@codemirror/commands").then(({ redo: runRedo }) => runRedo(view));
 }
 
-window.__bk = { init, setDoc, requestSnapshot, focus, undo, redo, get _view() { return view; } };
-export { init, setDoc, requestSnapshot, focus, undo, redo };
+window.__bk = {
+  protocolVersion: BRIDGE_SCHEMA_VERSION,
+  dispatch,
+  dispatchForRelayGeneration: dispatchForGeneration,
+  focus,
+  undo,
+  redo,
+  get _view() { return view; },
+};
+
+export { BRIDGE_SCHEMA_VERSION, dispatch, focus, undo, redo };
