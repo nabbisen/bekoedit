@@ -49,10 +49,25 @@ function sendToRust(payload) {
   window[currentRelayName]?.(JSON.stringify(payload));
 }
 
+function trace(event, details = {}) {
+  sendToRust({
+    type: "trace",
+    event,
+    editorId: currentEditorId,
+    docId: currentDocId,
+    epoch: currentEpoch,
+    details,
+  });
+}
+
 function sendChange() {
-  if (!view || skipNextSend) return;
+  if (!view || skipNextSend) {
+    trace("js.change.skipped", { hasView: Boolean(view), skipNextSend });
+    return;
+  }
   const text = view.state.doc.toString();
   seq += 1;
+  trace("js.change.send", { seq, length: text.length, composing: false });
   sendToRust({
     type: "change",
     editorId: currentEditorId,
@@ -67,7 +82,11 @@ function sendChange() {
 function scheduleSend(immediate) {
   clearTimeout(sendTimer);
   // Never send during active IME composition — wait for compositionend.
-  if (compositionActive) return;
+  if (compositionActive) {
+    trace("js.change.schedule.skipped_composition", { immediate });
+    return;
+  }
+  trace("js.change.schedule", { immediate });
   sendTimer = setTimeout(sendChange, immediate ? 0 : 100);
 }
 
@@ -154,27 +173,38 @@ function init(containerId, text, docId, revision, editorId = "text", relayName =
   currentEpoch = epoch;
   seq = 0;
   compositionActive = false;
+  trace("js.init.start", { containerId, revision, length: text.length, relayName });
 
   const parent = document.getElementById(containerId);
   if (!parent) {
+    trace("js.init.container_missing", { containerId });
     console.warn("bekoedit: container not found:", containerId);
     return;
   }
 
-  if (view) { view.destroy(); view = null; }
+  if (view) {
+    trace("js.init.destroy_previous", {});
+    view.destroy();
+    view = null;
+  }
 
   view = new EditorView({
     state: EditorState.create({ doc: text, extensions: buildExtensions() }),
     parent,
   });
 
+  trace("js.init.ready", { revision, length: text.length });
   sendToRust({ type: "ready", editorId: currentEditorId, docId: currentDocId, epoch: currentEpoch });
 }
 
 function setDoc(text, docId, revision, epoch = currentEpoch) {
-  if (!view) return;
+  if (!view) {
+    trace("js.set_doc.skipped_no_view", { docId, revision, epoch });
+    return;
+  }
 
   const isSameDoc = docId === currentDocId;
+  trace("js.set_doc.start", { docId, revision, epoch, isSameDoc, length: text.length });
   currentDocId = docId;
   currentEpoch = epoch;
   seq = 0;
@@ -184,11 +214,13 @@ function setDoc(text, docId, revision, epoch = currentEpoch) {
   const current = view.state.doc.toString();
   if (current !== text) {
     if (isSameDoc) {
+      trace("js.set_doc.dispatch", { previousLength: current.length, length: text.length });
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: text },
         annotations: Transaction.userEvent.of("remote"),
       });
     } else {
+      trace("js.set_doc.set_state", { previousLength: current.length, length: text.length });
       view.setState(EditorState.create({ doc: text, extensions: buildExtensions() }));
     }
   }
@@ -197,19 +229,31 @@ function setDoc(text, docId, revision, epoch = currentEpoch) {
 
 function requestSnapshot(requestId, editorId, docId, epoch) {
   if (!view) {
+    trace("js.snapshot.blocked_no_view", { requestId, editorId, docId, epoch });
     sendToRust({ type: "snapshotBlocked", requestId, editorId, docId, epoch, reason: "editorUnavailable" });
     return;
   }
   if (editorId !== currentEditorId || docId !== currentDocId || epoch !== currentEpoch) {
+    trace("js.snapshot.blocked_identity", {
+      requestId,
+      editorId,
+      docId,
+      epoch,
+      currentEditorId,
+      currentDocId,
+      currentEpoch,
+    });
     sendToRust({ type: "snapshotBlocked", requestId, editorId, docId, epoch, reason: "identityMismatch" });
     return;
   }
   if (compositionActive) {
+    trace("js.snapshot.blocked_composition", { requestId, editorId, docId, epoch });
     sendToRust({ type: "snapshotBlocked", requestId, editorId, docId, epoch, reason: "compositionActive" });
     return;
   }
   clearTimeout(sendTimer);
   seq += 1;
+  trace("js.snapshot.send", { requestId, seq, length: view.state.doc.length });
   sendToRust({
     type: "snapshot",
     requestId,

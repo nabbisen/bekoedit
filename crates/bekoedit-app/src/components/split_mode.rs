@@ -60,7 +60,21 @@ enum SplitMsg {
     Scroll {
         fraction: f64,
     },
-    Ready,
+    Ready {
+        #[serde(rename = "editorId")]
+        editor_id: String,
+        #[serde(rename = "docId")]
+        doc_id: u64,
+        epoch: u64,
+    },
+    Trace {
+        event: String,
+        #[serde(rename = "editorId")]
+        editor_id: String,
+        #[serde(rename = "docId")]
+        doc_id: Option<u64>,
+        epoch: Option<u64>,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -95,14 +109,29 @@ pub fn SplitMode() -> Element {
         }
     };
 
+    use_drop(move || {
+        bridge::trace("split.drop", format!("doc_id={doc_id} revision={revision}"));
+    });
+
     // Init CM6 in the split container.
     let text_init = text.clone();
     use_effect(move || {
+        bridge::trace(
+            "split.init_effect.start",
+            format!(
+                "doc_id={doc_id} revision={revision} length={}",
+                text_init.len()
+            ),
+        );
         let active = source_sync.write().register_editor(
             SourceEditorId::Split,
             EditorMode::Split,
             doc_id,
             revision,
+        );
+        bridge::trace(
+            "split.init_effect.registered",
+            format!("doc_id={doc_id} revision={revision} epoch={}", active.epoch),
         );
         let js = format!(
             "if(window.__bk){{window.__bk.init({},{},{},{},{},{},{});}}",
@@ -114,15 +143,29 @@ pub fn SplitMode() -> Element {
             serde_json::to_string(SPLIT_RELAY).unwrap(),
             active.epoch,
         );
+        bridge::trace(
+            "split.init_effect.eval_init",
+            format!("doc_id={doc_id} revision={revision} epoch={}", active.epoch),
+        );
         document::eval(&js);
         cm_doc_id.set(doc_id);
         cm_revision.set(revision);
+        bridge::trace(
+            "split.init_effect.end",
+            format!("doc_id={doc_id} revision={revision} epoch={}", active.epoch),
+        );
     });
 
     // Push external revision changes into CM6.
     let text_sync = text.clone();
     use_effect(move || {
-        if *cm_doc_id.read() == doc_id && revision <= *cm_revision.read() + 1 {
+        let local = *cm_revision.read();
+        let same = *cm_doc_id.read() == doc_id;
+        bridge::trace(
+            "split.sync_effect.check",
+            format!("doc_id={doc_id} revision={revision} cm_revision={local} same={same}"),
+        );
+        if same && revision <= local + 1 {
             return;
         }
         let active = source_sync.write().register_editor(
@@ -138,6 +181,10 @@ pub fn SplitMode() -> Element {
             revision,
             active.epoch,
         );
+        bridge::trace(
+            "split.sync_effect.eval_set_doc",
+            format!("doc_id={doc_id} revision={revision} epoch={}", active.epoch),
+        );
         document::eval(&js);
         cm_doc_id.set(doc_id);
         cm_revision.set(revision);
@@ -149,6 +196,13 @@ pub fn SplitMode() -> Element {
             .read()
             .pending_refresh_for(SourceEditorId::Split);
         if let Some(request) = request {
+            bridge::trace(
+                "split.refresh_effect.eval_set_doc",
+                format!(
+                    "doc_id={} revision={} epoch={}",
+                    request.document_id, request.revision, request.epoch
+                ),
+            );
             let js = format!(
                 "if(window.__bk){{window.__bk.setDoc({},{},{},{});}}",
                 serde_json::to_string(&text_refresh).unwrap(),
@@ -168,6 +222,13 @@ pub fn SplitMode() -> Element {
     use_effect(move || {
         let request = source_sync.read().unsent_request_for(SourceEditorId::Split);
         if let Some(request) = request {
+            bridge::trace(
+                "split.snapshot_effect.eval_request",
+                format!(
+                    "request_id={} doc_id={} epoch={}",
+                    request.request_id, request.document_id, request.epoch
+                ),
+            );
             let js = format!(
                 "if(window.__bk){{window.__bk.requestSnapshot({},{},{},{});}}",
                 request.request_id,
@@ -183,7 +244,12 @@ pub fn SplitMode() -> Element {
     // Relay: receives CM6 changes AND scroll events.
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
         let relay_js = bridge::relay_js(SPLIT_RELAY);
+        bridge::trace("split.relay.install.start", format!("relay={SPLIT_RELAY}"));
         let mut relay = document::eval(&relay_js);
+        bridge::trace(
+            "split.relay.install.created",
+            format!("relay={SPLIT_RELAY}"),
+        );
         while let Ok(raw) = relay.recv().await {
             if let Ok(msg) = serde_json::from_value::<SplitMsg>(raw) {
                 match msg {
@@ -195,6 +261,13 @@ pub fn SplitMode() -> Element {
                         text: new_text,
                         composing,
                     } => {
+                        bridge::trace(
+                            "split.relay.change",
+                            format!(
+                                "editor_id={editor_id} doc_id={doc_id} epoch={epoch} seq={seq} composing={composing} length={}",
+                                new_text.len()
+                            ),
+                        );
                         handle_editor_snapshot(
                             source_sync,
                             app_state,
@@ -227,6 +300,13 @@ pub fn SplitMode() -> Element {
                         text,
                         composing,
                     } => {
+                        bridge::trace(
+                            "split.relay.snapshot",
+                            format!(
+                                "request_id={request_id} editor_id={editor_id} doc_id={doc_id} epoch={epoch} seq={seq} composing={composing} length={}",
+                                text.len()
+                            ),
+                        );
                         handle_editor_snapshot(
                             source_sync,
                             app_state,
@@ -256,17 +336,25 @@ pub fn SplitMode() -> Element {
                         doc_id,
                         epoch,
                         reason,
-                    } => handle_snapshot_blocked(
-                        source_sync,
-                        toasts,
-                        SnapshotBlocked {
-                            request_id,
-                            editor_id: parse_editor_id(&editor_id),
-                            document_id: doc_id,
-                            epoch,
-                            reason: reason.into(),
-                        },
-                    ),
+                    } => {
+                        bridge::trace(
+                            "split.relay.snapshot_blocked",
+                            format!(
+                                "request_id={request_id} editor_id={editor_id} doc_id={doc_id} epoch={epoch} reason={reason:?}"
+                            ),
+                        );
+                        handle_snapshot_blocked(
+                            source_sync,
+                            toasts,
+                            SnapshotBlocked {
+                                request_id,
+                                editor_id: parse_editor_id(&editor_id),
+                                document_id: doc_id,
+                                epoch,
+                                reason: reason.into(),
+                            },
+                        )
+                    }
                     SplitMsg::Scroll { fraction } => {
                         // Mirror fractional scroll position to the preview pane.
                         let js = format!(
@@ -282,7 +370,25 @@ pub fn SplitMode() -> Element {
                         );
                         document::eval(&js);
                     }
-                    SplitMsg::Ready => {}
+                    SplitMsg::Ready {
+                        editor_id,
+                        doc_id,
+                        epoch,
+                    } => bridge::trace(
+                        "split.relay.ready",
+                        format!("editor_id={editor_id} doc_id={doc_id} epoch={epoch}"),
+                    ),
+                    SplitMsg::Trace {
+                        event,
+                        editor_id,
+                        doc_id,
+                        epoch,
+                    } => bridge::trace(
+                        "split.relay.js_trace",
+                        format!(
+                            "event={event} editor_id={editor_id} doc_id={doc_id:?} epoch={epoch:?}"
+                        ),
+                    ),
                 }
             }
         }

@@ -115,6 +115,7 @@ pub fn App() -> Element {
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(250)).await;
             if sync_for_timeout.write().expire_pending(now_ms()).is_some() {
+                bridge::trace("app.source_sync.timeout", "");
                 crate::components::toast::push_toast(
                     &mut timeout_toasts,
                     crate::components::toast::ToastKind::Error,
@@ -186,6 +187,12 @@ pub fn App() -> Element {
     let has_recovery = !*recovery_dismissed.read() && has_pending_recovery(&state.read());
     let workspace_open = state.read().workspace.is_some() || state.read().session.is_some();
     let settings_open = *use_context::<Signal<bool>>().read();
+    bridge::trace(
+        "app.render",
+        format!(
+            "has_recovery={has_recovery} workspace_open={workspace_open} settings_open={settings_open}"
+        ),
+    );
 
     rsx! {
         document::Link { rel: "stylesheet", href: STYLE }
@@ -223,6 +230,10 @@ fn MainShell() -> Element {
     let backlinks_open = use_context::<Signal<bool>>(); // 5th
     let history_open = use_context::<Signal<bool>>(); // 6th
     let has_doc = state.read().session.is_some();
+    bridge::trace(
+        "main_shell.render",
+        format!("mode={mode:?} has_doc={has_doc} collapsed={collapsed}"),
+    );
 
     rsx! {
         div { class: "shell",

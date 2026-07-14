@@ -100,6 +100,7 @@ pub fn AppBar() -> Element {
                             class: "dropdown-item",
                             role: "menuitem",
                             onclick: move |_| {
+                                crate::bridge::trace("app_bar.new_file.click", "");
                                 menu_open.set(false);
                                 submit_source_command(
                                     source_sync,
@@ -150,6 +151,7 @@ pub fn AppBar() -> Element {
                             class: "dropdown-item",
                             role: "menuitem",
                             onclick: move |_| {
+                                crate::bridge::trace("app_bar.settings.click", "");
                                 menu_open.set(false);
                                 settings_open.set(true);
                             },

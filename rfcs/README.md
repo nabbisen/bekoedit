@@ -66,6 +66,7 @@ Resolved 2026-06-07 rather than renumbering the cross-referenced corpus.
 | RFC-032 | Performance optimization and incremental parsing | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | Plugin system evaluation | Future evaluation only |
 | RFC-040 | Sync and collaboration evaluation | Future evaluation only |
+| RFC-041 | [Source editor lifecycle and synchronization controller](proposed/RFC-041-source-editor-lifecycle-and-synchronization-controller.md) | Critical incident design; implementation blocked pending architecture review |
 
 ## Implemented — v0.3.0 (`done/`)
 

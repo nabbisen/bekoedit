@@ -7,6 +7,15 @@
 //! - Embeds the BRIDGE_SCHEMA_VERSION so the JS side can detect mismatches.
 
 use bekoedit_ui_contract::BRIDGE_SCHEMA_VERSION;
+use std::fmt::Display;
+
+const SOURCE_TRACE_ENV: &str = "BEKOEDIT_SOURCE_TRACE";
+
+pub fn trace(event: &str, details: impl Display) {
+    if std::env::var_os(SOURCE_TRACE_ENV).is_some() {
+        eprintln!("[bekoedit-source-trace] {event} {details}");
+    }
+}
 
 /// JavaScript that installs a named relay function and keeps the eval
 /// context alive. `relay_name` is the `window` property to set

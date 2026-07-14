@@ -150,13 +150,28 @@ pub fn submit_source_command(
     command: SourceCommand,
 ) {
     let document_id = state.read().session.as_ref().map(|s| s.document_id);
+    crate::bridge::trace(
+        "source.submit_source_command",
+        format!("command={command:?} document_id={document_id:?}"),
+    );
     let outcome = sync.write().submit(command, document_id, now_ms());
     match outcome {
         SubmitOutcome::ExecuteNow(command) => {
+            crate::bridge::trace(
+                "source.submit_source_command.execute_now",
+                format!("command={command:?}"),
+            );
             execute_source_command(sync, state, mode, toasts, command);
         }
-        SubmitOutcome::SnapshotRequested(_) => {}
+        SubmitOutcome::SnapshotRequested(request) => crate::bridge::trace(
+            "source.submit_source_command.snapshot_requested",
+            format!(
+                "request_id={} editor_id={:?} doc_id={} epoch={}",
+                request.request_id, request.editor_id, request.document_id, request.epoch
+            ),
+        ),
         SubmitOutcome::Busy => {
+            crate::bridge::trace("source.submit_source_command.busy", "");
             let mut toasts = toasts;
             push_toast(
                 &mut toasts,
@@ -174,16 +189,39 @@ pub fn handle_editor_snapshot(
     toasts: Signal<Vec<Toast>>,
     snapshot: EditorSnapshot,
 ) {
+    crate::bridge::trace(
+        "source.handle_editor_snapshot.start",
+        format!(
+            "request_id={:?} editor_id={:?} doc_id={} epoch={} seq={} composing={} length={}",
+            snapshot.request_id,
+            snapshot.editor_id,
+            snapshot.document_id,
+            snapshot.epoch,
+            snapshot.seq,
+            snapshot.composing,
+            snapshot.text.len()
+        ),
+    );
     let result = {
         let mut app = state.write();
         sync.write().accept_snapshot(&mut app, snapshot, now_ms())
     };
     match result {
-        Ok(SnapshotOutcome::Accepted) => {}
+        Ok(SnapshotOutcome::Accepted) => {
+            crate::bridge::trace("source.handle_editor_snapshot.accepted", "");
+        }
         Ok(SnapshotOutcome::Complete(command)) => {
+            crate::bridge::trace(
+                "source.handle_editor_snapshot.complete",
+                format!("command={command:?}"),
+            );
             execute_source_command(sync, state, mode, toasts, command);
         }
         Err(err) => {
+            crate::bridge::trace(
+                "source.handle_editor_snapshot.error",
+                format!("error={err:?}"),
+            );
             let mut toasts = toasts;
             push_toast(&mut toasts, ToastKind::Error, err.to_string());
         }
@@ -195,10 +233,25 @@ pub fn handle_snapshot_blocked(
     mut toasts: Signal<Vec<Toast>>,
     blocked: SnapshotBlocked,
 ) {
+    crate::bridge::trace(
+        "source.handle_snapshot_blocked.start",
+        format!(
+            "request_id={} editor_id={:?} doc_id={} epoch={} reason={:?}",
+            blocked.request_id,
+            blocked.editor_id,
+            blocked.document_id,
+            blocked.epoch,
+            blocked.reason
+        ),
+    );
     let err = match sync.write().handle_blocked(blocked) {
         Ok(()) => return,
         Err(err) => err,
     };
+    crate::bridge::trace(
+        "source.handle_snapshot_blocked.error",
+        format!("error={err:?}"),
+    );
     push_toast(&mut toasts, ToastKind::Error, err.to_string());
 }
 
@@ -209,6 +262,10 @@ pub fn execute_source_command(
     mut toasts: Signal<Vec<Toast>>,
     command: SourceCommand,
 ) {
+    crate::bridge::trace(
+        "source.execute_command.start",
+        format!("command={command:?}"),
+    );
     let result = match command {
         SourceCommand::SwitchMode(target) => {
             sync.write().clear_active();
@@ -271,9 +328,18 @@ pub fn execute_source_command(
     };
 
     match result {
-        Ok(Some((kind, message))) => push_toast(&mut toasts, kind, message),
-        Ok(None) => {}
-        Err(err) => push_toast(&mut toasts, ToastKind::Error, err.to_string()),
+        Ok(Some((kind, message))) => {
+            crate::bridge::trace(
+                "source.execute_command.toast",
+                format!("kind={kind:?} message={message}"),
+            );
+            push_toast(&mut toasts, kind, message)
+        }
+        Ok(None) => crate::bridge::trace("source.execute_command.ok", ""),
+        Err(err) => {
+            crate::bridge::trace("source.execute_command.error", format!("error={err:?}"));
+            push_toast(&mut toasts, ToastKind::Error, err.to_string())
+        }
     }
 }
 
@@ -376,10 +442,20 @@ impl SourceSyncState {
             composing: false,
         };
         self.active = Some(active.clone());
+        crate::bridge::trace(
+            "source.register_editor",
+            format!(
+                "editor_id={editor_id:?} mode={mode:?} doc_id={document_id} revision={revision} epoch={epoch}"
+            ),
+        );
         active
     }
 
     pub fn clear_active(&mut self) {
+        crate::bridge::trace(
+            "source.clear_active",
+            format!("active={:?} pending={:?}", self.active, self.pending),
+        );
         self.active = None;
         self.pending = None;
     }
@@ -391,12 +467,27 @@ impl SourceSyncState {
         now_ms: u64,
     ) -> SubmitOutcome {
         if self.pending.is_some() {
+            crate::bridge::trace(
+                "source.submit.busy",
+                format!("command={command:?} pending={:?}", self.pending),
+            );
             return SubmitOutcome::Busy;
         }
         let Some(active) = self.active.as_ref() else {
+            crate::bridge::trace(
+                "source.submit.no_active",
+                format!("command={command:?} document_id={current_document_id:?}"),
+            );
             return SubmitOutcome::ExecuteNow(command);
         };
         if current_document_id != Some(active.document_id) {
+            crate::bridge::trace(
+                "source.submit.document_mismatch",
+                format!(
+                    "command={command:?} current_document_id={current_document_id:?} active_doc_id={}",
+                    active.document_id
+                ),
+            );
             self.clear_active();
             return SubmitOutcome::ExecuteNow(command);
         }
@@ -413,6 +504,13 @@ impl SourceSyncState {
             request: request.clone(),
             sent_to_js: false,
         });
+        crate::bridge::trace(
+            "source.submit.pending_created",
+            format!(
+                "request_id={} editor_id={:?} doc_id={} epoch={}",
+                request.request_id, request.editor_id, request.document_id, request.epoch
+            ),
+        );
         SubmitOutcome::SnapshotRequested(request)
     }
 
@@ -429,6 +527,10 @@ impl SourceSyncState {
             && pending.request.request_id == request_id
         {
             pending.sent_to_js = true;
+            crate::bridge::trace(
+                "source.mark_request_sent",
+                format!("request_id={request_id}"),
+            );
         }
     }
 
@@ -437,6 +539,10 @@ impl SourceSyncState {
             now_ms.saturating_sub(pending.request.requested_at_ms) >= SNAPSHOT_TIMEOUT_MS
         });
         if should_expire {
+            crate::bridge::trace(
+                "source.expire_pending",
+                format!("pending={:?}", self.pending),
+            );
             return self.pending.take().map(|pending| pending.command);
         }
         None
@@ -469,6 +575,12 @@ impl SourceSyncState {
             composing: false,
         });
         self.refresh = Some(request.clone());
+        crate::bridge::trace(
+            "source.request_editor_refresh",
+            format!(
+                "editor_id={editor_id:?} doc_id={document_id} revision={revision} epoch={epoch}"
+            ),
+        );
         request
     }
 
@@ -487,6 +599,10 @@ impl SourceSyncState {
             .as_ref()
             .is_some_and(|request| request.editor_id == editor_id && request.epoch == epoch)
         {
+            crate::bridge::trace(
+                "source.clear_refresh",
+                format!("editor_id={editor_id:?} epoch={epoch}"),
+            );
             self.refresh = None;
         }
     }
