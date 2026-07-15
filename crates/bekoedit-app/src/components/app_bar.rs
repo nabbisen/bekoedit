@@ -9,9 +9,14 @@ use dioxus::prelude::*;
 use bekoedit_core::AppState;
 use bekoedit_ui_contract::EditorMode;
 
+use crate::components::icons::{FolderIcon, NewFileIcon};
 use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
-use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
+use crate::source_sync::{
+    SourceCommand, SourceInteractionOrigin, SourceSyncState, cancel_source_focus,
+    submit_source_command, submit_source_interaction,
+};
+use crate::state::{OpenMenu, OpenMenuState};
 
 #[component]
 pub fn AppBar() -> Element {
@@ -19,11 +24,11 @@ pub fn AppBar() -> Element {
     let mode_sig = use_context::<Signal<EditorMode>>();
     let source_sync = use_context::<Signal<SourceSyncState>>();
     let toasts = use_context::<Signal<Vec<Toast>>>();
-    let mut lang_sig = use_context::<Signal<Lang>>();
-    let ui_lang = *lang_sig.read();
-    let mut menu_open = use_signal(|| false);
+    let ui_lang = *use_context::<Signal<Lang>>().read();
+    let mut open_menu = use_context::<OpenMenuState>().0;
 
     let has_workspace = state.read().workspace.is_some();
+    let menu_open = *open_menu.read() == OpenMenu::App;
 
     rsx! {
         header { class: "app-bar",
@@ -32,8 +37,7 @@ pub fn AppBar() -> Element {
                 class: "app-bar-logo",
                 title: tr(ui_lang, "app.title"),
                 onclick: move |_| {
-                    let o = *menu_open.read();
-                    if o { menu_open.set(false); }
+                    open_menu.set(OpenMenu::None);
                     submit_source_command(
                         source_sync,
                         state,
@@ -48,19 +52,25 @@ pub fn AppBar() -> Element {
             div { class: "app-bar-spacer" }
 
             // ── Single overflow menu ─────────────────────────────────────
-            div { class: "app-bar-menu-wrap",
+            div {
+                class: "app-bar-menu-wrap",
+                onclick: move |event| event.stop_propagation(),
+                onfocusin: move |event| event.stop_propagation(),
                 button {
-                    class: if *menu_open.read() { "app-bar-btn active" } else { "app-bar-btn" },
+                    class: if menu_open { "app-bar-btn active" } else { "app-bar-btn" },
                     aria_label: "Menu",
                     aria_haspopup: "menu",
-                    aria_expanded: "{*menu_open.read()}",
+                    aria_expanded: "{menu_open}",
                     onclick: move |_| {
-                        let cur = *menu_open.read();
-                        menu_open.set(!cur);
+                        open_menu.set(if *open_menu.read() == OpenMenu::App {
+                            OpenMenu::None
+                        } else {
+                            OpenMenu::App
+                        });
                     },
                     "⋯"
                 }
-                if *menu_open.read() {
+                if menu_open {
                     div {
                         class: "app-bar-dropdown",
                         role: "menu",
@@ -71,7 +81,8 @@ pub fn AppBar() -> Element {
                             class: "dropdown-item",
                             role: "menuitem",
                             onclick: move |_| {
-                                menu_open.set(false);
+                                cancel_source_focus(source_sync);
+                                open_menu.set(OpenMenu::None);
                                 let st = state;
                                 let sync = source_sync;
                                 let mode = mode_sig;
@@ -91,25 +102,27 @@ pub fn AppBar() -> Element {
                                     }
                                 });
                             },
-                            "📂  " {tr(ui_lang, "start.open_folder")}
+                            FolderIcon {} {tr(ui_lang, "start.open_folder")}
                         }
 
                         // New File
                         button {
                             class: "dropdown-item",
+                            "data-source-focus-launch": "appbar-new",
                             role: "menuitem",
                             onclick: move |_| {
                                 crate::bridge::trace("app_bar.new_file.click", "");
-                                menu_open.set(false);
-                                submit_source_command(
+                                submit_source_interaction(
                                     source_sync,
                                     state,
                                     mode_sig,
                                     toasts,
                                     SourceCommand::NewUntitled,
+                                    SourceInteractionOrigin::removable_menu_control("appbar-new"),
+                                    move || open_menu.set(OpenMenu::None),
                                 );
                             },
-                            "📝  " {tr(ui_lang, "start.new_file")}
+                            NewFileIcon {} {tr(ui_lang, "start.new_file")}
                         }
 
                         // Close Workspace (only when one is open)
@@ -119,7 +132,7 @@ pub fn AppBar() -> Element {
                                 class: "dropdown-item",
                                 role: "menuitem",
                                 onclick: move |_| {
-                                    menu_open.set(false);
+                                    open_menu.set(OpenMenu::None);
                                     submit_source_command(
                                         source_sync,
                                         state,
@@ -134,24 +147,13 @@ pub fn AppBar() -> Element {
 
                         hr { class: "dropdown-sep" }
 
-                        // Language
-                        button {
-                            class: "dropdown-item",
-                            role: "menuitem",
-                            onclick: move |_| {
-                                menu_open.set(false);
-                                lang_sig.set(if ui_lang == Lang::En { Lang::Ja } else { Lang::En });
-                            },
-                            "🌐  " {tr(ui_lang, "lang.switch")}
-                        }
-
                         // Settings
                         button {
                             class: "dropdown-item",
                             role: "menuitem",
                             onclick: move |_| {
                                 crate::bridge::trace("app_bar.settings.click", "");
-                                menu_open.set(false);
+                                open_menu.set(OpenMenu::None);
                                 submit_source_command(
                                     source_sync,
                                     state,

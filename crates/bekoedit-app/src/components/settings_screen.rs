@@ -6,10 +6,11 @@ use bekoedit_ui_contract::EditorMode;
 
 use crate::i18n::{Lang, tr};
 use crate::settings::AppSettings;
+use crate::state::SettingsOpen;
 
 #[component]
 pub fn SettingsScreen() -> Element {
-    let mut settings_open = use_context::<Signal<bool>>();
+    let mut settings_open = use_context::<SettingsOpen>().0;
     let mut lang_signal = use_context::<Signal<Lang>>();
     let mut mode_signal = use_context::<Signal<EditorMode>>();
     let lang = *lang_signal.read();

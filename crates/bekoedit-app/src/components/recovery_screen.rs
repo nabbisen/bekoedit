@@ -67,6 +67,9 @@ pub fn RecoveryScreen(mut dismissed: Signal<bool>) -> Element {
                                         let path = snap.original_path.clone();
                                         move |_| {
                                             let _ = state.write().recovery.remove(&path);
+                                            if state.read().recovery.list().is_empty() {
+                                                dismissed.set(true);
+                                            }
                                         }
                                     },
                                     {tr(lang, "recovery.discard")}

@@ -7,6 +7,7 @@ pub mod editor_header;
 pub mod explorer;
 pub mod form_mode;
 pub mod history_panel;
+pub mod icons;
 pub mod outline_panel;
 pub mod preview_mode;
 pub mod recovery_screen;

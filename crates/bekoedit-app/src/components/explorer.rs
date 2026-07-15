@@ -19,9 +19,12 @@ use dioxus_swdir_tree::{DirectoryTree, ThreadExecutor, use_scan_driver};
 use bekoedit_core::AppState;
 use bekoedit_ui_contract::EditorMode;
 
-use crate::components::toast::Toast;
+use crate::components::{search_panel::SearchPanel, toast::Toast};
 use crate::i18n::{Lang, tr};
-use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
+use crate::source_sync::{
+    SourceCommand, SourceSyncState, cancel_source_focus, submit_source_command,
+};
+use crate::state::{BacklinksOpen, HistoryOpen, OpenMenu, OpenMenuState, OutlineOpen, SearchOpen};
 
 use dioxus_swdir_tree::{ScanRequest, TreeNode};
 
@@ -32,6 +35,11 @@ pub fn Explorer() -> Element {
     let source_sync = use_context::<Signal<SourceSyncState>>();
     let ui_lang = *use_context::<Signal<Lang>>().read();
     let toasts = use_context::<Signal<Vec<Toast>>>();
+    let mut search_open = use_context::<SearchOpen>().0;
+    let mut outline_open = use_context::<OutlineOpen>().0;
+    let mut backlinks_open = use_context::<BacklinksOpen>().0;
+    let mut history_open = use_context::<HistoryOpen>().0;
+    let mut open_menu = use_context::<OpenMenuState>().0;
 
     let root = state.read().workspace.as_ref().map(|w| w.root_path.clone());
     let Some(root_path) = root else {
@@ -106,6 +114,21 @@ pub fn Explorer() -> Element {
             // ── Toolbar ──────────────────────────────────────────────────
             div { class: "explorer-toolbar",
                 button {
+                    class: if *search_open.read() { "explorer-tool-btn active" } else { "explorer-tool-btn" },
+                    aria_label: tr(ui_lang, "search.label"),
+                    onclick: move |_| {
+                        cancel_source_focus(source_sync);
+                        let next = !*search_open.read();
+                        search_open.set(next);
+                        outline_open.set(false);
+                        backlinks_open.set(false);
+                        history_open.set(false);
+                        open_menu.set(OpenMenu::None);
+                    },
+                    {tr(ui_lang, "search.label")}
+                }
+                div { class: "explorer-toolbar-spacer" }
+                button {
                     class: "icon-btn",
                     title: tr(ui_lang, "explorer.new_file"),
                     onclick: move |_| { let v = *show_new.read(); show_new.set(!v); },
@@ -114,6 +137,10 @@ pub fn Explorer() -> Element {
             }
 
             // ── New-file form ─────────────────────────────────────────────
+            if *search_open.read() {
+                SearchPanel {}
+            }
+
             if *show_new.read() {
                 div { class: "new-file-row",
                     input {
@@ -202,11 +229,14 @@ fn TreeRowItem(props: TreeRowItemProps) -> Element {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| node.path.display().to_string());
 
+    let is_openable = is_dir || bekoedit_fs::paths::is_markdown_path(&path);
     let (icon, row_class) = if is_dir {
         let arrow = if node.is_expanded { "▾" } else { "▸" };
         (arrow, "tree-row tree-dir")
-    } else {
+    } else if is_openable {
         ("·", "tree-row tree-file")
+    } else {
+        ("·", "tree-row tree-file disabled")
     };
 
     rsx! {
@@ -215,12 +245,14 @@ fn TreeRowItem(props: TreeRowItemProps) -> Element {
             style: "padding-left: {indent_px}px",
             role: "treeitem",
             aria_expanded: if is_dir { "{node.is_expanded}" } else { "false" },
+            aria_disabled: "{!is_openable}",
+            title: "{name}",
             onclick: move |_| {
                 if is_dir {
                     if let Some(req) = tree_sig.write().on_toggled(&path) {
                         scan_ch.send(req);
                     }
-                } else {
+                } else if is_openable {
                     let rel = path.strip_prefix(&root)
                         .map(|r| r.to_path_buf())
                         .unwrap_or_else(|_| path.clone());

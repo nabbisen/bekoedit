@@ -19,6 +19,10 @@ pub fn PreviewMode() -> Element {
         .unwrap_or_default();
 
     rsx! {
-        article { class: "preview", dangerous_inner_html: "{html}" }
+        article {
+            class: "preview",
+            "data-source-focus-launch-region": "preview",
+            dangerous_inner_html: "{html}",
+        }
     }
 }

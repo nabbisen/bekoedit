@@ -12,11 +12,16 @@ use crate::state::now_ms;
 
 mod commands;
 mod controller;
+mod focus;
 pub mod host;
 pub mod lifecycle;
 
 pub use bekoedit_ui_contract::source_editor::SourceEditorId;
 pub use controller::{EditorMountHandle, MountOutcome, SourceSyncState, SubmitOutcome};
+pub use focus::{
+    SourceInteractionOrigin, cancel_source_focus, submit_source_interaction,
+    submit_source_shortcut_interaction,
+};
 pub use lifecycle::MountIntent;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,15 +58,32 @@ pub fn submit_source_command(
     mut sync: Signal<SourceSyncState>,
     state: Signal<AppState>,
     _mode: Signal<EditorMode>,
+    toasts: Signal<Vec<Toast>>,
+    command: SourceCommand,
+) -> SubmitOutcome {
+    if let Some(token) = sync.write().cancel_focus_interactions() {
+        focus::cancel_focus_guards_through(token);
+    }
+    submit_source_command_preserving_focus(sync, state, _mode, toasts, command, None)
+}
+
+fn submit_source_command_preserving_focus(
+    mut sync: Signal<SourceSyncState>,
+    state: Signal<AppState>,
+    _mode: Signal<EditorMode>,
     mut toasts: Signal<Vec<Toast>>,
     command: SourceCommand,
-) {
+    focus_token: Option<u64>,
+) -> SubmitOutcome {
     let document_id = state
         .read()
         .session
         .as_ref()
         .map(|session| session.document_id);
-    match sync.write().submit(command, document_id, now_ms()) {
+    let outcome = sync
+        .write()
+        .submit_with_focus(command, document_id, now_ms(), focus_token);
+    match outcome {
         SubmitOutcome::NoOp
         | SubmitOutcome::ExecuteQueued
         | SubmitOutcome::SnapshotRequested(_)
@@ -75,6 +97,7 @@ pub fn submit_source_command(
             SourceSyncError::EditorUnavailable.to_string(),
         ),
     }
+    outcome
 }
 
 pub fn mount_source_editor(

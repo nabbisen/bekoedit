@@ -1,6 +1,6 @@
 use bekoedit_core::AppState;
 use bekoedit_ui_contract::source_editor::{
-    EditorInstanceId, OperationId, SourceEditorEvent, SourceEditorId,
+    EditorIdentity, EditorInstanceId, OperationId, SourceEditorEvent, SourceEditorId,
 };
 
 use super::lifecycle::{
@@ -9,13 +9,48 @@ use super::lifecycle::{
 };
 use super::{SourceCommand, SourceSyncError};
 
+const MAX_JAVASCRIPT_FOCUS_TOKEN: u64 = 9_007_199_254_740_991;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ControllerAction {
     Lifecycle(LifecycleEffect),
     Execute {
         command: SourceCommand,
         protected: bool,
+        focus_token: Option<u64>,
     },
+    Focus {
+        token: u64,
+        identity: EditorIdentity,
+        fingerprint: String,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusResolution {
+    Armed,
+    ProceedWithoutFocus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusClaim {
+    Claimed,
+    Stale,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FocusInteraction {
+    token: u64,
+    target: SourceEditorId,
+    fingerprint: String,
+    command_executed: bool,
+    result_document_id: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PendingCommand {
+    command: SourceCommand,
+    focus_token: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,10 +95,14 @@ pub enum TickOutcome {
 pub struct SourceSyncState {
     pub lifecycle: LifecycleReducer,
     actions: Vec<ControllerAction>,
-    waiting_command: Option<SourceCommand>,
+    waiting_command: Option<PendingCommand>,
+    protected_focus_token: Option<u64>,
     bundle_probe_started: bool,
     expected_relay_generation: Option<u64>,
     relay_generation: Option<u64>,
+    next_focus_token: u64,
+    provisional_focus: Option<FocusInteraction>,
+    pending_focus: Option<FocusInteraction>,
 }
 
 impl SourceSyncState {
@@ -116,6 +155,7 @@ impl SourceSyncState {
 
     pub fn force_unmount(&mut self, now_ms: u64) {
         self.waiting_command = None;
+        self.protected_focus_token = None;
         if let Ok(Some(effect)) = self.lifecycle.begin_unmount(now_ms) {
             self.push_effect(effect);
         }
@@ -123,6 +163,9 @@ impl SourceSyncState {
 
     pub fn shutdown(&mut self, now_ms: u64) -> Option<LifecycleEffect> {
         self.waiting_command = None;
+        self.protected_focus_token = None;
+        self.provisional_focus = None;
+        self.pending_focus = None;
         self.actions.clear();
         self.lifecycle.begin_unmount(now_ms).ok().flatten()
     }
@@ -133,6 +176,16 @@ impl SourceSyncState {
         current_document_id: Option<u64>,
         now_ms: u64,
     ) -> SubmitOutcome {
+        self.submit_with_focus(command, current_document_id, now_ms, None)
+    }
+
+    pub fn submit_with_focus(
+        &mut self,
+        command: SourceCommand,
+        current_document_id: Option<u64>,
+        now_ms: u64,
+        focus_token: Option<u64>,
+    ) -> SubmitOutcome {
         if self.is_same_source_mode(&command) {
             return SubmitOutcome::NoOp;
         }
@@ -141,6 +194,7 @@ impl SourceSyncState {
                 self.actions.push(ControllerAction::Execute {
                     command,
                     protected: false,
+                    focus_token,
                 });
                 SubmitOutcome::ExecuteQueued
             }
@@ -149,6 +203,7 @@ impl SourceSyncState {
             {
                 match self.lifecycle.begin_snapshot(command, now_ms) {
                     Ok(effect @ LifecycleEffect::RequestSnapshot(_, operation_id)) => {
+                        self.protected_focus_token = focus_token;
                         self.push_effect(effect);
                         SubmitOutcome::SnapshotRequested(operation_id)
                     }
@@ -158,17 +213,18 @@ impl SourceSyncState {
             LifecycleState::Mounting { ref intent, .. }
                 if current_document_id == Some(intent.document_id) =>
             {
-                self.queue_for_mount(command)
+                self.queue_for_mount(command, focus_token)
             }
             LifecycleState::Initializing { identity, .. }
                 if current_document_id == Some(identity.document_id) =>
             {
-                self.queue_for_mount(command)
+                self.queue_for_mount(command, focus_token)
             }
             LifecycleState::Unavailable { retired: None } => {
                 self.actions.push(ControllerAction::Execute {
                     command,
                     protected: false,
+                    focus_token,
                 });
                 SubmitOutcome::ExecuteQueued
             }
@@ -208,9 +264,11 @@ impl SourceSyncState {
                 self.lifecycle.handle_relay_event(&event, now_ms)?;
                 Err(reason.into())
             }
-            event @ SourceEditorEvent::EditorReady { .. } => {
+            event @ SourceEditorEvent::EditorReady { identity, .. } => {
+                let ready_identity = identity;
                 self.lifecycle.handle_init_event(&event)?;
                 self.start_waiting_command(now_ms);
+                self.queue_ready_focus(ready_identity);
                 Ok(())
             }
             event @ SourceEditorEvent::InitFailed { reason, .. } => {
@@ -258,6 +316,7 @@ impl SourceSyncState {
         })();
         if matches!(self.lifecycle.state, LifecycleState::Unavailable { .. }) {
             self.waiting_command = None;
+            self.protected_focus_token = None;
         }
         match result {
             Ok(()) => Ok(EventOutcome::Applied),
@@ -303,6 +362,7 @@ impl SourceSyncState {
         }
         if matches!(self.lifecycle.state, LifecycleState::Unavailable { .. }) {
             self.waiting_command = None;
+            self.protected_focus_token = None;
         }
         Ok(if takeover {
             TickOutcome::TakeoverStarted
@@ -344,11 +404,112 @@ impl SourceSyncState {
         !self.actions.is_empty()
     }
 
-    fn queue_for_mount(&mut self, command: SourceCommand) -> SubmitOutcome {
+    pub fn allocate_focus_interaction(
+        &mut self,
+        target: SourceEditorId,
+        fingerprint: String,
+    ) -> Option<(u64, Option<u64>)> {
+        let token = self.next_focus_token.checked_add(1)?;
+        if token > MAX_JAVASCRIPT_FOCUS_TOKEN {
+            return None;
+        }
+        let superseded = self
+            .provisional_focus
+            .take()
+            .or_else(|| self.pending_focus.take())
+            .map(|focus| focus.token);
+        self.next_focus_token = token;
+        self.provisional_focus = Some(FocusInteraction {
+            token,
+            target,
+            fingerprint,
+            command_executed: false,
+            result_document_id: None,
+        });
+        Some((token, superseded))
+    }
+
+    pub fn claim_focus_interaction(
+        &mut self,
+        token: u64,
+        resolution: FocusResolution,
+    ) -> FocusClaim {
+        let Some(interaction) = self.provisional_focus.take_if(|item| item.token == token) else {
+            return FocusClaim::Stale;
+        };
+        if resolution == FocusResolution::Armed {
+            self.pending_focus = Some(interaction);
+        }
+        FocusClaim::Claimed
+    }
+
+    pub fn cancel_focus_interactions(&mut self) -> Option<u64> {
+        let provisional = self.provisional_focus.take().map(|item| item.token);
+        let pending = self.pending_focus.take().map(|item| item.token);
+        provisional.into_iter().chain(pending).max()
+    }
+
+    pub fn cancel_focus_token(&mut self, token: u64) -> bool {
+        let mut cancelled = false;
+        if self
+            .provisional_focus
+            .as_ref()
+            .is_some_and(|item| item.token == token)
+        {
+            self.provisional_focus = None;
+            cancelled = true;
+        }
+        if self
+            .pending_focus
+            .as_ref()
+            .is_some_and(|item| item.token == token)
+        {
+            self.pending_focus = None;
+            cancelled = true;
+        }
+        cancelled
+    }
+
+    pub fn active_command_focus_token(&self) -> Option<u64> {
+        self.protected_focus_token.or_else(|| {
+            self.waiting_command
+                .as_ref()
+                .and_then(|pending| pending.focus_token)
+        })
+    }
+
+    pub fn focus_command_completed(
+        &mut self,
+        token: Option<u64>,
+        success: bool,
+        result_document_id: Option<u64>,
+    ) -> Option<u64> {
+        let token = token?;
+        let interaction = self.pending_focus.as_mut()?;
+        if interaction.token != token {
+            return None;
+        }
+        if success && result_document_id.is_some() {
+            interaction.command_executed = true;
+            interaction.result_document_id = result_document_id;
+            None
+        } else {
+            self.pending_focus.take().map(|item| item.token)
+        }
+    }
+
+    fn queue_for_mount(
+        &mut self,
+        command: SourceCommand,
+        focus_token: Option<u64>,
+    ) -> SubmitOutcome {
         if self.waiting_command.is_some() {
             SubmitOutcome::Busy
         } else {
-            self.waiting_command = Some(command);
+            self.waiting_command = Some(PendingCommand {
+                command,
+                focus_token,
+            });
             SubmitOutcome::WaitingForReady
         }
     }
@@ -358,12 +519,31 @@ impl SourceSyncState {
             self.waiting_command = None;
             return;
         }
-        let Some(command) = self.waiting_command.take() else {
+        let Some(pending) = self.waiting_command.take() else {
             return;
         };
-        if let Ok(effect) = self.lifecycle.begin_snapshot(command, now_ms) {
+        if let Ok(effect) = self.lifecycle.begin_snapshot(pending.command, now_ms) {
+            self.protected_focus_token = pending.focus_token;
             self.push_effect(effect);
         }
+    }
+
+    fn queue_ready_focus(&mut self, identity: EditorIdentity) {
+        let Some(interaction) = self.pending_focus.as_ref() else {
+            return;
+        };
+        if !interaction.command_executed
+            || interaction.target != identity.editor_id
+            || interaction.result_document_id != Some(identity.document_id)
+        {
+            return;
+        }
+        let interaction = self.pending_focus.take().expect("checked pending focus");
+        self.actions.push(ControllerAction::Focus {
+            token: interaction.token,
+            identity,
+            fingerprint: interaction.fingerprint,
+        });
     }
 
     fn accept_change(
@@ -466,6 +646,7 @@ impl SourceSyncState {
             LifecycleEffect::ExecuteCommand(command) => ControllerAction::Execute {
                 command,
                 protected: true,
+                focus_token: self.protected_focus_token.take(),
             },
             effect => ControllerAction::Lifecycle(effect),
         });

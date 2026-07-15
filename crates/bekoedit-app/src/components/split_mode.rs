@@ -27,7 +27,7 @@ pub fn SplitMode() -> Element {
         .unwrap_or_default();
 
     rsx! {
-        div { class: "split-mode",
+        div { class: "split-mode", "data-source-focus-launch-region": "split",
             div { class: "split-left source-editor-host",
                 div { id: CM_SPLIT_ID, class: "text-mode-cm" }
                 match status {

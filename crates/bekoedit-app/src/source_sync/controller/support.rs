@@ -47,6 +47,7 @@ impl SourceSyncState {
         }
         self.relay_generation = None;
         self.waiting_command = None;
+        self.protected_focus_token = None;
         self.actions.clear();
         if self.lifecycle.abandon_bundle_probe() {
             self.bundle_probe_started = false;
@@ -58,10 +59,13 @@ impl SourceSyncState {
         if self.relay_generation.is_some() {
             return self.drain_actions();
         }
-        let (dispatchable, waiting): (Vec<_>, Vec<_>) = self
-            .actions
-            .drain(..)
-            .partition(|action| matches!(action, super::ControllerAction::Execute { .. }));
+        let (dispatchable, waiting): (Vec<_>, Vec<_>) =
+            self.actions.drain(..).partition(|action| {
+                matches!(
+                    action,
+                    super::ControllerAction::Execute { .. } | super::ControllerAction::Focus { .. }
+                )
+            });
         self.actions = waiting;
         dispatchable
     }
@@ -69,7 +73,10 @@ impl SourceSyncState {
     pub fn has_dispatchable_actions(&self) -> bool {
         self.actions.iter().any(|action| {
             self.relay_generation.is_some()
-                || matches!(action, super::ControllerAction::Execute { .. })
+                || matches!(
+                    action,
+                    super::ControllerAction::Execute { .. } | super::ControllerAction::Focus { .. }
+                )
         })
     }
 

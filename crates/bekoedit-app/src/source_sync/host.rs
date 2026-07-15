@@ -9,7 +9,7 @@ use serde::Deserialize;
 use crate::{
     bridge,
     components::toast::{Toast, ToastKind, push_toast},
-    state::now_ms,
+    state::{SettingsOpen, now_ms},
 };
 
 use super::{
@@ -35,7 +35,7 @@ pub fn SourceEditorControllerHost() -> Element {
     let mut sync = use_context::<Signal<SourceSyncState>>();
     let mut state = use_context::<Signal<AppState>>();
     let mut mode = use_context::<Signal<EditorMode>>();
-    let mut settings_open = use_context::<Signal<bool>>();
+    let mut settings_open = use_context::<SettingsOpen>().0;
     let toasts = use_context::<Signal<Vec<Toast>>>();
 
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
@@ -50,6 +50,13 @@ pub fn SourceEditorControllerHost() -> Element {
             while let Ok(raw) = relay.recv::<serde_json::Value>().await {
                 consecutive_failures = 0;
                 if let Ok(event) = decode::<SourceEditorEvent>(raw.clone()) {
+                    if let SourceEditorEvent::Trace {
+                        instance_id, event, ..
+                    } = &event
+                    {
+                        bridge::trace(event, format!("instance_id={instance_id:?}"));
+                    }
+                    let active_focus_token = sync.read().active_command_focus_token();
                     let handled = {
                         let mut app = state.write();
                         sync.write().handle_event(event, &mut app, now_ms())
@@ -57,7 +64,19 @@ pub fn SourceEditorControllerHost() -> Element {
                     match handled {
                         Ok(EventOutcome::Applied) => {}
                         Ok(EventOutcome::Stale) => bridge::trace("source.controller.stale", ""),
-                        Err(error) => announce_error(toasts, error),
+                        Err(error) => {
+                            let exact_cancelled = active_focus_token
+                                .filter(|token| sync.write().cancel_focus_token(*token));
+                            if let Some(token) = exact_cancelled {
+                                super::focus::cancel_focus_guards_through(token);
+                            }
+                            if sync.read().is_unavailable()
+                                && let Some(token) = sync.write().cancel_focus_interactions()
+                            {
+                                super::focus::cancel_focus_guards_through(token);
+                            }
+                            announce_error(toasts, error);
+                        }
                     }
                 } else if let Ok(auxiliary) = decode::<AuxiliaryEvent>(raw) {
                     match auxiliary {
@@ -76,6 +95,9 @@ pub fn SourceEditorControllerHost() -> Element {
             }
             document::eval(&bridge::clear_relay_js(SOURCE_RELAY, generation));
             if sync.write().relay_disconnected(generation) {
+                if let Some(token) = sync.write().cancel_focus_interactions() {
+                    super::focus::cancel_focus_guards_through(token);
+                }
                 announce_error(toasts, SourceSyncError::EditorUnavailable);
             }
             consecutive_failures = consecutive_failures.saturating_add(1);
@@ -99,7 +121,11 @@ pub fn SourceEditorControllerHost() -> Element {
                         .expect("lifecycle actions require a ready relay generation");
                     dispatch_lifecycle_effect(sync, state, toasts, effect, generation);
                 }
-                ControllerAction::Execute { command, protected } => {
+                ControllerAction::Execute {
+                    command,
+                    protected,
+                    focus_token,
+                } => {
                     let result = {
                         let mut app = state.write();
                         let mut editor_mode = mode.write();
@@ -113,6 +139,18 @@ pub fn SourceEditorControllerHost() -> Element {
                         )
                     };
                     let success = result.is_ok();
+                    let result_document_id = state
+                        .read()
+                        .session
+                        .as_ref()
+                        .map(|session| session.document_id);
+                    if let Some(token) = sync.write().focus_command_completed(
+                        focus_token,
+                        success,
+                        result_document_id,
+                    ) {
+                        super::focus::cancel_focus_guards_through(token);
+                    }
                     match result {
                         Ok(Some(notice)) => {
                             let mut target = toasts;
@@ -129,6 +167,13 @@ pub fn SourceEditorControllerHost() -> Element {
                         }
                     }
                 }
+                ControllerAction::Focus {
+                    token,
+                    identity,
+                    fingerprint,
+                } => {
+                    super::focus::consume_focus_guard(token, identity, &fingerprint);
+                }
             }
         }
     });
@@ -136,15 +181,34 @@ pub fn SourceEditorControllerHost() -> Element {
     use_future(move || async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            match sync.write().tick(now_ms()) {
-                Ok(TickOutcome::TimedOut) => announce_error(toasts, SourceSyncError::Timeout),
+            let active_focus_token = sync.read().active_command_focus_token();
+            let tick = { sync.write().tick(now_ms()) };
+            match tick {
+                Ok(TickOutcome::TimedOut) => {
+                    if let Some(token) =
+                        active_focus_token.filter(|token| sync.write().cancel_focus_token(*token))
+                    {
+                        super::focus::cancel_focus_guards_through(token);
+                    }
+                    announce_error(toasts, SourceSyncError::Timeout);
+                }
                 Ok(TickOutcome::Idle | TickOutcome::TakeoverStarted) => {}
-                Err(error) => announce_error(toasts, error),
+                Err(error) => {
+                    if let Some(token) =
+                        active_focus_token.filter(|token| sync.write().cancel_focus_token(*token))
+                    {
+                        super::focus::cancel_focus_guards_through(token);
+                    }
+                    announce_error(toasts, error);
+                }
             }
         }
     });
 
     use_drop(move || {
+        if let Some(token) = sync.write().cancel_focus_interactions() {
+            super::focus::cancel_focus_guards_through(token);
+        }
         let effect = { sync.write().shutdown(now_ms()) };
         let generation = sync.read().relay_generation();
         if let (Some(effect), Some(generation)) = (effect, generation) {

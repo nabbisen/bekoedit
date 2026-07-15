@@ -19,7 +19,7 @@ pub fn TextMode() -> Element {
     let lang = *use_context::<Signal<Lang>>().read();
     let status = use_source_editor_lifecycle(SourceEditorId::Text);
     rsx! {
-        div { class: "source-editor-host",
+        div { class: "source-editor-host", "data-source-focus-launch-region": "text",
             div { id: CM_CONTAINER, class: "text-mode-cm" }
             match status {
                 SourceEditorStatus::Loading => rsx! {

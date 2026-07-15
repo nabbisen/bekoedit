@@ -9,12 +9,22 @@ use dioxus::prelude::*;
 
 use bekoedit_core::AppState;
 
+use crate::components::icons::{FolderIcon, NewFileIcon};
+use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
+use crate::source_sync::{
+    SourceCommand, SourceInteractionOrigin, SourceSyncState, cancel_source_focus,
+    submit_source_interaction,
+};
 use crate::state::now_ms;
+use bekoedit_ui_contract::EditorMode;
 
 #[component]
 pub fn StartScreen() -> Element {
     let mut state = use_context::<Signal<AppState>>();
+    let source_sync = use_context::<Signal<SourceSyncState>>();
+    let mode = use_context::<Signal<EditorMode>>();
+    let toasts = use_context::<Signal<Vec<Toast>>>();
     let lang = *use_context::<Signal<Lang>>().read();
 
     let recents: Vec<_> = state
@@ -37,6 +47,7 @@ pub fn StartScreen() -> Element {
                         class: "btn-primary start-btn",
                         aria_label: tr(lang, "start.open_folder"),
                         onclick: move |_| {
+                            cancel_source_focus(source_sync);
                             let mut st = state;
                             spawn(async move {
                                 if let Some(handle) = rfd::AsyncFileDialog::new()
@@ -48,18 +59,27 @@ pub fn StartScreen() -> Element {
                                 }
                             });
                         },
-                        "📂 "
+                        FolderIcon {}
                         {tr(lang, "start.open_folder")}
                     }
 
                     // ── New In-Memory File ───────────────────────────────────
                     button {
                         class: "btn-secondary start-btn",
+                        "data-source-focus-launch": "start-new",
                         aria_label: tr(lang, "start.new_file"),
                         onclick: move |_| {
-                            state.write().new_untitled();
+                            submit_source_interaction(
+                                source_sync,
+                                state,
+                                mode,
+                                toasts,
+                                SourceCommand::NewUntitled,
+                                SourceInteractionOrigin::start_control("start-new"),
+                                || {},
+                            );
                         },
-                        "📝 "
+                        NewFileIcon {}
                         {tr(lang, "start.new_file")}
                     }
                 }

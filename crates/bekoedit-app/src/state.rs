@@ -6,6 +6,37 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use bekoedit_core::AppState;
 use bekoedit_fs::{RecentWorkspaces, RecoveryStore};
+use dioxus::prelude::Signal;
+
+// Dioxus contexts are keyed by type. Keep each independent UI flag in a
+// distinct newtype so one panel cannot accidentally read or mutate another.
+#[derive(Clone, Copy)]
+pub struct ExplorerCollapsed(pub Signal<bool>);
+
+#[derive(Clone, Copy)]
+pub struct SettingsOpen(pub Signal<bool>);
+
+#[derive(Clone, Copy)]
+pub struct OutlineOpen(pub Signal<bool>);
+
+#[derive(Clone, Copy)]
+pub struct SearchOpen(pub Signal<bool>);
+
+#[derive(Clone, Copy)]
+pub struct BacklinksOpen(pub Signal<bool>);
+
+#[derive(Clone, Copy)]
+pub struct HistoryOpen(pub Signal<bool>);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpenMenu {
+    None,
+    App,
+    EditorTools,
+}
+
+#[derive(Clone, Copy)]
+pub struct OpenMenuState(pub Signal<OpenMenu>);
 
 /// Autosave debounce (external design §25.4 default).
 pub const AUTOSAVE_DEBOUNCE_MS: u64 = 1500;

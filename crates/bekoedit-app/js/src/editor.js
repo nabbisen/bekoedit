@@ -14,12 +14,17 @@ import {
 
 import { BRIDGE_SCHEMA_VERSION, createLifecycleAdapter } from "./lifecycle.js";
 import { dispatchForRelayGeneration } from "./transport.js";
+import {
+  consumeFocusRequest,
+  createBrowserFocusGuardRegistry,
+} from "./focus-guard.js";
 
 const RELAY_NAME = "__bk_source_editor_relay";
 let view = null;
 let sendTimer = null;
 let skipNextSend = false;
 let adapter = null;
+const focusGuards = createBrowserFocusGuardRegistry(document);
 
 function emit(payload) {
   const relay = window[RELAY_NAME];
@@ -182,6 +187,15 @@ window.__bk = {
   dispatch,
   dispatchForRelayGeneration: dispatchForGeneration,
   focus,
+  armFocusGuard: (request) => focusGuards.arm(request),
+  cancelFocusGuardsThrough: (token) => focusGuards.cancelThrough(token),
+  consumeFocusGuard: (request) => consumeFocusRequest(
+    focusGuards,
+    request,
+    adapter.currentIdentity(),
+    () => adapter.focus(),
+    trace,
+  ),
   undo,
   redo,
   get _view() { return view; },

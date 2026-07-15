@@ -21,7 +21,6 @@ use crate::components::{
     outline_panel::OutlinePanel,
     preview_mode::PreviewMode,
     recovery_screen::RecoveryScreen,
-    search_panel::SearchPanel,
     settings_screen::SettingsScreen,
     split_mode::SplitMode,
     start_screen::StartScreen,
@@ -32,8 +31,13 @@ use crate::components::{
 use crate::i18n::{Lang, tr};
 use crate::settings::AppSettings;
 use crate::source_sync::host::SourceEditorControllerHost;
-use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
-use crate::state::{create_app_state, now_ms};
+use crate::source_sync::{
+    SourceCommand, SourceSyncState, submit_source_command, submit_source_shortcut_interaction,
+};
+use crate::state::{
+    BacklinksOpen, ExplorerCollapsed, HistoryOpen, OpenMenu, OpenMenuState, OutlineOpen,
+    SearchOpen, SettingsOpen, create_app_state, now_ms,
+};
 
 const STYLE: Asset = asset!("/assets/style.css");
 const SHORTCUTS_JS: Asset = asset!("/assets/shortcuts.js");
@@ -52,14 +56,16 @@ pub fn App() -> Element {
     let state = use_context_provider(|| Signal::new(create_app_state()));
     use_context_provider(|| Signal::new(settings.lang));
     use_context_provider(|| Signal::new(settings.default_mode));
-    use_context_provider(|| Signal::new(false_val())); // explorer collapsed
-    use_context_provider(|| Signal::new(false_val())); // settings screen open
-    use_context_provider(|| Signal::new(false_val())); // outline panel open
-    use_context_provider(|| Signal::new(false_val())); // search panel open
-    use_context_provider(|| Signal::new(false_val())); // backlinks panel open
-    use_context_provider(|| Signal::new(false_val())); // history panel open
+    use_context_provider(|| ExplorerCollapsed(Signal::new(false_val())));
+    use_context_provider(|| SettingsOpen(Signal::new(false_val())));
+    use_context_provider(|| OutlineOpen(Signal::new(false_val())));
+    use_context_provider(|| SearchOpen(Signal::new(false_val())));
+    use_context_provider(|| BacklinksOpen(Signal::new(false_val())));
+    use_context_provider(|| HistoryOpen(Signal::new(false_val())));
+    let mut open_menu = use_context_provider(|| OpenMenuState(Signal::new(OpenMenu::None))).0;
     use_context_provider(|| Signal::new(Vec::<Toast>::new()));
     let source_sync = use_context_provider(|| Signal::new(SourceSyncState::default()));
+    let recovery_pending_at_launch = use_signal(|| has_pending_recovery(&state.read()));
     let recovery_dismissed = use_signal(|| false);
 
     // Background: native fs watcher + autosave + external-change poll.
@@ -134,28 +140,28 @@ pub fn App() -> Element {
                                 SourceCommand::SaveNow,
                             );
                         }
-                        "mode_text" => submit_source_command(
+                        "mode_text" => submit_source_shortcut_interaction(
                             source_sync_for_shortcuts,
                             app_st,
                             mode_sig,
                             toasts_for_shortcuts,
                             SourceCommand::SwitchMode(EditorMode::Text),
                         ),
-                        "mode_form" => submit_source_command(
+                        "mode_form" => submit_source_shortcut_interaction(
                             source_sync_for_shortcuts,
                             app_st,
                             mode_sig,
                             toasts_for_shortcuts,
                             SourceCommand::SwitchMode(EditorMode::Form),
                         ),
-                        "mode_preview" => submit_source_command(
+                        "mode_preview" => submit_source_shortcut_interaction(
                             source_sync_for_shortcuts,
                             app_st,
                             mode_sig,
                             toasts_for_shortcuts,
                             SourceCommand::SwitchMode(EditorMode::Preview),
                         ),
-                        "mode_split" => submit_source_command(
+                        "mode_split" => submit_source_shortcut_interaction(
                             source_sync_for_shortcuts,
                             app_st,
                             mode_sig,
@@ -173,9 +179,13 @@ pub fn App() -> Element {
         }
     });
 
-    let has_recovery = !*recovery_dismissed.read() && has_pending_recovery(&state.read());
+    let has_recovery = should_show_recovery(
+        &state.read(),
+        *recovery_pending_at_launch.read(),
+        *recovery_dismissed.read(),
+    );
     let workspace_open = state.read().workspace.is_some() || state.read().session.is_some();
-    let settings_open = *use_context::<Signal<bool>>().read();
+    let settings_open = *use_context::<SettingsOpen>().0.read();
     bridge::trace(
         "app.render",
         format!(
@@ -188,15 +198,20 @@ pub fn App() -> Element {
         document::Script { src: SHORTCUTS_JS }
         SourceEditorControllerHost {}
         ToastLayer {}
-        AppBar {}
-        if settings_open {
-            SettingsScreen {}
-        } else if has_recovery {
-            RecoveryScreen { dismissed: recovery_dismissed }
-        } else if workspace_open {
-            MainShell {}
-        } else {
-            StartScreen {}
+        div {
+            class: "app-frame",
+            onclick: move |_| open_menu.set(OpenMenu::None),
+            onfocusin: move |_| open_menu.set(OpenMenu::None),
+            AppBar {}
+            if settings_open {
+                SettingsScreen {}
+            } else if has_recovery {
+                RecoveryScreen { dismissed: recovery_dismissed }
+            } else if workspace_open {
+                MainShell {}
+            } else {
+                StartScreen {}
+            }
         }
     }
 }
@@ -209,16 +224,23 @@ pub(crate) fn has_pending_recovery(state: &AppState) -> bool {
     !state.recovery.list().is_empty()
 }
 
+pub(crate) fn should_show_recovery(
+    state: &AppState,
+    pending_at_launch: bool,
+    dismissed: bool,
+) -> bool {
+    pending_at_launch && !dismissed && state.session.is_none() && has_pending_recovery(state)
+}
+
 #[component]
 fn MainShell() -> Element {
     let state = use_context::<Signal<AppState>>();
     let lang = *use_context::<Signal<Lang>>().read();
     let mode = *use_context::<Signal<EditorMode>>().read();
-    let collapsed = *use_context::<Signal<bool>>().read(); // explorer
-    let outline_open = use_context::<Signal<bool>>(); // 3rd bool
-    let search_open = use_context::<Signal<bool>>(); // 4th
-    let backlinks_open = use_context::<Signal<bool>>(); // 5th
-    let history_open = use_context::<Signal<bool>>(); // 6th
+    let collapsed = *use_context::<ExplorerCollapsed>().0.read();
+    let outline_open = use_context::<OutlineOpen>().0;
+    let backlinks_open = use_context::<BacklinksOpen>().0;
+    let history_open = use_context::<HistoryOpen>().0;
     let has_doc = state.read().session.is_some();
     bridge::trace(
         "main_shell.render",
@@ -248,8 +270,6 @@ fn MainShell() -> Element {
                     // Right panels (mutually exclusive or stacked)
                     if *history_open.read() && has_doc {
                         HistoryPanel {}
-                    } else if *search_open.read() {
-                        SearchPanel {}
                     } else if *backlinks_open.read() && has_doc {
                         BacklinksPanel {}
                     } else if *outline_open.read() && has_doc {

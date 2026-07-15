@@ -7,6 +7,7 @@ use bekoedit_markdown::{FormBlockDisplay, FormBlockEdit, fingerprint::BlockId};
 
 use super::dispatch;
 use super::inline_toolbar::InlineToolbar;
+use crate::components::icons::AddIcon;
 use crate::i18n::{Lang, tr};
 
 // ─── Per-block view ───────────────────────────────────────────────────────────
@@ -209,6 +210,7 @@ pub fn FormBlockView(
                 button {
                     class: "table-add-row",
                     onclick: move |_| dispatch(state, revision, block_id, FormBlockEdit::AddTableRow),
+                    AddIcon {}
                     {tr(lang, "table.add_row")}
                 }
                 // Warn if col_count == 0 (degenerate table).

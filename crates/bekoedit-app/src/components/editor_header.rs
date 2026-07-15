@@ -14,7 +14,13 @@ use bekoedit_ui_contract::EditorMode;
 
 use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
-use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
+use crate::source_sync::{
+    SourceCommand, SourceInteractionOrigin, SourceSyncState, cancel_source_focus,
+    submit_source_command, submit_source_interaction,
+};
+use crate::state::{
+    BacklinksOpen, ExplorerCollapsed, HistoryOpen, OpenMenu, OpenMenuState, OutlineOpen, SearchOpen,
+};
 
 #[component]
 pub fn EditorHeader() -> Element {
@@ -22,12 +28,12 @@ pub fn EditorHeader() -> Element {
     let mode_sig = use_context::<Signal<EditorMode>>();
     let source_sync = use_context::<Signal<SourceSyncState>>();
     let mode = *mode_sig.read();
-    let mut collapsed = use_context::<Signal<bool>>();
-    // advanced panel signals (3rd–7th bools)
-    let mut outline_open = use_context::<Signal<bool>>();
-    let mut search_open = use_context::<Signal<bool>>();
-    let mut backlinks_open = use_context::<Signal<bool>>();
-    let mut history_open = use_context::<Signal<bool>>();
+    let mut collapsed = use_context::<ExplorerCollapsed>().0;
+    let mut outline_open = use_context::<OutlineOpen>().0;
+    let mut search_open = use_context::<SearchOpen>().0;
+    let mut backlinks_open = use_context::<BacklinksOpen>().0;
+    let mut history_open = use_context::<HistoryOpen>().0;
+    let mut open_menu = use_context::<OpenMenuState>().0;
     let toasts = use_context::<Signal<Vec<Toast>>>();
     let ui_lang = *use_context::<Signal<Lang>>().read();
 
@@ -39,6 +45,11 @@ pub fn EditorHeader() -> Element {
     let dirty = doc.is_some_and(|s| s.dirty);
     let is_untitled = doc.is_some_and(|s| s.is_untitled);
     let has_doc = doc.is_some();
+    let backlinks_available = session
+        .workspace
+        .as_ref()
+        .zip(doc)
+        .is_some_and(|(workspace, document)| document.path.starts_with(&workspace.root_path));
     let save_label = match &session.save_state {
         SaveState::Clean => "save.clean",
         SaveState::Dirty => "save.dirty",
@@ -50,7 +61,7 @@ pub fn EditorHeader() -> Element {
     };
     drop(session);
 
-    let mut adv_open = use_signal(|| false);
+    let adv_open = *open_menu.read() == OpenMenu::EditorTools;
 
     rsx! {
         header { class: "editor-header", role: "toolbar", aria_label: tr(ui_lang, "editor.toolbar_label"),
@@ -82,15 +93,20 @@ pub fn EditorHeader() -> Element {
                     ] {
                         button {
                             class: if mode == m { "mode-tab active" } else { "mode-tab" },
+                            "data-source-focus-launch": if m == EditorMode::Text { "mode-text" } else { "mode-preview" },
                             role: "tab",
                             aria_selected: "{mode == m}",
                             onclick: move |_| {
-                                submit_source_command(
+                                submit_source_interaction(
                                     source_sync,
                                     state,
                                     mode_sig,
                                     toasts,
                                     SourceCommand::SwitchMode(m),
+                                    SourceInteractionOrigin::persistent_control(
+                                        if m == EditorMode::Text { "mode-text" } else { "mode-preview" },
+                                    ),
+                                    || {},
                                 );
                             },
                             {tr(ui_lang, key)}
@@ -99,15 +115,18 @@ pub fn EditorHeader() -> Element {
                     // Form Mode — still in the primary bar but AFTER Text/Preview
                     button {
                         class: if mode == EditorMode::Form { "mode-tab active" } else { "mode-tab mode-tab-secondary" },
+                        "data-source-focus-launch": "mode-form",
                         role: "tab",
                         aria_selected: "{mode == EditorMode::Form}",
                         onclick: move |_| {
-                            submit_source_command(
+                            submit_source_interaction(
                                 source_sync,
                                 state,
                                 mode_sig,
                                 toasts,
                                 SourceCommand::SwitchMode(EditorMode::Form),
+                                SourceInteractionOrigin::persistent_control("mode-form"),
+                                || {},
                             );
                         },
                         {tr(ui_lang, "mode.form")}
@@ -130,6 +149,7 @@ pub fn EditorHeader() -> Element {
                         class: "btn-secondary save-as-btn",
                         title: tr(ui_lang, "editor.save_as"),
                         onclick: move |_| {
+                            cancel_source_focus(source_sync);
                             let lv = ui_lang;
                             let sync = source_sync;
                             let st = state;
@@ -171,68 +191,93 @@ pub fn EditorHeader() -> Element {
                 }
 
                 // ── Tier 3: "•••" advanced overflow ────────────────────────
-                button {
-                    class: if *adv_open.read() { "icon-btn active" } else { "icon-btn" },
-                    title: "More",
-                    aria_label: "More tools",
-                    onclick: move |_| { let o = *adv_open.read(); adv_open.set(!o); },
-                    "•••"
-                }
-                if *adv_open.read() {
+                div {
+                    class: "adv-menu-wrap",
+                    onclick: move |event| event.stop_propagation(),
+                    onfocusin: move |event| event.stop_propagation(),
+                    button {
+                        class: if adv_open { "icon-btn active" } else { "icon-btn" },
+                        title: "More",
+                        aria_label: "More tools",
+                        onclick: move |_| {
+                            open_menu.set(if *open_menu.read() == OpenMenu::EditorTools {
+                                OpenMenu::None
+                            } else {
+                                OpenMenu::EditorTools
+                            });
+                        },
+                        "•••"
+                    }
+                    if adv_open {
                     div { class: "adv-dropdown", role: "menu",
                         // Split
                         button {
                             class: if mode == EditorMode::Split { "dropdown-item active" } else { "dropdown-item" },
+                            "data-source-focus-launch": "mode-split",
                             onclick: move |_| {
-                                submit_source_command(
+                                let target = if mode == EditorMode::Split {
+                                    EditorMode::Text
+                                } else {
+                                    EditorMode::Split
+                                };
+                                submit_source_interaction(
                                     source_sync,
                                     state,
                                     mode_sig,
                                     toasts,
-                                    SourceCommand::SwitchMode(EditorMode::Split),
+                                    SourceCommand::SwitchMode(target),
+                                    SourceInteractionOrigin::removable_menu_control("mode-split"),
+                                    move || open_menu.set(OpenMenu::None),
                                 );
-                                adv_open.set(false);
                             },
-                            {tr(ui_lang, "mode.split")}
+                            if mode == EditorMode::Split {
+                                {tr(ui_lang, "mode.close_split")}
+                            } else {
+                                {tr(ui_lang, "mode.split")}
+                            }
                         }
                         hr { class: "dropdown-sep" }
                         // Outline
                         button {
                             class: "dropdown-item",
                             onclick: move |_| {
+                                cancel_source_focus(source_sync);
                                 let o = *outline_open.read();
                                 outline_open.set(!o);
-                                adv_open.set(false);
+                                search_open.set(false);
+                                backlinks_open.set(false);
+                                history_open.set(false);
+                                open_menu.set(OpenMenu::None);
                             },
                             {tr(ui_lang, "outline.title")}
                         }
-                        // Search
-                        button {
-                            class: "dropdown-item",
-                            onclick: move |_| {
-                                let o = *search_open.read();
-                                search_open.set(!o);
-                                adv_open.set(false);
-                            },
-                            {tr(ui_lang, "search.label")}
-                        }
-                        // Backlinks
-                        button {
-                            class: "dropdown-item",
-                            onclick: move |_| {
-                                let o = *backlinks_open.read();
-                                backlinks_open.set(!o);
-                                adv_open.set(false);
-                            },
-                            {tr(ui_lang, "backlinks.title")}
+                        if backlinks_available {
+                            // Backlinks
+                            button {
+                                class: "dropdown-item",
+                                onclick: move |_| {
+                                    cancel_source_focus(source_sync);
+                                    let o = *backlinks_open.read();
+                                    backlinks_open.set(!o);
+                                    outline_open.set(false);
+                                    search_open.set(false);
+                                    history_open.set(false);
+                                    open_menu.set(OpenMenu::None);
+                                },
+                                {tr(ui_lang, "backlinks.title")}
+                            }
                         }
                         // History
                         button {
                             class: "dropdown-item",
                             onclick: move |_| {
+                                cancel_source_focus(source_sync);
                                 let o = *history_open.read();
                                 history_open.set(!o);
-                                adv_open.set(false);
+                                outline_open.set(false);
+                                search_open.set(false);
+                                backlinks_open.set(false);
+                                open_menu.set(OpenMenu::None);
                             },
                             {tr(ui_lang, "history.title")}
                         }
@@ -241,7 +286,8 @@ pub fn EditorHeader() -> Element {
                         button {
                             class: "dropdown-item",
                             onclick: move |_| {
-                                adv_open.set(false);
+                                cancel_source_focus(source_sync);
+                                open_menu.set(OpenMenu::None);
                                 let st = state.read();
                                 if let Some(session) = st.session.as_ref() {
                                     let html = session.preview_html();
@@ -263,6 +309,7 @@ pub fn EditorHeader() -> Element {
                             },
                             {tr(ui_lang, "export.html")}
                         }
+                    }
                     }
                 }
             }

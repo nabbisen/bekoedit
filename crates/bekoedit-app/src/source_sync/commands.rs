@@ -41,6 +41,7 @@ pub fn execute(
         }
         SourceCommand::NewUntitled => {
             state.new_untitled();
+            *mode = EditorMode::Text;
             Ok(None)
         }
         SourceCommand::OpenWorkspace(path) => {

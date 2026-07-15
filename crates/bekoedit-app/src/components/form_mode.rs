@@ -29,7 +29,7 @@ pub fn FormMode() -> Element {
     let revision = projection.document_revision;
 
     rsx! {
-        div { class: "form-mode",
+        div { class: "form-mode", "data-source-focus-launch-region": "form",
             for block in projection.blocks {
                 FormBlockView {
                     key: "{block.block_id.ordinal}-{block.block_id.fingerprint.content_hash}",
