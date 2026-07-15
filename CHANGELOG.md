@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.13.0] - 2026-07-15
+
+### Added
+- A Rust-owned source-editor lifecycle controller now coordinates bundle
+  readiness, editor identity, correlated snapshots, hold/resume, refresh, and
+  teardown across the Dioxus/WebView boundary.
+- Bridge protocol v2 types, lifecycle reducer tests, JavaScript adapter tests,
+  and focus-transition tracing cover Text and Split editor mounts.
+
+### Changed
+- New documents open directly in Text Mode and focus CodeMirror after its
+  validated ready handshake.
+- Workspace search uses a focused Explorer overlay, clears stale results while
+  the query changes, and keeps unsupported files visibly disabled.
+- Editor modes, menus, recovery notices, split controls, and toolbar icons now
+  expose clearer active, dismissal, and availability states.
+
+### Fixed
+- First-run and remount races no longer leave the editor unavailable, emit
+  repeated source-operation timeout errors, or stall Preview transitions.
+- Recovery no longer prompts on every edit of a new document, and restored
+  notices can be dismissed or expire automatically.
+- Overflow menus remain within the window, close when focus moves outside,
+  and no longer route unrelated actions to Settings.
+- Split Mode can be closed, search no longer shows premature or stale
+  no-match results, and truncated Explorer labels retain their full tooltip.
+
+[0.13.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.13.0
+
 ## [0.12.0] - 2026-07-11
 
 ### Added

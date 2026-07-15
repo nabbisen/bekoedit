@@ -30,6 +30,14 @@ templates, extension policy, plugin system, sync/collaboration.
 
 **1.0.0 requires explicit maintainer sign-off on the acceptance checklist.**
 
+## Shipped — v0.13.0 (2026-07-15)
+RFC-041 replaces optimistic CodeMirror registration with a Rust-owned,
+identity-checked source-editor lifecycle controller. Text and Split mounts now
+coordinate bridge readiness, snapshots, protected operations, refresh, focus,
+and teardown explicitly. Owner feedback remediation also improves recovery,
+mode/menu state, workspace search, Explorer file availability, and split-view
+controls.
+
 ## Shipped — v0.9.0 (2026-06-07)
 Recovery screen (RFC-007 UI), large-file warning, relay auto-restart
 (RFC-002), `file_size_bytes` query. Acceptance checklist items have code

@@ -66,7 +66,6 @@ Resolved 2026-06-07 rather than renumbering the cross-referenced corpus.
 | RFC-032 | Performance optimization and incremental parsing | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | Plugin system evaluation | Future evaluation only |
 | RFC-040 | Sync and collaboration evaluation | Future evaluation only |
-| RFC-041 | [Source editor lifecycle and synchronization controller](proposed/RFC-041-source-editor-lifecycle-and-synchronization-controller.md) | Critical incident design; implementation blocked pending architecture review |
 
 ## Implemented — v0.3.0 (`done/`)
 
@@ -127,3 +126,9 @@ Resolved 2026-06-07 rather than renumbering the cross-referenced corpus.
 | RFC-002 | Runtime architecture and WebView boundary | Typed versioned payloads, eval relay with auto-restart (v0.9.0), rfd native dialogs replacing text-path input (v0.10.0) |
 
 **All MVP RFCs now implemented.** Remaining proposed: RFC-031 (decided), RFC-032 (deferred), RFC-039/040 (future evaluation only).
+
+## Implemented — v0.13.0 (`done/`)
+
+| RFC | Title | Notes |
+|-----|-------|-------|
+| RFC-041 | [Source editor lifecycle and synchronization controller](done/RFC-041-source-editor-lifecycle-and-synchronization-controller.md) | Rust-owned protocol-v2 lifecycle, correlated source barriers, explicit mount/refresh/teardown, and validated Text/Split focus |

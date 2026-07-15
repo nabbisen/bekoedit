@@ -3,12 +3,13 @@
 ## 1. Summary
 
 Implement the reviewed form of
-[RFC-041](../../proposed/RFC-041-source-editor-lifecycle-and-synchronization-controller.md):
+[RFC-041](../../done/RFC-041-source-editor-lifecycle-and-synchronization-controller.md):
 replace optimistic CodeMirror registration and distributed Dioxus effects with
 one explicit Rust-owned source-editor lifecycle controller.
 
-This handoff is design-stage guidance, not implementation authorization. Its
-status is inherited from the Proposed RFC.
+The implementation was completed and owner-tested on 2026-07-15. This handoff
+remains the historical execution guide; its status is inherited from the
+Implemented RFC.
 
 ## 2. Scope followed
 
@@ -43,7 +44,7 @@ Out of scope:
 
 Design-stage files created or updated:
 
-- `rfcs/proposed/RFC-041-source-editor-lifecycle-and-synchronization-controller.md`
+- `rfcs/done/RFC-041-source-editor-lifecycle-and-synchronization-controller.md`
 - `rfcs/handoffs/041-source-editor-lifecycle-and-synchronization-controller/implementation-handoff.md`
 - `rfcs/README.md`
 - `.git-exclude/review-request/2026-07-14-rfc-041-source-editor-lifecycle-design.md`
@@ -144,7 +145,7 @@ claim lifecycle acceptance from headless tests alone.
 
 ## 6. Generated artifacts
 
-- Proposed RFC-041.
+- Implemented RFC-041.
 - This implementation handoff.
 - Architecture review request for the design package.
 - Focused architecture rereview request for revision 2.
@@ -168,7 +169,5 @@ No binary, package, release archive, commit, tag, or push was generated.
 
 ## 8. Recommended next step
 
-Obtain final architecture rereview of RFC-041 revision 3 and this handoff. After
-an acceptable verdict, implement in the RFC rollout order, beginning with
-bridge version types and the pure lifecycle reducer rather than editing the
-current Dioxus effects in place.
+Ship the completed RFC-041 implementation in bekoedit 0.13.0 after the release
+metadata, local gates, remote CI, and release-artifact evidence are accepted.

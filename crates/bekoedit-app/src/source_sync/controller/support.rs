@@ -18,6 +18,39 @@ pub fn fingerprint(app: &AppState) -> SessionFingerprint {
 }
 
 impl SourceSyncState {
+    pub fn is_ready(&self, editor_id: SourceEditorId, document_id: u64) -> bool {
+        self.lifecycle.ready_editor().is_some_and(|editor| {
+            editor.identity.editor_id == editor_id && editor.identity.document_id == document_id
+        })
+    }
+
+    pub fn is_unavailable(&self) -> bool {
+        matches!(self.lifecycle.state, LifecycleState::Unavailable { .. })
+    }
+
+    pub fn mount_handle(
+        &self,
+        editor_id: SourceEditorId,
+        document_id: u64,
+    ) -> Option<EditorMountHandle> {
+        let identity = self.current_physical_identity()?;
+        (identity.editor_id == editor_id && identity.document_id == document_id).then_some(
+            EditorMountHandle {
+                instance_id: identity.instance_id,
+                editor_id,
+                document_id,
+            },
+        )
+    }
+
+    pub fn drain_actions(&mut self) -> Vec<super::ControllerAction> {
+        std::mem::take(&mut self.actions)
+    }
+
+    pub fn has_actions(&self) -> bool {
+        !self.actions.is_empty()
+    }
+
     pub fn relay_generation_started(&mut self, generation: u64) {
         self.expected_relay_generation = Some(generation);
         self.relay_generation = None;

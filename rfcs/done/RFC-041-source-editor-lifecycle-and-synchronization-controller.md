@@ -1,7 +1,7 @@
 # RFC-041: Source Editor Lifecycle and Synchronization Controller
 
 **Project:** bekoedit
-**Status:** Proposed
+**Status:** Implemented (v0.13.0, 2026-07-15)
 **Track:** Source safety / WebView lifecycle
 **Priority:** Critical
 **Date:** 2026-07-14
