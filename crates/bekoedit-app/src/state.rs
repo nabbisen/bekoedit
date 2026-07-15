@@ -5,8 +5,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bekoedit_core::AppState;
-use bekoedit_fs::{RecentWorkspaces, RecoveryStore};
 use dioxus::prelude::Signal;
+
+use crate::persistence::AppPersistence;
 
 // Dioxus contexts are keyed by type. Keep each independent UI flag in a
 // distinct newtype so one panel cannot accidentally read or mutate another.
@@ -41,13 +42,9 @@ pub struct OpenMenuState(pub Signal<OpenMenu>);
 /// Autosave debounce (external design §25.4 default).
 pub const AUTOSAVE_DEBOUNCE_MS: u64 = 1500;
 
-/// Builds the store with platform-default persistence locations.
-pub fn create_app_state() -> AppState {
-    AppState::new(
-        RecoveryStore::default_location(),
-        RecentWorkspaces::default_file(),
-        AUTOSAVE_DEBOUNCE_MS,
-    )
+/// Builds the store with the launch-selected persistence locations.
+pub fn create_app_state(persistence: &AppPersistence) -> AppState {
+    persistence.create_app_state(AUTOSAVE_DEBOUNCE_MS)
 }
 
 pub fn now_ms() -> u64 {

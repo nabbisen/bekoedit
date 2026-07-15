@@ -29,7 +29,6 @@ use crate::components::{
     toast::{Toast, ToastLayer},
 };
 use crate::i18n::{Lang, tr};
-use crate::settings::AppSettings;
 use crate::source_sync::host::SourceEditorControllerHost;
 use crate::source_sync::{
     SourceCommand, SourceSyncState, submit_source_command, submit_source_shortcut_interaction,
@@ -38,6 +37,7 @@ use crate::state::{
     BacklinksOpen, ExplorerCollapsed, HistoryOpen, OpenMenu, OpenMenuState, OutlineOpen,
     SearchOpen, SettingsOpen, create_app_state, now_ms,
 };
+use crate::webview_smoke::{WebViewSmokeDriver, launch_config};
 
 const STYLE: Asset = asset!("/assets/style.css");
 const SHORTCUTS_JS: Asset = asset!("/assets/shortcuts.js");
@@ -51,9 +51,13 @@ enum AppMsg {
 
 #[component]
 pub fn App() -> Element {
-    let settings = AppSettings::load();
+    let launch = launch_config();
+    let persistence = launch.persistence.clone();
+    let settings = persistence.load_settings();
+    let webview_smoke = launch.webview_smoke;
 
-    let state = use_context_provider(|| Signal::new(create_app_state()));
+    use_context_provider(|| persistence.clone());
+    let state = use_context_provider(|| Signal::new(create_app_state(&persistence)));
     use_context_provider(|| Signal::new(settings.lang));
     use_context_provider(|| Signal::new(settings.default_mode));
     use_context_provider(|| ExplorerCollapsed(Signal::new(false_val())));
@@ -197,6 +201,9 @@ pub fn App() -> Element {
         document::Link { rel: "stylesheet", href: STYLE }
         document::Script { src: SHORTCUTS_JS }
         SourceEditorControllerHost {}
+        if webview_smoke {
+            WebViewSmokeDriver {}
+        }
         ToastLayer {}
         div {
             class: "app-frame",

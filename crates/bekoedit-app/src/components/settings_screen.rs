@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use bekoedit_ui_contract::EditorMode;
 
 use crate::i18n::{Lang, tr};
-use crate::settings::AppSettings;
+use crate::persistence::AppPersistence;
 use crate::state::SettingsOpen;
 
 #[component]
@@ -13,9 +13,10 @@ pub fn SettingsScreen() -> Element {
     let mut settings_open = use_context::<SettingsOpen>().0;
     let mut lang_signal = use_context::<Signal<Lang>>();
     let mut mode_signal = use_context::<Signal<EditorMode>>();
+    let persistence = use_context::<AppPersistence>();
     let lang = *lang_signal.read();
 
-    let mut settings = use_signal(AppSettings::load);
+    let mut settings = use_signal(|| persistence.load_settings());
 
     rsx! {
         div { class: "settings-screen",
@@ -91,7 +92,7 @@ pub fn SettingsScreen() -> Element {
                         let s = settings.read().clone();
                         lang_signal.set(s.lang);
                         mode_signal.set(s.default_mode);
-                        s.save();
+                        persistence.save_settings(&s);
                         settings_open.set(false);
                     },
                     {tr(lang, "settings.save")}

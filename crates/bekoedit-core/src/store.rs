@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use bekoedit_fs::{
-    FileOpError, FileTreeIndex, RecentWorkspaces, RecoverySnapshot, RecoveryStore, Workspace,
-    WorkspaceError, atomic_write,
+    FileOpError, FileTreeIndex, HistoryStore, RecentWorkspaces, RecoverySnapshot, RecoveryStore,
+    Workspace, WorkspaceError, atomic_write,
 };
 use bekoedit_markdown::FormEditCommand;
 
@@ -60,10 +60,24 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(recovery: RecoveryStore, recents_file: PathBuf, autosave_debounce_ms: u64) -> Self {
+        Self::new_with_history(
+            recovery,
+            recents_file,
+            HistoryStore::default_location(),
+            autosave_debounce_ms,
+        )
+    }
+
+    pub fn new_with_history(
+        recovery: RecoveryStore,
+        recents_file: PathBuf,
+        history: HistoryStore,
+        autosave_debounce_ms: u64,
+    ) -> Self {
         let mut recents = RecentWorkspaces::load(&recents_file);
         recents.prune_missing();
         Self {
-            history: bekoedit_fs::HistoryStore::default_location(),
+            history,
             workspace: None,
             tree: FileTreeIndex::default(),
             session: None,

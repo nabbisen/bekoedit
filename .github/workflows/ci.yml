@@ -79,8 +79,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
             libxdo-dev libssl-dev xvfb
+      - name: Install JS dependencies
+        run: cd crates/bekoedit-app/js && npm ci
+      - name: Test source-editor JavaScript adapter
+        run: cd crates/bekoedit-app/js && npm test
       - name: Build JS bundle
-        run: cd crates/bekoedit-app/js && npm ci && node build.mjs
+        run: cd crates/bekoedit-app/js && node build.mjs
+      - name: Test desktop application
+        run: cargo test -p bekoedit
       - name: Build desktop app
         run: cargo build -p bekoedit --release
       - name: Smoke test (headless launch, exit 0 within 10 s)
@@ -88,6 +94,14 @@ jobs:
           # Verify the binary starts and exits cleanly in a headless display.
           # Uses xvfb-run to provide a virtual framebuffer on CI.
           timeout 10 xvfb-run -a ./target/release/bekoedit --headless-smoke
+      - name: WebView lifecycle regression (RFC-041)
+        run: |
+          SMOKE_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-webview-smoke.XXXXXX")"
+          trap 'rm -rf "$SMOKE_PARENT"' EXIT
+          timeout 30 xvfb-run -a -s "-screen 0 1280x1024x24" \
+            env NO_AT_BRIDGE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
+            ./target/release/bekoedit \
+            --webview-smoke "$SMOKE_PARENT/bekoedit-webview-smoke-profile"
       - name: Check binary links and size
         run: |
           file target/release/bekoedit

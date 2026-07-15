@@ -61,12 +61,15 @@ impl AppSettings {
     }
 
     pub fn save(&self) {
-        let path = Self::settings_path();
+        self.save_to(&Self::settings_path());
+    }
+
+    pub fn save_to(&self, path: &Path) {
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
         if let Ok(json) = serde_json::to_string_pretty(self) {
-            let _ = bekoedit_fs::atomic_write(&path, &json);
+            let _ = bekoedit_fs::atomic_write(path, &json);
         }
     }
 }

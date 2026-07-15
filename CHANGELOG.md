@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   teardown across the Dioxus/WebView boundary.
 - Bridge protocol v2 types, lifecycle reducer tests, JavaScript adapter tests,
   and focus-transition tracing cover Text and Split editor mounts.
+- Blocking Linux CI now runs the Rust app and JavaScript adapter suites plus an
+  actual Dioxus/WebView New-to-Preview lifecycle regression under Xvfb.
 
 ### Changed
 - New documents open directly in Text Mode and focus CodeMirror after its
