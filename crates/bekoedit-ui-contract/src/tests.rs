@@ -6,7 +6,10 @@ use std::path::PathBuf;
 use crate::{
     BRIDGE_SCHEMA_VERSION,
     source_editor::{
-        EditorIdentity, EditorInstanceId, OperationId, SourceEditorEvent, SourceEditorId,
+        EditorIdentity, EditorInstanceId, FocusGuardActiveElementRelation, FocusGuardDiagnostic,
+        FocusGuardDiversion, FocusGuardFallback, FocusGuardFingerprintRelation,
+        FocusGuardOriginConnection, FocusGuardOutcome, FocusGuardReason, FocusGuardRemovalPolicy,
+        FocusGuardTokenRelation, OperationId, SourceEditorEvent, SourceEditorId,
         SourceEditorRequest, SourceEpoch,
     },
 };
@@ -87,4 +90,51 @@ fn unsupported_source_editor_event_version_is_detectable() {
         operation_id: OperationId::new(1),
     };
     assert!(!event.has_supported_version());
+}
+
+#[test]
+fn focus_guard_trace_diagnostic_round_trips_with_fixed_camel_case_enums() {
+    let event = SourceEditorEvent::Trace {
+        protocol_version: BRIDGE_SCHEMA_VERSION,
+        instance_id: Some(EditorInstanceId::new(4)),
+        event: "source.focus.rejected.guard".into(),
+        focus_token: Some(7),
+        focus_guard_diagnostic: Some(FocusGuardDiagnostic {
+            outcome: FocusGuardOutcome::Rejected,
+            reason: FocusGuardReason::DivertedFocusIn,
+            token_relation: FocusGuardTokenRelation::Match,
+            diversion: FocusGuardDiversion::FocusIn,
+            fingerprint_relation: FocusGuardFingerprintRelation::Equal,
+            origin_connection: FocusGuardOriginConnection::Connected,
+            active_element_relation: FocusGuardActiveElementRelation::Other,
+            removal_policy: FocusGuardRemovalPolicy::LaunchMayBeRemoved,
+            removed_body_fallback: FocusGuardFallback::Ineligible,
+        }),
+    };
+    let json = serde_json::to_string(&event).unwrap();
+    assert!(json.contains("\"focusToken\":7"));
+    assert!(json.contains("\"reason\":\"divertedFocusIn\""));
+    assert!(json.contains("\"activeElementRelation\":\"other\""));
+    assert_eq!(
+        serde_json::from_str::<SourceEditorEvent>(&json).unwrap(),
+        event
+    );
+}
+
+#[test]
+fn legacy_trace_without_focus_diagnostic_remains_decodable() {
+    let event = serde_json::from_str::<SourceEditorEvent>(
+        r#"{"type":"trace","protocolVersion":2,"instanceId":null,"event":"legacy"}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        event,
+        SourceEditorEvent::Trace {
+            protocol_version: BRIDGE_SCHEMA_VERSION,
+            instance_id: None,
+            event: "legacy".into(),
+            focus_token: None,
+            focus_guard_diagnostic: None,
+        }
+    );
 }

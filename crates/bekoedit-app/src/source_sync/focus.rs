@@ -16,6 +16,8 @@ use super::{
 };
 
 const ARM_TIMEOUT: Duration = Duration::from_millis(250);
+const FOCUS_GUARD_BOOTSTRAP: &str = include_str!("../../assets/focus-guard-bundle.js");
+const FOCUS_GUARD_PROTOCOL_VERSION: u32 = 2;
 
 pub fn cancel_source_focus(mut sync: Signal<SourceSyncState>) {
     if let Some(token) = sync.write().cancel_focus_interactions() {
@@ -264,16 +266,22 @@ async fn arm_focus_guard(
     let payload = serde_json::to_string(&request).ok()?;
     let mut eval = document::eval(&format!(
         r#"
+        {FOCUS_GUARD_BOOTSTRAP}
         (async () => {{
             const request = {payload};
-            for (let attempt = 0; attempt < 50; attempt += 1) {{
-                if (window.__bk && typeof window.__bk.armFocusGuard === "function") {{
-                    dioxus.send(JSON.stringify(window.__bk.armFocusGuard(request)));
-                    return;
-                }}
-                await new Promise(resolve => setTimeout(resolve, 5));
+            const guards = window.__bkFocusGuards;
+            if (!guards
+                || guards.protocolVersion !== {FOCUS_GUARD_PROTOCOL_VERSION}
+                || typeof guards.arm !== "function") {{
+                dioxus.send(JSON.stringify({{
+                    token: request.token,
+                    armed: false,
+                    reason: "incompatibleRegistry",
+                }}));
+                return null;
             }}
-            dioxus.send(JSON.stringify({{ token: request.token, armed: false }}));
+            dioxus.send(JSON.stringify(guards.arm(request)));
+            return null;
         }})();
         "#,
     ));
@@ -288,15 +296,11 @@ fn decode_guard_acknowledgement(payload: &str) -> Option<GuardArmed> {
 pub(crate) fn cancel_focus_guards_through(token: u64) {
     document::eval(&format!(
         r#"
-        (async () => {{
-            for (let attempt = 0; attempt < 100; attempt += 1) {{
-                if (window.__bk && typeof window.__bk.cancelFocusGuardsThrough === "function") {{
-                    window.__bk.cancelFocusGuardsThrough({token});
-                    return;
-                }}
-                await new Promise(resolve => setTimeout(resolve, 5));
-            }}
-        }})();
+        {FOCUS_GUARD_BOOTSTRAP}
+        if (window.__bkFocusGuards?.protocolVersion === {FOCUS_GUARD_PROTOCOL_VERSION}
+            && typeof window.__bkFocusGuards.cancelThrough === "function") {{
+            window.__bkFocusGuards.cancelThrough({token});
+        }}
         "#,
     ));
 }
@@ -350,5 +354,14 @@ mod tests {
         assert_eq!(acknowledgement.token, 7);
         assert!(acknowledgement.armed);
         assert_eq!(acknowledgement.reason, None);
+    }
+
+    #[test]
+    fn eager_guard_bundle_owns_arm_and_cancel_before_editor_bootstrap() {
+        assert!(FOCUS_GUARD_BOOTSTRAP.contains("__bkFocusGuards"));
+        assert!(FOCUS_GUARD_BOOTSTRAP.contains("protocolVersion"));
+        assert!(FOCUS_GUARD_BOOTSTRAP.contains("consumeDiagnostic"));
+        assert!(!FOCUS_GUARD_BOOTSTRAP.contains("CodeMirror"));
+        assert_eq!(FOCUS_GUARD_PROTOCOL_VERSION, 2);
     }
 }

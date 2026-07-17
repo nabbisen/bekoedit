@@ -39,8 +39,8 @@ use crate::state::{
 };
 use crate::webview_smoke::{WebViewSmokeDriver, launch_config};
 
-const STYLE: Asset = asset!("/assets/style.css");
-const SHORTCUTS_JS: Asset = asset!("/assets/shortcuts.js");
+pub(crate) const STYLE_SOURCE: &str = include_str!("../assets/style.css");
+pub(crate) const SHORTCUTS_SOURCE: &str = include_str!("../assets/shortcuts.js");
 const TICK_MS: u64 = 500;
 
 #[derive(Debug, Deserialize)]
@@ -198,8 +198,8 @@ pub fn App() -> Element {
     );
 
     rsx! {
-        document::Link { rel: "stylesheet", href: STYLE }
-        document::Script { src: SHORTCUTS_JS }
+        document::Style { "{STYLE_SOURCE}" }
+        document::Script { "{SHORTCUTS_SOURCE}" }
         SourceEditorControllerHost {}
         if webview_smoke {
             WebViewSmokeDriver {}

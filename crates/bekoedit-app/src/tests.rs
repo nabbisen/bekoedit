@@ -16,6 +16,25 @@ mod app_tests {
     }
 
     #[test]
+    fn application_root_assets_are_cargo_native_and_current() {
+        let app = include_str!("app.rs");
+        let host = include_str!("source_sync/host.rs");
+        let placeholder = "This should be replaced by dx";
+
+        assert!(!crate::app::STYLE_SOURCE.trim().is_empty());
+        assert!(crate::app::STYLE_SOURCE.contains(".shell"));
+        assert!(!crate::app::STYLE_SOURCE.contains(placeholder));
+
+        assert!(!crate::app::SHORTCUTS_SOURCE.trim().is_empty());
+        assert!(crate::app::SHORTCUTS_SOURCE.contains("window.__bk_shortcut_relay"));
+        assert!(!crate::app::SHORTCUTS_SOURCE.contains(placeholder));
+
+        assert!(!app.contains("asset!(\"/assets/style.css\")"));
+        assert!(!app.contains("asset!(\"/assets/shortcuts.js\")"));
+        assert!(!host.contains("asset!(\"/assets/editor-bundle.js\")"));
+    }
+
+    #[test]
     fn i18n_all_keys_have_both_languages() {
         use crate::i18n::{Lang, tr};
         let sample_keys = [

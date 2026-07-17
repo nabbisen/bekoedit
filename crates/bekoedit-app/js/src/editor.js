@@ -16,7 +16,7 @@ import { BRIDGE_SCHEMA_VERSION, createLifecycleAdapter } from "./lifecycle.js";
 import { dispatchForRelayGeneration } from "./transport.js";
 import {
   consumeFocusRequest,
-  createBrowserFocusGuardRegistry,
+  installBrowserFocusGuardRegistry,
 } from "./focus-guard.js";
 
 const RELAY_NAME = "__bk_source_editor_relay";
@@ -24,7 +24,10 @@ let view = null;
 let sendTimer = null;
 let skipNextSend = false;
 let adapter = null;
-const focusGuards = createBrowserFocusGuardRegistry(document);
+const focusGuards = installBrowserFocusGuardRegistry(window, document);
+if (!focusGuards) {
+  throw new Error("bekoedit: incompatible source focus guard registry");
+}
 
 function emit(payload) {
   const relay = window[RELAY_NAME];
@@ -36,13 +39,14 @@ function emit(payload) {
   return true;
 }
 
-function trace(name) {
+function trace(name, details = {}) {
   const identity = adapter?.currentIdentity();
   emit({
     type: "trace",
     protocolVersion: BRIDGE_SCHEMA_VERSION,
     instanceId: identity?.instanceId ?? null,
     event: name,
+    ...details,
   });
 }
 

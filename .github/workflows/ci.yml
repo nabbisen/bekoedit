@@ -85,6 +85,8 @@ jobs:
         run: cd crates/bekoedit-app/js && npm test
       - name: Build JS bundle
         run: cd crates/bekoedit-app/js && node build.mjs
+      - name: Check committed JS bundles are current
+        run: git diff --exit-code -- crates/bekoedit-app/assets/editor-bundle.js crates/bekoedit-app/assets/focus-guard-bundle.js
       - name: Test desktop application
         run: cargo test -p bekoedit
       - name: Build desktop app
@@ -98,7 +100,7 @@ jobs:
         run: |
           SMOKE_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-webview-smoke.XXXXXX")"
           trap 'rm -rf "$SMOKE_PARENT"' EXIT
-          timeout 30 xvfb-run -a -s "-screen 0 1280x1024x24" \
+          timeout 60 xvfb-run -a -s "-screen 0 1280x1024x24" \
             env NO_AT_BRIDGE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
             ./target/release/bekoedit \
             --webview-smoke "$SMOKE_PARENT/bekoedit-webview-smoke-profile"

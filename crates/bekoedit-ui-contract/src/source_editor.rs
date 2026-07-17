@@ -152,6 +152,95 @@ pub enum BridgeFailureReason {
     BridgeError,
 }
 
+macro_rules! diagnostic_enum {
+    ($name:ident { $($variant:ident => $value:literal),+ $(,)? }) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        pub enum $name {
+            $($variant),+
+        }
+
+        impl $name {
+            pub const fn as_str(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $value),+
+                }
+            }
+        }
+    };
+}
+
+diagnostic_enum!(FocusGuardOutcome {
+    Accepted => "accepted",
+    Rejected => "rejected",
+});
+diagnostic_enum!(FocusGuardReason {
+    Accepted => "accepted",
+    RequestMissing => "requestMissing",
+    IdentityMismatch => "identityMismatch",
+    MissingGuard => "missingGuard",
+    TokenMismatch => "tokenMismatch",
+    DivertedPointer => "divertedPointer",
+    DivertedTab => "divertedTab",
+    DivertedFocusIn => "divertedFocusIn",
+    FingerprintMismatch => "fingerprintMismatch",
+    ActiveElementIneligible => "activeElementIneligible",
+});
+diagnostic_enum!(FocusGuardTokenRelation {
+    Match => "match",
+    Mismatch => "mismatch",
+    NoGuard => "noGuard",
+    NotEvaluated => "notEvaluated",
+});
+diagnostic_enum!(FocusGuardDiversion {
+    None => "none",
+    Pointer => "pointer",
+    Tab => "tab",
+    FocusIn => "focusIn",
+    NotEvaluated => "notEvaluated",
+});
+diagnostic_enum!(FocusGuardFingerprintRelation {
+    Equal => "equal",
+    Mismatch => "mismatch",
+    NotEvaluated => "notEvaluated",
+});
+diagnostic_enum!(FocusGuardOriginConnection {
+    Connected => "connected",
+    Disconnected => "disconnected",
+    NotEvaluated => "notEvaluated",
+});
+diagnostic_enum!(FocusGuardActiveElementRelation {
+    Origin => "origin",
+    Body => "body",
+    Other => "other",
+    None => "none",
+    NotEvaluated => "notEvaluated",
+});
+diagnostic_enum!(FocusGuardRemovalPolicy {
+    LaunchMayBeRemoved => "launchMayBeRemoved",
+    LaunchMustRemain => "launchMustRemain",
+    NotEvaluated => "notEvaluated",
+});
+diagnostic_enum!(FocusGuardFallback {
+    Eligible => "eligible",
+    Ineligible => "ineligible",
+    NotEvaluated => "notEvaluated",
+});
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusGuardDiagnostic {
+    pub outcome: FocusGuardOutcome,
+    pub reason: FocusGuardReason,
+    pub token_relation: FocusGuardTokenRelation,
+    pub diversion: FocusGuardDiversion,
+    pub fingerprint_relation: FocusGuardFingerprintRelation,
+    pub origin_connection: FocusGuardOriginConnection,
+    pub active_element_relation: FocusGuardActiveElementRelation,
+    pub removal_policy: FocusGuardRemovalPolicy,
+    pub removed_body_fallback: FocusGuardFallback,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
     tag = "type",
@@ -255,6 +344,10 @@ pub enum SourceEditorEvent {
         protocol_version: u32,
         instance_id: Option<EditorInstanceId>,
         event: String,
+        #[serde(default)]
+        focus_token: Option<u64>,
+        #[serde(default)]
+        focus_guard_diagnostic: Option<FocusGuardDiagnostic>,
     },
 }
 

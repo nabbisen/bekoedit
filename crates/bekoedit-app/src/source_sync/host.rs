@@ -1,7 +1,10 @@
 use bekoedit_core::AppState;
 use bekoedit_ui_contract::{
     BRIDGE_SCHEMA_VERSION, EditorMode,
-    source_editor::{BridgeFailureReason, SourceEditorEvent, SourceEditorId, SourceEditorRequest},
+    source_editor::{
+        BridgeFailureReason, EditorInstanceId, FocusGuardDiagnostic, SourceEditorEvent,
+        SourceEditorId, SourceEditorRequest,
+    },
 };
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -18,7 +21,7 @@ use super::{
     lifecycle::LifecycleEffect,
 };
 
-const EDITOR_BUNDLE: Asset = asset!("/assets/editor-bundle.js");
+const EDITOR_BUNDLE: &str = include_str!("../../assets/editor-bundle.js");
 const SOURCE_RELAY: &str = "__bk_source_editor_relay";
 const TEXT_CONTAINER: &str = "cm-root";
 const SPLIT_CONTAINER: &str = "cm-split";
@@ -51,10 +54,21 @@ pub fn SourceEditorControllerHost() -> Element {
                 consecutive_failures = 0;
                 if let Ok(event) = decode::<SourceEditorEvent>(raw.clone()) {
                     if let SourceEditorEvent::Trace {
-                        instance_id, event, ..
+                        instance_id,
+                        event,
+                        focus_token,
+                        focus_guard_diagnostic,
+                        ..
                     } = &event
                     {
-                        bridge::trace(event, format!("instance_id={instance_id:?}"));
+                        bridge::trace(
+                            event,
+                            format_trace_details(
+                                *instance_id,
+                                *focus_token,
+                                focus_guard_diagnostic.as_ref(),
+                            ),
+                        );
                     }
                     let active_focus_token = sync.read().active_command_focus_token();
                     let handled = {
@@ -216,7 +230,7 @@ pub fn SourceEditorControllerHost() -> Element {
         }
     });
 
-    rsx! { document::Script { src: EDITOR_BUNDLE } }
+    rsx! { document::Script { "{EDITOR_BUNDLE}" } }
 }
 
 fn dispatch_lifecycle_effect(
@@ -412,6 +426,31 @@ fn container_id(editor_id: SourceEditorId) -> &'static str {
     }
 }
 
+fn format_trace_details(
+    instance_id: Option<EditorInstanceId>,
+    focus_token: Option<u64>,
+    diagnostic: Option<&FocusGuardDiagnostic>,
+) -> String {
+    let Some(diagnostic) = diagnostic else {
+        return format!("instance_id={instance_id:?}");
+    };
+    let token = focus_token.map_or_else(|| "null".to_string(), |token| token.to_string());
+    format!(
+        "token={token} instance_id={instance_id:?} reason={} outcome={} \
+         token_relation={} diversion={} fingerprint={} origin={} active={} \
+         removal_policy={} fallback={}",
+        diagnostic.reason.as_str(),
+        diagnostic.outcome.as_str(),
+        diagnostic.token_relation.as_str(),
+        diagnostic.diversion.as_str(),
+        diagnostic.fingerprint_relation.as_str(),
+        diagnostic.origin_connection.as_str(),
+        diagnostic.active_element_relation.as_str(),
+        diagnostic.removal_policy.as_str(),
+        diagnostic.removed_body_fallback.as_str(),
+    )
+}
+
 fn announce_error(mut toasts: Signal<Vec<Toast>>, error: SourceSyncError) {
     if matches!(
         error,
@@ -426,17 +465,5 @@ fn announce_error(mut toasts: Signal<Vec<Toast>>, error: SourceSyncError) {
 use super::lifecycle::TransitionError;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn lifecycle_dispatch_requires_the_acknowledged_exact_generation() {
-        for script in [
-            dispatch_request_js("{}", None, 41),
-            dispatch_request_js("{}", Some("{}"), 41),
-        ] {
-            assert!(script.contains("window.__bk.dispatchForRelayGeneration(request, 41)"));
-            assert!(!script.contains("__bkGeneration === 40"));
-        }
-    }
-}
+#[path = "host/tests.rs"]
+mod tests;

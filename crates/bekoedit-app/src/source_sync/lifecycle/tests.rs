@@ -287,6 +287,8 @@ fn unsupported_version_and_stale_terminal_are_rejected() {
             protocol_version: 1,
             instance_id: None,
             event: "old".into(),
+            focus_token: None,
+            focus_guard_diagnostic: None,
         }),
         Err(TransitionError::UnsupportedVersion)
     );

@@ -1,13 +1,17 @@
 use std::ffi::OsString;
+use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, OnceLock};
-
-use dioxus::desktop::DesktopContext;
-use dioxus::prelude::*;
-use serde::Deserialize;
+use std::time::Duration;
 
 use crate::persistence::AppPersistence;
+use dioxus::desktop::DesktopContext;
+use dioxus::prelude::*;
+
+use self::protocol::*;
+
+mod protocol;
 
 const PROFILE_PREFIX: &str = "bekoedit-webview-smoke-";
 const MARKER: &str = "RFC041_WEBVIEW_SMOKE_MARKER";
@@ -22,6 +26,8 @@ const EXPECTED_MILESTONES: [&str; 7] = [
 ];
 const NOT_COMPLETE: u8 = 0;
 const SUCCEEDED: u8 = 1;
+const PHASE_EVALUATOR_TIMEOUT: Duration = Duration::from_secs(5);
+const PHASE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 static LAUNCH_CONFIG: OnceLock<LaunchConfig> = OnceLock::new();
 
@@ -215,43 +221,89 @@ impl SmokeTerminal {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DriverResult {
-    ok: bool,
-    stage: String,
-    marker: String,
-    milestones: Vec<String>,
-    error_toast_seen: bool,
-    error: Option<String>,
+async fn run_driver_phase(
+    phase: SmokePhase,
+    exchange_id: u64,
+    release: Option<PinnedExchange>,
+) -> Result<CompletedProbe, String> {
+    let phase_name = phase.as_str();
+    let deadline = tokio::time::Instant::now() + PHASE_EVALUATOR_TIMEOUT;
+    let mut eval = document::eval(WEBVIEW_SMOKE_JS);
+    eval.send(PhaseRequest {
+        protocol_version: SMOKE_PROTOCOL_VERSION,
+        exchange_id,
+        phase: phase_name,
+        release_exchange_id: release.map(|pin| pin.exchange_id),
+        release_phase: release.map(|pin| pin.phase.as_str()),
+    })
+    .map_err(|error| format!("could not start {phase_name} phase: {error}"))?;
+    let message = tokio::time::timeout_at(deadline, eval.recv::<PhaseMessage>())
+        .await
+        .map_err(|_| format!("{phase_name} phase evaluator did not report progress"))?
+        .map_err(|error| format!("{phase_name} phase evaluator receive failed: {error}"))?;
+    let machine = PhaseMachine::for_phase(phase);
+    machine.validate(&message, exchange_id, release)?;
+    eval.send(PhaseAcknowledgement {
+        protocol_version: SMOKE_PROTOCOL_VERSION,
+        exchange_id,
+        phase: phase_name,
+        kind: message.kind,
+    })
+    .map_err(|error| format!("could not acknowledge {phase_name} phase: {error}"))?;
+
+    // Audited against Dioxus Desktop/Document 0.7.9. NativeDioxusChannel::close
+    // only clears the JS queue; its FinalizationRegistry emits the query drop,
+    // whose slab entry owns DesktopEvaluator's generational Owner. The
+    // smoke-only JS pin keeps that exact channel reachable until this joined
+    // return is consumed. Re-audit native_eval.ts, query.rs, document.rs, and
+    // dioxus-document eval.rs before updating Dioxus.
+    let completion = tokio::time::timeout_at(deadline, eval.join::<PhaseCompletion>())
+        .await
+        .map_err(|_| {
+            format!("{phase_name} phase evaluator did not complete after acknowledgement")
+        })?
+        .map_err(|error| format!("{phase_name} phase evaluator join failed: {error}"))?;
+    Ok(CompletedProbe {
+        message,
+        completion,
+        pin: PinnedExchange { exchange_id, phase },
+    })
 }
 
-fn validate_driver_result(result: &DriverResult) -> Result<(), String> {
-    if !result.ok {
-        return Err(format!(
-            "driver failed at {}: {}",
-            result.stage,
-            result.error.as_deref().unwrap_or("unknown error")
-        ));
+async fn run_smoke_sequence<RunProbe, ProbeFuture, ProductionWindow, WindowFuture>(
+    terminal: &SmokeTerminal,
+    mut run_probe: RunProbe,
+    mut production_window: ProductionWindow,
+) -> Result<DriverResult, String>
+where
+    RunProbe: FnMut(SmokePhase, u64, Option<PinnedExchange>) -> ProbeFuture,
+    ProbeFuture: Future<Output = Result<CompletedProbe, String>>,
+    ProductionWindow: FnMut() -> WindowFuture,
+    WindowFuture: Future<Output = ()>,
+{
+    let mut machine = PhaseMachine::new();
+    let mut exchange_id = 1_u64;
+    let mut release = None;
+    loop {
+        let completed = run_probe(machine.current(), exchange_id, release).await?;
+        machine.validate(&completed.message, exchange_id, release)?;
+        validate_completion(
+            &completed.completion,
+            exchange_id,
+            machine.current().as_str(),
+            completed.message.kind,
+        )?;
+        machine.apply_completed(exchange_id, &completed.message)?;
+        release = Some(completed.pin);
+        if let Some(result) = completed.message.result {
+            terminal.accept(&result)?;
+            return Ok(result);
+        }
+        exchange_id = exchange_id
+            .checked_add(1)
+            .ok_or_else(|| "exchange id exhausted".to_string())?;
+        production_window().await;
     }
-    if result.stage != "preview_verified" || result.marker != MARKER {
-        return Err("driver returned the wrong terminal stage or marker".into());
-    }
-    if result.error_toast_seen {
-        return Err("an error toast appeared during the WebView smoke sequence".into());
-    }
-    if result.error.is_some() {
-        return Err("successful driver result unexpectedly contained an error".into());
-    }
-    if result
-        .milestones
-        .iter()
-        .map(String::as_str)
-        .ne(EXPECTED_MILESTONES)
-    {
-        return Err("driver returned an incomplete or out-of-order milestone list".into());
-    }
-    Ok(())
 }
 
 #[component]
@@ -266,20 +318,18 @@ pub fn WebViewSmokeDriver() -> Element {
         let desktop = desktop.clone();
         async move {
             println!("bekoedit WebView lifecycle smoke");
-            let mut eval = document::eval(WEBVIEW_SMOKE_JS);
-            match eval.recv::<DriverResult>().await {
-                Ok(result) => match terminal.accept(&result) {
-                    Ok(()) => {
-                        for milestone in &result.milestones {
-                            println!("  ✓ {milestone}");
-                        }
-                        println!("bekoedit WebView lifecycle smoke PASSED");
+            match run_smoke_sequence(&terminal, run_driver_phase, || {
+                tokio::time::sleep(PHASE_POLL_INTERVAL)
+            })
+            .await
+            {
+                Ok(result) => {
+                    for milestone in &result.milestones {
+                        println!("  ✓ {milestone}");
                     }
-                    Err(error) => eprintln!("bekoedit WebView lifecycle smoke FAILED: {error}"),
-                },
-                Err(error) => {
-                    eprintln!("bekoedit WebView lifecycle smoke FAILED: evaluator error: {error}")
+                    println!("bekoedit WebView lifecycle smoke PASSED");
                 }
+                Err(error) => eprintln!("bekoedit WebView lifecycle smoke FAILED: {error}"),
             }
             desktop.close();
         }

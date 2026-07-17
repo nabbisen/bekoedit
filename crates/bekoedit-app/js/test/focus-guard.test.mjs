@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  FOCUS_GUARD_PROTOCOL_VERSION,
   consumeFocusRequest,
   createBrowserFocusGuardRegistry,
   createFocusGuardRegistry,
+  installBrowserFocusGuardRegistry,
 } from "../src/focus-guard.js";
 
 function element(name) {
@@ -72,6 +74,41 @@ test("browser pointer origin does not depend on button focus", () => {
     invocation: "pointer",
     launchId: "start-new",
   }).armed, true);
+});
+
+test("browser registry installation is idempotent and preserves live state", () => {
+  const body = element("body");
+  const launch = {
+    ...element("launch"),
+    dataset: { sourceFocusLaunch: "start-new" },
+    getClientRects: () => [{}],
+  };
+  const document = {
+    activeElement: body,
+    body,
+    querySelectorAll: () => [launch],
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const globalObject = {};
+  const first = installBrowserFocusGuardRegistry(globalObject, document);
+  assert.equal(first.protocolVersion, FOCUS_GUARD_PROTOCOL_VERSION);
+  assert.equal(first.arm({
+    ...request(7),
+    invocation: "pointer",
+    launchId: "start-new",
+  }).armed, true);
+
+  const second = installBrowserFocusGuardRegistry(globalObject, document);
+  assert.equal(second, first);
+  assert.equal(second.inspect().currentToken, 7);
+});
+
+test("browser registry installation fails closed on an incompatible owner", () => {
+  const incompatible = { protocolVersion: FOCUS_GUARD_PROTOCOL_VERSION + 1 };
+  const globalObject = { __bkFocusGuards: incompatible };
+  assert.equal(installBrowserFocusGuardRegistry(globalObject, {}), null);
+  assert.equal(globalObject.__bkFocusGuards, incompatible);
 });
 
 test("timeout before delayed arm fences installation", () => {
@@ -246,4 +283,233 @@ test("only an exact successful consumption emits the success trace", () => {
     focuses: 0,
     traces: ["source.focus.rejected.identity"],
   });
+});
+
+test("diagnostics distinguish missing guard and token mismatch without exposing current token", () => {
+  const missing = harness();
+  assert.deepEqual(missing.registry.consumeDiagnostic(1, "secret-fingerprint"), {
+    accepted: false,
+    diagnostic: {
+      outcome: "rejected",
+      reason: "missingGuard",
+      tokenRelation: "noGuard",
+      diversion: "notEvaluated",
+      fingerprintRelation: "notEvaluated",
+      originConnection: "notEvaluated",
+      activeElementRelation: "notEvaluated",
+      removalPolicy: "notEvaluated",
+      removedBodyFallback: "notEvaluated",
+    },
+  });
+
+  const mismatch = harness();
+  const newer = element("newer-secret-element");
+  mismatch.origins.set("newer-secret-fingerprint", newer);
+  mismatch.setActive(newer);
+  mismatch.registry.arm(request(2, "newer-secret-fingerprint"));
+  const result = mismatch.registry.consumeDiagnostic(1, "older-secret-fingerprint");
+  assert.equal(result.accepted, false);
+  assert.equal(result.diagnostic.reason, "tokenMismatch");
+  assert.equal(result.diagnostic.tokenRelation, "mismatch");
+  assert.equal(JSON.stringify(result).includes("newer-secret"), false);
+  assert.equal(mismatch.registry.inspect().currentToken, 2);
+  assert.equal(mismatch.listenerCount(), 3);
+});
+
+test("first diversion source is irreversible and independently reports fingerprint state", () => {
+  const cases = [
+    {
+      fire: (h, origin) => h.fire("pointerdown", { target: element("outside") }),
+      later: (h) => h.fire("keydown", { key: "Tab" }),
+      reason: "divertedPointer",
+      diversion: "pointer",
+    },
+    {
+      fire: (h) => h.fire("keydown", { key: "Tab" }),
+      later: (h) => h.fire("focusin", { target: element("outside") }),
+      reason: "divertedTab",
+      diversion: "tab",
+    },
+    {
+      fire: (h) => h.fire("focusin", { target: element("outside") }),
+      later: (h) => h.fire("pointerdown", { target: element("outside") }),
+      reason: "divertedFocusIn",
+      diversion: "focusIn",
+    },
+  ];
+  for (const entry of cases) {
+    const h = harness();
+    const origin = element("origin");
+    h.origins.set("request-1", origin);
+    h.setActive(origin);
+    assert.equal(h.registry.arm(request(1)).armed, true);
+    entry.fire(h, origin);
+    entry.later(h);
+    const result = h.registry.consumeDiagnostic(1, "different-fingerprint");
+    assert.equal(result.accepted, false);
+    assert.equal(result.diagnostic.reason, entry.reason);
+    assert.equal(result.diagnostic.diversion, entry.diversion);
+    assert.equal(result.diagnostic.fingerprintRelation, "mismatch");
+    assert.equal(h.listenerCount(), 0);
+    assert.equal(h.registry.consumeDiagnostic(1, "request-1").diagnostic.reason, "missingGuard");
+  }
+});
+
+test("diagnostics classify every origin and active-element eligibility state", () => {
+  const cases = [
+    ["connected-origin", true, "origin", "launchMayBeRemoved", true, "ineligible"],
+    ["connected-body", true, "body", "launchMayBeRemoved", false, "ineligible"],
+    ["connected-other", true, "other", "launchMayBeRemoved", false, "ineligible"],
+    ["connected-none", true, "none", "launchMayBeRemoved", false, "ineligible"],
+    ["removed-body-allowed", false, "body", "launchMayBeRemoved", true, "eligible"],
+    ["removed-body-forbidden", false, "body", "launchMustRemain", false, "ineligible"],
+    ["removed-origin", false, "origin", "launchMayBeRemoved", false, "ineligible"],
+    ["removed-other", false, "other", "launchMayBeRemoved", false, "ineligible"],
+    ["removed-none", false, "none", "launchMayBeRemoved", false, "ineligible"],
+  ];
+  for (const [name, connected, relation, removalPolicy, accepted, fallback] of cases) {
+    const h = harness();
+    const origin = element(`origin-${name}`);
+    const other = element(`other-${name}`);
+    h.origins.set(name, origin);
+    h.setActive(relation === "origin"
+      ? origin
+      : relation === "body"
+        ? h.body
+        : relation === "other"
+          ? other
+          : null);
+    assert.equal(h.registry.arm({ ...request(1, name), removalPolicy }).armed, true);
+    origin.isConnected = connected;
+    const result = h.registry.consumeDiagnostic(1, name);
+    assert.equal(result.accepted, accepted, name);
+    assert.equal(result.diagnostic.reason, accepted ? "accepted" : "activeElementIneligible");
+    assert.equal(result.diagnostic.originConnection, connected ? "connected" : "disconnected");
+    assert.equal(result.diagnostic.activeElementRelation, relation);
+    assert.equal(result.diagnostic.removedBodyFallback, fallback);
+    assert.equal(result.diagnostic.removalPolicy, removalPolicy);
+  }
+});
+
+test("fingerprint diagnostics expose equality only and legacy consume shares one-use authority", () => {
+  const h = harness();
+  const origin = element("private-origin-name");
+  h.origins.set("private-original-fingerprint", origin);
+  h.setActive(origin);
+  h.registry.arm(request(1, "private-original-fingerprint"));
+  const mismatch = h.registry.consumeDiagnostic(1, "private-other-fingerprint");
+  assert.equal(mismatch.diagnostic.reason, "fingerprintMismatch");
+  assert.equal(mismatch.diagnostic.fingerprintRelation, "mismatch");
+  assert.equal(JSON.stringify(mismatch).includes("private-"), false);
+
+  const legacy = harness();
+  const legacyOrigin = element("legacy");
+  legacy.origins.set("request-1", legacyOrigin);
+  legacy.setActive(legacyOrigin);
+  legacy.registry.arm(request(1));
+  assert.equal(legacy.registry.consume(1, "request-1"), true);
+  assert.equal(legacy.registry.consume(1, "request-1"), false);
+});
+
+test("wrapper traces correlate safe diagnostics and preserve identity and cancellation fences", () => {
+  const identity = {
+    instanceId: 4,
+    editorId: "text",
+    documentId: 7,
+    epoch: 2,
+  };
+  const run = ({ suppliedRequest, actualIdentity = identity, armToken = 1 } = {}) => {
+    const h = harness();
+    const origin = element("private-origin");
+    h.origins.set(`request-${armToken}`, origin);
+    h.setActive(origin);
+    h.registry.arm(request(armToken));
+    const traces = [];
+    let focuses = 0;
+    const accepted = consumeFocusRequest(
+      h.registry,
+      suppliedRequest,
+      actualIdentity,
+      () => { focuses += 1; },
+      (name, details) => traces.push({ name, details }),
+    );
+    return { accepted, focuses, traces, h };
+  };
+
+  const exactRequest = { token: 1, fingerprint: "request-1", identity };
+  const accepted = run({ suppliedRequest: exactRequest });
+  assert.equal(accepted.accepted, true);
+  assert.equal(accepted.focuses, 1);
+  assert.equal(accepted.traces[0].name, "source.focus.consumed");
+  assert.equal(accepted.traces[0].details.focusToken, 1);
+  assert.equal(accepted.traces[0].details.focusGuardDiagnostic.reason, "accepted");
+
+  const missingRequest = run({ suppliedRequest: null });
+  assert.equal(missingRequest.accepted, false);
+  assert.equal(missingRequest.traces[0].details.focusToken, null);
+  assert.equal(
+    missingRequest.traces[0].details.focusGuardDiagnostic.reason,
+    "requestMissing",
+  );
+
+  const identityMismatch = run({
+    suppliedRequest: exactRequest,
+    actualIdentity: { ...identity, epoch: 3 },
+  });
+  assert.equal(identityMismatch.accepted, false);
+  assert.equal(
+    identityMismatch.traces[0].details.focusGuardDiagnostic.reason,
+    "identityMismatch",
+  );
+
+  const newer = run({
+    suppliedRequest: exactRequest,
+    armToken: 2,
+  });
+  assert.equal(newer.accepted, false);
+  assert.equal(newer.traces[0].details.focusGuardDiagnostic.reason, "tokenMismatch");
+  assert.equal(newer.h.registry.inspect().currentToken, 2);
+  assert.equal(newer.h.listenerCount(), 3);
+
+  const older = run({
+    suppliedRequest: { token: 2, fingerprint: "request-2", identity },
+    armToken: 1,
+  });
+  assert.equal(older.accepted, false);
+  assert.equal(older.traces[0].details.focusGuardDiagnostic.reason, "tokenMismatch");
+  assert.equal(older.h.registry.inspect().currentToken, null);
+  assert.equal(older.h.listenerCount(), 0);
+});
+
+test("trace delivery failure cannot reverse an accepted or rejected focus decision", () => {
+  const identity = {
+    instanceId: 4,
+    editorId: "text",
+    documentId: 7,
+    epoch: 2,
+  };
+  const accepted = harness();
+  const origin = element("origin");
+  accepted.origins.set("request-1", origin);
+  accepted.setActive(origin);
+  accepted.registry.arm(request(1));
+  let focuses = 0;
+  assert.equal(consumeFocusRequest(
+    accepted.registry,
+    { token: 1, fingerprint: "request-1", identity },
+    identity,
+    () => { focuses += 1; },
+    () => { throw new Error("trace unavailable"); },
+  ), true);
+  assert.equal(focuses, 1);
+
+  const rejected = harness();
+  assert.equal(consumeFocusRequest(
+    rejected.registry,
+    { token: 1, fingerprint: "request-1", identity },
+    identity,
+    () => { focuses += 1; },
+    () => { throw new Error("trace unavailable"); },
+  ), false);
+  assert.equal(focuses, 1);
 });

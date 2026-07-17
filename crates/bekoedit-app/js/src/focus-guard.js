@@ -9,19 +9,62 @@ const sameIdentity = (left, right) => Boolean(left && right)
   && left.documentId === right.documentId
   && left.epoch === right.epoch;
 
+export const FOCUS_GUARD_PROTOCOL_VERSION = 2;
+const FOCUS_GUARD_REGISTRY_KEY = "__bkFocusGuards";
+
+const unevaluatedDiagnostic = (reason, tokenRelation = "notEvaluated") => ({
+  outcome: "rejected",
+  reason,
+  tokenRelation,
+  diversion: "notEvaluated",
+  fingerprintRelation: "notEvaluated",
+  originConnection: "notEvaluated",
+  activeElementRelation: "notEvaluated",
+  removalPolicy: "notEvaluated",
+  removedBodyFallback: "notEvaluated",
+});
+
+const emitTraceSafely = (trace, name, details) => {
+  try {
+    trace(name, details);
+  } catch (_error) {
+    // Diagnostic delivery is never allowed to change focus authority.
+  }
+};
+
+const safeFocusToken = (token) => Number.isSafeInteger(token) && token > 0 ? token : null;
+
 export function consumeFocusRequest(registry, request, currentIdentity, focus, trace) {
-  if (!request || !sameIdentity(currentIdentity, request.identity)) {
-    registry.cancelThrough(request?.token ?? 0);
-    trace("source.focus.rejected.identity");
+  if (!request) {
+    registry.cancelThrough(0);
+    emitTraceSafely(trace, "source.focus.rejected.identity", {
+      focusToken: null,
+      focusGuardDiagnostic: unevaluatedDiagnostic("requestMissing"),
+    });
     return false;
   }
-  if (!registry.consume(request.token, request.fingerprint)) {
+  if (!sameIdentity(currentIdentity, request.identity)) {
+    registry.cancelThrough(request?.token ?? 0);
+    emitTraceSafely(trace, "source.focus.rejected.identity", {
+      focusToken: safeFocusToken(request.token),
+      focusGuardDiagnostic: unevaluatedDiagnostic("identityMismatch"),
+    });
+    return false;
+  }
+  const consumed = registry.consumeDiagnostic(request.token, request.fingerprint);
+  if (!consumed.accepted) {
     registry.cancelThrough(request.token);
-    trace("source.focus.rejected.guard");
+    emitTraceSafely(trace, "source.focus.rejected.guard", {
+      focusToken: safeFocusToken(request.token),
+      focusGuardDiagnostic: consumed.diagnostic,
+    });
     return false;
   }
   focus();
-  trace("source.focus.consumed");
+  emitTraceSafely(trace, "source.focus.consumed", {
+    focusToken: safeFocusToken(request.token),
+    focusGuardDiagnostic: consumed.diagnostic,
+  });
   return true;
 }
 
@@ -74,22 +117,24 @@ export function createFocusGuardRegistry(deps) {
       fingerprint: request.fingerprint,
       origin,
       removalPolicy: request.removalPolicy,
-      diverted: false,
+      diversionReason: null,
       listeners: [],
     };
-    const divert = () => { guard.diverted = true; };
+    const divert = (reason) => {
+      if (guard.diversionReason === null) guard.diversionReason = reason;
+    };
     const onPointerDown = (event) => {
-      if (!contains(guard.origin, event.target)) divert();
+      if (!contains(guard.origin, event.target)) divert("pointer");
     };
     const onKeyDown = (event) => {
-      if (event.key === "Tab") divert();
+      if (event.key === "Tab") divert("tab");
     };
     const onFocusIn = (event) => {
       if (contains(guard.origin, event.target)) return;
       const removableBodyFallback = guard.removalPolicy === "launchMayBeRemoved"
         && !guard.origin.isConnected
         && event.target === deps.body();
-      if (!removableBodyFallback) divert();
+      if (!removableBodyFallback) divert("focusIn");
     };
     guard.listeners = [
       ["pointerdown", onPointerDown],
@@ -114,26 +159,77 @@ export function createFocusGuardRegistry(deps) {
     return true;
   };
 
-  const consume = (token, fingerprint) => {
-    if (!currentGuard || currentGuard.token !== token) return false;
+  const consumeDiagnostic = (token, fingerprint) => {
+    if (!currentGuard) {
+      return {
+        accepted: false,
+        diagnostic: unevaluatedDiagnostic("missingGuard", "noGuard"),
+      };
+    }
+    if (currentGuard.token !== token) {
+      return {
+        accepted: false,
+        diagnostic: unevaluatedDiagnostic("tokenMismatch", "mismatch"),
+      };
+    }
     const guard = currentGuard;
     const active = deps.activeElement();
-    const originActive = guard.origin.isConnected && contains(guard.origin, active);
+    const originConnection = guard.origin.isConnected ? "connected" : "disconnected";
+    const activeElementRelation = contains(guard.origin, active)
+      ? "origin"
+      : active === deps.body()
+        ? "body"
+        : active
+          ? "other"
+          : "none";
+    const fingerprintRelation = sameFingerprint(guard.fingerprint, fingerprint)
+      ? "equal"
+      : "mismatch";
+    const originActive = originConnection === "connected"
+      && activeElementRelation === "origin";
     const removedBodyFallback = guard.removalPolicy === "launchMayBeRemoved"
-      && !guard.origin.isConnected
-      && active === deps.body();
-    const permitted = !guard.diverted
-      && sameFingerprint(guard.fingerprint, fingerprint)
+      && originConnection === "disconnected"
+      && activeElementRelation === "body";
+    const removalPolicy = guard.removalPolicy === "launchMayBeRemoved"
+      || guard.removalPolicy === "launchMustRemain"
+      ? guard.removalPolicy
+      : "notEvaluated";
+    const permitted = guard.diversionReason === null
+      && fingerprintRelation === "equal"
       && (originActive || removedBodyFallback);
+    const reason = guard.diversionReason === "pointer"
+      ? "divertedPointer"
+      : guard.diversionReason === "tab"
+        ? "divertedTab"
+        : guard.diversionReason === "focusIn"
+          ? "divertedFocusIn"
+          : fingerprintRelation === "mismatch"
+            ? "fingerprintMismatch"
+            : !originActive && !removedBodyFallback
+              ? "activeElementIneligible"
+              : "accepted";
+    const diagnostic = {
+      outcome: permitted ? "accepted" : "rejected",
+      reason,
+      tokenRelation: "match",
+      diversion: guard.diversionReason ?? "none",
+      fingerprintRelation,
+      originConnection,
+      activeElementRelation,
+      removalPolicy,
+      removedBodyFallback: removedBodyFallback ? "eligible" : "ineligible",
+    };
     removeCurrent();
     cancelledThrough = Math.max(cancelledThrough, token);
-    return permitted;
+    return { accepted: permitted, diagnostic };
   };
+  const consume = (token, fingerprint) => consumeDiagnostic(token, fingerprint).accepted;
 
   return {
     arm,
     cancelThrough,
     consume,
+    consumeDiagnostic,
     inspect: () => ({
       highestArmToken,
       highestFingerprint,
@@ -178,4 +274,37 @@ export function createBrowserFocusGuardRegistry(document) {
     addListener: (...args) => document.addEventListener(...args),
     removeListener: (...args) => document.removeEventListener(...args),
   });
+}
+
+function compatibleBrowserRegistry(candidate) {
+  return candidate?.protocolVersion === FOCUS_GUARD_PROTOCOL_VERSION
+    && typeof candidate.arm === "function"
+    && typeof candidate.cancelThrough === "function"
+    && typeof candidate.consume === "function"
+    && typeof candidate.consumeDiagnostic === "function"
+    && typeof candidate.inspect === "function";
+}
+
+export function installBrowserFocusGuardRegistry(globalObject, document) {
+  const existing = globalObject[FOCUS_GUARD_REGISTRY_KEY];
+  if (existing !== undefined) {
+    return compatibleBrowserRegistry(existing) ? existing : null;
+  }
+
+  const registry = createBrowserFocusGuardRegistry(document);
+  const singleton = Object.freeze({
+    protocolVersion: FOCUS_GUARD_PROTOCOL_VERSION,
+    arm: registry.arm,
+    cancelThrough: registry.cancelThrough,
+    consume: registry.consume,
+    consumeDiagnostic: registry.consumeDiagnostic,
+    inspect: registry.inspect,
+  });
+  Object.defineProperty(globalObject, FOCUS_GUARD_REGISTRY_KEY, {
+    value: singleton,
+    configurable: false,
+    enumerable: false,
+    writable: false,
+  });
+  return singleton;
 }

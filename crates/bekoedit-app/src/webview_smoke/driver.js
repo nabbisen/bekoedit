@@ -1,39 +1,67 @@
-(async () => {
+return (async () => {
   const marker = "RFC041_WEBVIEW_SMOKE_MARKER";
-  const milestones = [];
-  const deadline = performance.now() + 15000;
-  let stage = "observer_install";
-  let errorToastSeen = Boolean(document.querySelector(".toast-error"));
+  const stateKey = "__bkWebViewSmokeState";
+  const pinKey = "__bkWebViewSmokeEvalPin";
+  const protocolVersion = 2;
+  const pinProtocolVersion = 1;
+  const request = await dioxus.recv();
+  const requestedPhase = request?.phase;
+  const exchangeId = request?.exchangeId;
+
+  if (
+    request?.protocolVersion !== protocolVersion ||
+    !Number.isSafeInteger(exchangeId) ||
+    exchangeId <= 0 ||
+    !["launch", "editor", "preview"].includes(requestedPhase)
+  ) {
+    throw new Error("invalid phase request");
+  }
+
+  let pinRegistry = window[pinKey];
+  if (pinRegistry === undefined) {
+    pinRegistry = Object.seal({ protocolVersion: pinProtocolVersion, current: null });
+    Object.defineProperty(window, pinKey, {
+      value: pinRegistry,
+      configurable: false,
+      enumerable: false,
+      writable: false,
+    });
+  } else if (
+    pinRegistry?.protocolVersion !== pinProtocolVersion ||
+    !Object.isSealed(pinRegistry) ||
+    Object.keys(pinRegistry).sort().join(",") !== "current,protocolVersion"
+  ) {
+    throw new Error("incompatible smoke evaluator pin registry");
+  }
+
+  const hasReleaseId = request.releaseExchangeId !== null;
+  const hasReleasePhase = request.releasePhase !== null;
+  if (hasReleaseId !== hasReleasePhase) {
+    throw new Error("incomplete prior evaluator pin release");
+  }
+  let releasedExchangeId = null;
+  let releasedPhase = null;
+  if (hasReleaseId) {
+    if (
+      !Number.isSafeInteger(request.releaseExchangeId) ||
+      request.releaseExchangeId <= 0 ||
+      !["launch", "editor", "preview"].includes(request.releasePhase) ||
+      pinRegistry.current?.exchangeId !== request.releaseExchangeId ||
+      pinRegistry.current?.phase !== request.releasePhase ||
+      !pinRegistry.current?.channel
+    ) {
+      throw new Error("prior evaluator pin did not match release request");
+    }
+    releasedExchangeId = request.releaseExchangeId;
+    releasedPhase = request.releasePhase;
+    pinRegistry.current = null;
+  } else if (pinRegistry.current !== null) {
+    throw new Error("unexpected prior evaluator pin");
+  }
+
   const containsErrorToast = (node) =>
     node?.nodeType === Node.ELEMENT_NODE &&
     (node.matches?.(".toast-error") || node.querySelector?.(".toast-error"));
-  const observer = new MutationObserver((records) => {
-    for (const record of records) {
-      if (
-        [...record.addedNodes].some(containsErrorToast) ||
-        containsErrorToast(record.target)
-      ) {
-        errorToastSeen = true;
-      }
-    }
-  });
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ["class"],
-  });
-  milestones.push("observer_installed");
-
-  const waitFor = async (name, probe) => {
-    stage = name;
-    while (performance.now() < deadline) {
-      const value = probe();
-      if (value) return value;
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-    throw new Error(`timed out at ${name}`);
-  };
   const click = (element) =>
     element.dispatchEvent(
       new MouseEvent("click", {
@@ -44,70 +72,165 @@
       }),
     );
 
-  try {
-    const newButton = await waitFor("start_visible", () =>
-      document.querySelector('[data-source-focus-launch="start-new"]'),
-    );
-    milestones.push("start_visible");
-    click(newButton);
-    milestones.push("new_clicked");
+  const createState = () => {
+    const state = {
+      protocolVersion: 1,
+      phase: "launch",
+      stage: "observer_install",
+      deadline: null,
+      milestones: ["observer_installed"],
+      errorToastSeen: Boolean(document.querySelector(".toast-error")),
+      observer: null,
+    };
+    state.observer = new MutationObserver((records) => {
+      for (const record of records) {
+        if (
+          [...record.addedNodes].some(containsErrorToast) ||
+          containsErrorToast(record.target)
+        ) {
+          state.errorToastSeen = true;
+        }
+      }
+    });
+    state.observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    window[stateKey] = state;
+    return state;
+  };
 
-    const view = await waitFor("editor_ready_focused", () => {
-      const current = window.__bk?._view;
+  const state = window[stateKey] ?? createState();
+  const finish = (ok, error = null) => {
+    const result = {
+      ok,
+      stage: state.stage,
+      marker,
+      milestones: [...state.milestones],
+      errorToastSeen: state.errorToastSeen,
+      error,
+    };
+    state.observer.disconnect();
+    delete window[stateKey];
+    return { kind: "terminal", result };
+  };
+  const timedOut = () => state.deadline !== null && performance.now() >= state.deadline;
+
+  let outgoing;
+  try {
+    if (state.protocolVersion !== 1 || requestedPhase !== state.phase) {
+      throw new Error(
+        `phase mismatch: requested ${requestedPhase}, current ${state.phase}`,
+      );
+    }
+
+    if (requestedPhase === "launch") {
+      state.stage = "start_visible";
+      const newButton = document.querySelector(
+        '[data-source-focus-launch="start-new"]',
+      );
+      if (!newButton) {
+        outgoing = { kind: "pending" };
+      } else {
+        state.milestones.push("start_visible");
+        if (!click(newButton)) throw new Error("New click was not accepted");
+        state.milestones.push("new_clicked");
+        state.deadline = performance.now() + 15000;
+        state.phase = "editor";
+        outgoing = {
+          kind: "progress",
+          milestone: "new_clicked",
+        };
+      }
+    } else if (requestedPhase === "editor") {
+      state.stage = "editor_ready_focused";
+      if (timedOut()) throw new Error("timed out at editor_ready_focused");
+      const view = window.__bk?._view;
       const host = document.querySelector(
         '[data-source-focus-launch-region="text"]',
       );
-      return current &&
-        current.dom?.isConnected &&
-        current.hasFocus &&
+      const ready = view &&
+        view.dom?.isConnected &&
+        view.hasFocus &&
         host &&
-        !host.querySelector(".source-editor-status")
-        ? current
-        : null;
-    });
-    milestones.push("editor_ready_focused");
-
-    stage = "edit_dispatched";
-    view.dispatch({ changes: { from: view.state.doc.length, insert: marker } });
-    milestones.push("edit_dispatched");
-    const previewButton = document.querySelector(
-      '[data-source-focus-launch="mode-preview"]',
-    );
-    if (!previewButton) throw new Error("Preview control is missing");
-    click(previewButton);
-    milestones.push("preview_clicked");
-
-    const preview = await waitFor("preview_verified", () => {
+        !host.querySelector(".source-editor-status");
+      if (!ready) {
+        outgoing = { kind: "pending" };
+      } else {
+        state.milestones.push("editor_ready_focused");
+        state.stage = "edit_dispatched";
+        view.dispatch({
+          changes: { from: view.state.doc.length, insert: marker },
+        });
+        state.milestones.push("edit_dispatched");
+        const previewButton = document.querySelector(
+          '[data-source-focus-launch="mode-preview"]',
+        );
+        if (!previewButton) throw new Error("Preview control is missing");
+        if (!click(previewButton)) throw new Error("Preview click was not accepted");
+        state.milestones.push("preview_clicked");
+        state.phase = "preview";
+        outgoing = {
+          kind: "progress",
+          milestone: "preview_clicked",
+        };
+      }
+    } else if (requestedPhase === "preview") {
+      state.stage = "preview_verified";
+      if (timedOut()) throw new Error("timed out at preview_verified");
       const article = document.querySelector("article.preview");
       const active = document.querySelector(
         '[data-source-focus-launch="mode-preview"].active[aria-selected="true"]',
       );
-      return article?.textContent?.includes(marker) && active ? article : null;
-    });
-    if (!preview.textContent.includes(marker)) {
-      throw new Error("Preview does not contain the exact marker");
+      if (!article?.textContent?.includes(marker) || !active) {
+        outgoing = { kind: "pending" };
+      } else {
+        if (state.errorToastSeen) throw new Error("an error toast appeared");
+        state.milestones.push("preview_verified");
+        outgoing = finish(true);
+      }
+    } else {
+      throw new Error(`unknown phase: ${requestedPhase}`);
     }
-    if (errorToastSeen) throw new Error("an error toast appeared");
-    milestones.push("preview_verified");
-    stage = "preview_verified";
-    dioxus.send({
-      ok: true,
-      stage,
-      marker,
-      milestones,
-      errorToastSeen,
-      error: null,
-    });
   } catch (error) {
-    dioxus.send({
-      ok: false,
-      stage,
-      marker,
-      milestones,
-      errorToastSeen,
-      error: String(error),
-    });
-  } finally {
-    observer.disconnect();
+    outgoing = finish(false, String(error));
   }
+
+  const report = {
+    protocolVersion,
+    exchangeId,
+    phase: requestedPhase,
+    releasedExchangeId,
+    releasedPhase,
+    ...outgoing,
+  };
+  dioxus.send(report);
+  const acknowledgement = await dioxus.recv();
+  if (
+    acknowledgement?.protocolVersion !== protocolVersion ||
+    acknowledgement?.exchangeId !== exchangeId ||
+    acknowledgement?.phase !== requestedPhase ||
+    acknowledgement?.kind !== report.kind
+  ) {
+    throw new Error("invalid phase acknowledgement");
+  }
+
+  if (pinRegistry.current !== null) {
+    throw new Error("smoke evaluator pin was already occupied");
+  }
+  pinRegistry.current = Object.freeze({
+    exchangeId,
+    phase: requestedPhase,
+    channel: dioxus,
+  });
+  return {
+    protocolVersion,
+    exchangeId,
+    phase: requestedPhase,
+    kind: report.kind,
+    acknowledgementProcessed: true,
+    evaluatorPinned: true,
+  };
 })();
