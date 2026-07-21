@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Updated transitive `anyhow` from 1.0.102 to 1.0.103 through the Dioxus
+  core/desktop and image/rav1e dependency paths, resolving
+  RUSTSEC-2026-0190.
+- Updated transitive `memmap2` from 0.9.10 to 0.9.11 through Dioxus and
+  `subsecond`, resolving RUSTSEC-2026-0186.
+- Both patched releases are selected in `Cargo.lock` under their upstream
+  semver-compatible requirements; no direct application dependency or exact
+  manifest pin was added.
+- This closes the two time-bounded 0.13.0 patch-level deferrals tracked by
+  `AUDIT-2026-07-17-01`; its remaining dependency workstreams stay open.
+
+[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.13.0...HEAD
+
 ## [0.13.0] - 2026-07-15
 
 ### Added
