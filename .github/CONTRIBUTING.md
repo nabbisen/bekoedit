@@ -7,12 +7,20 @@ layout, development workflow, and the conventions used throughout the codebase.
 
 | Tool | Minimum version | Purpose |
 |------|-----------------|---------|
-| Rust (stable) | 1.85 | All Rust crates |
+| Rust | 1.88 | Desktop app, core, and Markdown crates |
+| Rust | 1.85 | `bekoedit-fs` supported floor |
 | Node.js | 24 | Build the CodeMirror 6 bundle |
 | Git | Any recent | Version control |
 
-Install Rust via [rustup](https://rustup.rs). The workspace toolchain file
-(`rust-toolchain.toml`) pins the exact compiler version automatically.
+Install Rust via [rustup](https://rustup.rs). The repository does not override
+your selected compiler. Cargo metadata declares Rust 1.88 for `bekoedit`,
+`bekoedit-core`, and `bekoedit-markdown`; release CI tests their lower bound
+with exact Rust 1.88.0. `bekoedit-fs` intentionally has no new manifest floor
+in this patch, but exact Rust 1.85.0 tests continuously enforce its supported
+minimum. `bekoedit-ui-contract` has no independently declared MSRV; whole-
+workspace and release CI still build it with exact Rust 1.88.0. An absent
+manifest declaration does not promise compatibility with every older compiler,
+and newer compilers are not each independently certified.
 
 ## Repository layout
 
@@ -39,7 +47,7 @@ cargo install dioxus-cli --version 0.7
 cargo run -p bekoedit
 
 # Build release binary
-cargo build --release -p bekoedit
+cargo build --release --locked -p bekoedit
 
 # Rebuild the CodeMirror 6 bundle after editing js/src/editor.js
 cd crates/bekoedit-app/js && npm install && npm run build
@@ -49,10 +57,10 @@ cd crates/bekoedit-app/js && npm install && npm run build
 
 ```sh
 # Full workspace test suite
-cargo test --workspace
+cargo test --workspace --locked
 
 # Headless smoke test (CI equivalent)
-cargo build -p bekoedit && ./target/debug/bekoedit --headless-smoke
+cargo build -p bekoedit --locked && ./target/debug/bekoedit --headless-smoke
 
 # Performance benchmark (RFC-032)
 cargo bench -p bekoedit-markdown -- --test
@@ -65,9 +73,9 @@ All three must pass before submitting a pull request.
 Every pull request must pass:
 
 ```sh
-cargo fmt --all                                    # formatting
-cargo clippy --workspace -- -D warnings            # no new warnings
-cargo test --workspace                             # all tests green
+cargo fmt --all                                      # formatting
+cargo clippy --workspace --locked -- -D warnings    # no new warnings
+cargo test --workspace --locked                     # all tests green
 ./target/debug/bekoedit --headless-smoke           # smoke test
 bash scripts/check-rfcs.sh                        # RFC integrity
 ```

@@ -8,6 +8,32 @@ maintainer decision.
 Do not mark an item complete unless the command output, workflow result, or
 artifact inspection was observed for the release candidate being signed off.
 
+## Third-party action pin policy
+
+Every third-party GitHub Action must use a reviewed full commit SHA in tracked
+workflow `uses:` entries. Re-evaluate every pin during each release prep,
+immediately after an upstream security advisory, deprecation, runtime/runner
+incompatibility, or maintenance notice, and at least every 90 days when no
+release triggers a review.
+
+For each candidate, record the intended upstream release tag and verify that
+its full executable commit is reachable from that tag. Dereference annotated
+tags and record the peeled commit rather than the tag-object SHA. Review the
+release notes, exact commit's `action.yml` runtime and inputs/outputs, required
+permissions, runner compatibility, and relevant advisories or maintenance
+notices.
+
+A changed pin requires maintainer and architecture approval, affected local
+and workflow/static gates, and fresh exact-commit CI. Keep a human-readable
+release label in the workflow comment beside the SHA and record the mapping,
+review date, and evidence in candidate release records.
+
+An intentionally non-current release is an exception. Record the newer
+release, the incompatibility or risk requiring the older selection, supported
+runtime/runner assumptions, an owner, an event-driven re-evaluation trigger,
+and an absolute review date no more than 90 days away. Never retain an older
+pin silently.
+
 ---
 
 ## Candidate identity
@@ -24,16 +50,29 @@ artifact inspection was observed for the release candidate being signed off.
 
 Record the command, environment, and observed result.
 
+MSRV terminology is package-specific. Cargo declares Rust 1.88 for
+`bekoedit`, `bekoedit-core`, and `bekoedit-markdown`. Exact Rust 1.85 CI
+continuously tests `bekoedit-fs` without adding a manifest constraint in the
+0.13.1 patch. `bekoedit-ui-contract` has no independent manifest MSRV. Exact
+Rust 1.88.0 is the whole-workspace release compiler; this does not imply that
+every newer compiler is separately certified.
+
 | Gate | Evidence |
 |------|----------|
-| `cargo fmt --all -- --check` | `________` |
-| `cargo clippy --workspace --all-targets -- -D warnings` | `________` |
-| `cargo test --workspace` | `________` |
-| `cargo audit` | `________` |
+| `cargo +1.88.0 fmt --all -- --check` | `________` |
+| `cargo metadata --locked --format-version 1` | `________` |
+| Parsed package MSRV split (three at 1.88; fs/UI contract absent) | `________` |
+| `cargo +1.85.0 test -p bekoedit-fs --locked` | `________` |
+| `cargo +1.88.0 clippy --workspace --all-targets --locked -- -D warnings` | `________` |
+| `cargo +1.88.0 test --workspace --locked` | `________` |
+| `cargo +1.88.0 audit` | `________` |
 | `bash scripts/check-rfcs.sh` | `________` |
 | `mdbook build docs` | `________` |
-| `cargo build -p bekoedit --release` | `________` |
-| `./target/release/bekoedit --headless-smoke` | `________` |
+| `cargo +1.88.0 build -p bekoedit --release --locked --target <target>` | `________` |
+| Target-qualified binary architecture inspection | `________` |
+| Target-qualified release binary `--headless-smoke` | `________` |
+| `bash scripts/test-release-artifacts.sh <temporary-directory>` | `________` |
+| `git diff --exit-code -- Cargo.lock` | `________` |
 
 ## CI gates
 
@@ -42,6 +81,8 @@ Record the command, environment, and observed result.
 | Latest CI workflow run | `________` |
 | Format and clippy job | `________` |
 | Workspace tests on Linux, macOS, Windows | `________` |
+| Rust 1.85 filesystem support job | `________` |
+| Rust 1.88 native GUI builds on Linux, macOS, Windows | `________` |
 | Security audit job | `________` |
 | Build and smoke job | `________` |
 | Audit warning decision | `accept / defer / deny`: `________` |
@@ -49,6 +90,17 @@ Record the command, environment, and observed result.
 ## Release workflow artifacts
 
 Record the tag workflow run and every generated artifact.
+
+For every builder, also record `RUNNER_OS`, `RUNNER_ARCH`, full `rustc -vV`
+output, requested and installed target, target-qualified Cargo output path,
+platform binary-inspection output, archive name, and the immediately
+pre-upload Cargo.lock cleanliness result. These values must agree with the
+fixed workflow matrix.
+
+The publisher must invoke `scripts/check-release-artifacts.sh` on the merged
+download directory. After verification, pass exactly those six explicit
+archive/sidecar paths to the publication action without an intervening step or
+wildcard.
 
 | Artifact | Root layout inspected | Checksum verified | Notes |
 |----------|-----------------------|-------------------|-------|

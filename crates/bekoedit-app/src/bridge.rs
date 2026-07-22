@@ -21,6 +21,8 @@ pub fn trace(event: &str, details: impl Display) {
 /// context alive. `relay_name` is the `window` property to set
 /// (e.g. `"__bk_relay"` or `"__bk_shortcut_relay"`).
 pub fn relay_js(relay_name: &str, generation: u64) -> String {
+    let relay = relay_name;
+    let version = BRIDGE_SCHEMA_VERSION;
     format!(
         r#"
         const relay = (msg) => dioxus.send(msg);
@@ -37,14 +39,12 @@ pub fn relay_js(relay_name: &str, generation: u64) -> String {
             }}
         }})();
         "#,
-        relay = relay_name,
-        generation = generation,
-        version = BRIDGE_SCHEMA_VERSION,
     )
 }
 
 /// Clears only the retired relay generation, never a newer replacement.
 pub fn clear_relay_js(relay_name: &str, generation: u64) -> String {
+    let relay = relay_name;
     format!(
         r#"
         (() => {{
@@ -54,8 +54,6 @@ pub fn clear_relay_js(relay_name: &str, generation: u64) -> String {
             }}
         }})();
         "#,
-        relay = relay_name,
-        generation = generation,
     )
 }
 

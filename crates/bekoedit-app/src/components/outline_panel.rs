@@ -62,7 +62,7 @@ pub fn OutlinePanel() -> Element {
                                                 const els = document.querySelectorAll('.preview h{level}');
                                                 if (els.length) els[0].scrollIntoView({{ behavior:'smooth' }});
                                             }}
-                                        "#, offset = offset, level = level);
+                                        "#);
                                         document::eval(&js);
                                     }
                                 },

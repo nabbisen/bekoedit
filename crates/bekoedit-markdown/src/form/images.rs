@@ -52,5 +52,5 @@ fn rewrite_image_source(source: &str, new_alt: &str, new_src: &str) -> String {
         }
     }
     // Fallback: return a fresh image tag.
-    format!("![{}]({})", new_alt, new_src)
+    format!("![{new_alt}]({new_src})")
 }

@@ -30,6 +30,14 @@ templates, extension policy, plugin system, sync/collaboration.
 
 **1.0.0 requires explicit maintainer sign-off on the acceptance checklist.**
 
+## Shipped — v0.13.1 (2026-07-21)
+Patch-level dependency maintenance resolves the accepted `anyhow` and
+`memmap2` advisories. Release preparation also declares and tests package-
+specific Rust floors, pins immutable workflow actions, enforces the committed
+lockfile in every builder, separates
+read-only platform builds from publication, and verifies target provenance,
+checksums, and archive layout before publishing.
+
 ## Shipped — v0.13.0 (2026-07-15)
 RFC-041 replaces optimistic CodeMirror registration with a Rust-owned,
 identity-checked source-editor lifecycle controller. Text and Split mounts now

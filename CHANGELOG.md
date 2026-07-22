@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-07-21
+
 ### Changed
 - Updated transitive `anyhow` from 1.0.102 to 1.0.103 through the Dioxus
   core/desktop and image/rav1e dependency paths, resolving
@@ -17,8 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   manifest pin was added.
 - This closes the two time-bounded 0.13.0 patch-level deferrals tracked by
   `AUDIT-2026-07-17-01`; its remaining dependency workstreams stay open.
+- Declared the already-effective Rust 1.88 floor for the application, core, and
+  Markdown packages, added exact lower-bound CI, and aligned source-build
+  documentation without overriding contributors' selected compiler.
+- Hardened CI and release workflows with immutable action commits, locked Cargo
+  resolution, read-only target-bound builders, and a single write-authorized
+  publication job.
+- Added shared verification for release archive names, checksums, safe root
+  members, target provenance, and complete cross-platform artifact sets.
 
-[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.13.0...HEAD
+[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.13.1...HEAD
+[0.13.1]: https://github.com/nabbisen/bekoedit/releases/tag/0.13.1
 
 ## [0.13.0] - 2026-07-15
 

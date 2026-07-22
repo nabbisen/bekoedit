@@ -6,7 +6,9 @@ Prebuilt archives are published per release with target-qualified names such as
 `bekoedit-<version>-x86_64-unknown-linux-gnu.tar.gz`,
 `bekoedit-<version>-aarch64-apple-darwin.tar.gz`, and
 `bekoedit-<version>-x86_64-pc-windows-msvc.zip`. To build from source you need
-Rust 1.85+ (edition 2024):
+Rust 1.88+ (edition 2024) for the desktop application. The repository does not
+override your selected compiler; release CI tests the declared application
+floor with exact Rust 1.88.0:
 
 ```sh
 cargo run -p bekoedit

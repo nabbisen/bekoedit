@@ -353,6 +353,9 @@ fn dispatch_request(
 }
 
 fn dispatch_request_js(payload: &str, fallback: Option<&str>, relay_generation: u64) -> String {
+    let version = BRIDGE_SCHEMA_VERSION;
+    let relay = SOURCE_RELAY;
+    let generation = relay_generation;
     if let Some(fallback) = fallback {
         format!(
             r#"
@@ -373,9 +376,6 @@ fn dispatch_request_js(payload: &str, fallback: Option<&str>, relay_generation: 
                 }}
             }})();
             "#,
-            version = BRIDGE_SCHEMA_VERSION,
-            relay = SOURCE_RELAY,
-            generation = relay_generation,
         )
     } else {
         format!(
@@ -392,8 +392,6 @@ fn dispatch_request_js(payload: &str, fallback: Option<&str>, relay_generation: 
                 }}
             }})();
             "#,
-            version = BRIDGE_SCHEMA_VERSION,
-            generation = relay_generation,
         )
     }
 }
