@@ -5,10 +5,36 @@
 **Depends on:** slice 1 (focus authority) — specifically the `shell_focus`
 module, to which this slice adds `focus_tree_row` (§7.5). Slice 2 does not call
 `focus_element` and must not modify it.
-**Status:** inherited from RFC-042 (Proposed — do not start until the RFC is approved and slice 1 is merged)
-**Date:** 2026-07-31
+**Status:** inherited from RFC-042 (Proposed). **Ready to start** — RFC-042 was
+approved for implementation on 2026-07-31 and slice 1 merged to `main` as
+`96f2287` on 2026-08-03.
+**Date:** 2026-07-31 (document identifier; revised 2026-08-04)
 
 ---
+
+## 0. How to read this handoff
+
+*(Convention introduced 2026-08-04, applies from this slice onward.)*
+
+Sections are marked **[Binding]** or **[Advisory]**.
+
+- **[Binding]** — an architecture, security, scope, or conformance decision.
+  It is mine to make and yours to implement. If you believe one is wrong,
+  stop and say so; do not route around it.
+- **[Advisory]** — a mechanism I am suggesting because it seemed reasonable
+  from outside the code. **You may replace it with something better, and you
+  do not need permission — state what you did and why in the review request.**
+  Where I name a type, signature, or file layout, that is advisory unless the
+  section says otherwise.
+
+The reason for the split: during slice 1, every point where you had to stop
+and ask traced to a mechanism I specified without being able to verify it —
+how CI triggers, what a merge button does, whether a display was isolated.
+The architecture decisions held; the mechanism guesses did not. This marking
+makes that boundary explicit instead of leaving you to infer it.
+
+Unmarked sections (purpose, background, evidence, review format) are
+informational or procedural.
 
 ## 1. Task title
 
@@ -46,7 +72,7 @@ drag path.**
 - RFC-021 accessibility baseline; RFC-000 §11; product principle 6.7
 - DEC-011 (no library drag path)
 
-## 5. Change scope
+## 5. Change scope · **[Advisory]**
 
 - `crates/bekoedit-app/src/components/explorer.rs`
 - `crates/bekoedit-app/src/components/explorer/tree_nav.rs` — **new**, pure
@@ -63,7 +89,7 @@ Module layout follows the project rule: `explorer.rs` plus an `explorer/`
 subdirectory, no `mod.rs`, tests in a sibling `tests.rs` rather than `#[test]`
 blocks inside the implementation file.
 
-## 6. Non-change scope
+## 6. Non-change scope · **[Binding]**
 
 - Menu and tab keyboard navigation (slice 3).
 - Conflict, Recovery, Settings metadata (slice 4).
@@ -78,7 +104,7 @@ blocks inside the implementation file.
 
 ## 7. Required implementation
 
-### 7.1 Pure navigation module
+### 7.1 Pure navigation module · behavior **[Binding]**, types **[Advisory]**
 
 `tree_nav.rs` exposes navigation as pure functions over a row view. Suggested
 shape — adapt names, keep the purity:
@@ -113,7 +139,7 @@ Behavior per RFC-042 §7.1:
 Rows that are not openable are **still navigable** — navigation never skips
 them. Only activation is suppressed.
 
-### 7.2 Roving tabindex
+### 7.2 Roving tabindex · **[Binding]**
 
 Exactly one row carries `tabindex="0"`; every other row carries
 `tabindex="-1"`. Tab enters the tree at the active row and Tab leaves it. Do
@@ -126,7 +152,7 @@ expand, collapse, or refresh that renumbers rows. When the tracked path is no
 longer visible, fall back to the nearest surviving ancestor, then to the first
 row.
 
-### 7.3 Active vs selected
+### 7.3 Active vs selected · distinction **[Binding]**, mechanism **[Advisory]**
 
 These are two different things and both are required:
 
@@ -143,10 +169,12 @@ You may implement selection with a local signal or via the library's
 `on_selected`; that is your call. If you use the library path, verify it does
 not pull in the drag machinery (DEC-011) and say so in the review request.
 
-### 7.4 Revision to in-flight work
+### 7.4 Revision to in-flight work · **[Binding]**
 
-The uncommitted change added `disabled: !is_openable` to the row button and an
-assertion for it in `tests.rs`. **Both must be reverted.** A natively disabled
+`explorer.rs:321` carries `disabled: !is_openable` on the row button, and
+`tests.rs:176` asserts its presence. Both landed in `96f2287` knowingly — the
+commit message records that RFC-042 §11 declares them non-conformant and that
+this slice reverts them. **Both must be reverted here.** A natively disabled
 element leaves the tab order and assistive-technology focus, so a user could
 not perceive that a non-Markdown file exists — which contradicts §7.1.
 
@@ -158,7 +186,7 @@ Replace with:
 
 Keep the change from `div` to `button` — that part is correct and stays.
 
-### 7.5 Activation and focus
+### 7.5 Activation and focus · index-not-string **[Binding]**, signature **[Advisory]**
 
 - Enter or Space: toggle a directory, open a file, no-op on a non-openable row.
 - Opening a file hands focus onward through the normal controller path. The
@@ -193,7 +221,7 @@ a position at render time. Roving tabindex uses real DOM focus rather than
 `aria-activedescendant`, so per-row ids are not needed for accessibility
 either.
 
-## 8. Required tests
+## 8. Required tests · coverage **[Binding]**, organization **[Advisory]**
 
 **Pure tests** (`explorer/tree_nav/tests.rs`) — the substance of this slice:
 
@@ -215,7 +243,7 @@ either.
 
 No SSR, hook, or Playwright harness — RFC-026 declined them.
 
-## 9. Required documentation updates
+## 9. Required documentation updates · **[Binding]**
 
 - `docs/src/mvp-acceptance.md`: restore the file-tree item to ✅ **only when
   this slice is complete**, citing the new pure tests as evidence. The item is
@@ -223,7 +251,7 @@ No SSR, hook, or Playwright harness — RFC-026 declined them.
   correction history.
 - Any new visible string needs both EN and JA arms plus an `ALL_KEYS` entry.
 
-## 10. Acceptance criteria
+## 10. Acceptance criteria · **[Binding]**
 
 1. Arrow, Home, End, Enter, and Space behave per RFC-042 §7.1.
 2. Exactly one row is in the tab order at any time.
@@ -238,7 +266,7 @@ No SSR, hook, or Playwright harness — RFC-026 declined them.
     is already 311 lines — if it grows past the guideline, split it rather than
     letting it drift toward the hard limit.
 
-## 11. Prohibited shortcuts
+## 11. Prohibited shortcuts · **[Binding]**
 
 - Do not put navigation logic inline in the RSX closure. It goes in
   `tree_nav.rs` and is tested there; an untestable reducer is the whole thing
@@ -250,7 +278,7 @@ No SSR, hook, or Playwright harness — RFC-026 declined them.
 - Do not weaken or delete an existing test to make this pass.
 - No commits, tags, or pushes.
 
-## 12. Compatibility and security constraints
+## 12. Compatibility and security constraints · **[Binding]**
 
 - No bridge protocol change; no payload shape change.
 - No new filesystem, network, or process access.
@@ -266,7 +294,7 @@ No SSR, hook, or Playwright harness — RFC-026 declined them.
   escalate** rather than solving it locally. That requirement would be a
   design change, not an implementation detail.
 
-## 13. Known risks
+## 13. Known risks · **[Advisory]**
 
 | Risk | Mitigation |
 |---|---|

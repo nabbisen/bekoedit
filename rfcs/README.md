@@ -68,7 +68,8 @@ it moves to `done/` (decision shipped) or `archive/` (withdrawn or superseded).
 
 | RFC | Title | Notes |
 |-----|-------|-------|
-| RFC-042 | [Shell interaction, focus & accessibility conformance](proposed/RFC-042-shell-interaction-focus-and-accessibility-conformance.md) | **Under review** — governs the v0.14.0 UI/UX stabilization theme |
+| RFC-042 | [Shell interaction, focus & accessibility conformance](proposed/RFC-042-shell-interaction-focus-and-accessibility-conformance.md) | **Under review** — governs the v0.14.0 UI/UX stabilization theme; slice 1 implemented |
+| RFC-043 | [Reopen last workspace on launch](proposed/RFC-043-reopen-last-workspace-on-launch.md) | **Under review** — implements the inert `reopen_last_workspace` setting |
 | RFC-032 | Performance optimization and incremental parsing | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | Plugin system evaluation | Future evaluation only |
 | RFC-040 | Sync and collaboration evaluation | Future evaluation only |
