@@ -75,12 +75,19 @@ sign-off.
 
 - ✅ All primary workflows completable with keyboard only.
   *Evidence: Ctrl+S/1/2/3/4/B/F shortcuts in `shortcuts.js`*
-- ⚠️ File tree exposes `role="tree"` / `role="treeitem"` with `aria-selected`.
-  *Corrected 2026-07-31: the roles are present, but `aria-selected` is **not**
-  implemented anywhere in `explorer.rs`, and the tree has no arrow-key
-  navigation, so the declared Tree View pattern is not honored. The evidence
-  previously cited here did not support the claim. Tracked by RFC-042 §7.1;
-  disposition for 1.0.0 pending maintainer decision.*
+- ✅ File tree exposes `role="tree"` / `role="treeitem"` with `aria-selected`,
+  roving tabindex, and arrow-key navigation per the WAI-ARIA Tree View
+  pattern.
+  *Evidence: `components/explorer/tree_row.rs` (`aria_selected`,
+  `aria_disabled`, roving `tabindex`); `components/explorer/tree_nav.rs`
+  (pure `navigate`/`resolve_active_row`, 14 tests); guard test
+  `rfc_042_slice_2_tree_conforms_to_the_wai_aria_tree_pattern`. Closes
+  RFC-042 §7.1 (F-1, F-2, F-3).*
+  *History: corrected 2026-07-31 — the roles were present but
+  `aria-selected` was not implemented and the tree had no arrow-key
+  navigation, so the Tree View pattern was not actually honored despite the
+  roles declaring it; the evidence previously cited did not support the
+  claim. Resolved by RFC-042 slice 2.*
 - ✅ Save status changes announced via polite live region.
   *Evidence: `status_bar.rs` — `role="status"` + `aria-live="polite"`*
 - ✅ Save failures announced via assertive live region.

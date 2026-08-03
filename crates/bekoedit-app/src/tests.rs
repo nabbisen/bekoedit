@@ -172,8 +172,14 @@ mod app_tests {
         assert!(include_str!("components/search_panel.rs").contains("search.close"));
         assert!(include_str!("components/explorer.rs").contains("SearchOpen"));
         assert!(include_str!("components/explorer.rs").contains("SearchPanel {}"));
-        assert!(include_str!("components/explorer.rs").contains("is_markdown_path"));
-        assert!(include_str!("components/explorer.rs").contains("disabled: !is_openable"));
+        assert!(include_str!("components/explorer/tree_row.rs").contains("is_markdown_path"));
+        // RFC-042 §7.4/§11 (slice 2): the native `disabled` attribute was
+        // reverted — a disabled row leaves the tab order and
+        // assistive-technology focus entirely, which contradicts the tree
+        // pattern. Must never reappear anywhere in the row renderer.
+        assert!(
+            !include_str!("components/explorer/tree_row.rs").contains("disabled: !is_openable")
+        );
         assert!(include_str!("components/explorer.rs").contains("workspace-new-file-name"));
         assert!(include_str!("components/explorer.rs").contains("search.label"));
         assert!(include_str!("state.rs").contains("pub enum OpenMenu"));
@@ -394,5 +400,55 @@ mod app_tests {
                 .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
             out.push((format!("{label}/{file_name}"), source));
         }
+    }
+
+    #[test]
+    fn rfc_042_slice_2_tree_conforms_to_the_wai_aria_tree_pattern() {
+        let explorer = include_str!("components/explorer.rs");
+        let tree_row = include_str!("components/explorer/tree_row.rs");
+        let tree_nav = include_str!("components/explorer/tree_nav.rs");
+
+        // Roving tabindex: exactly one row in the tab order at a time, never
+        // every row (§7.2, §11).
+        assert!(tree_row.contains(r#"tabindex: if is_active { "0" } else { "-1" }"#));
+
+        // Active vs selected are two different, both-required things (§7.3).
+        assert!(tree_row.contains("is_active: bool"));
+        assert!(tree_row.contains("is_selected: bool"));
+        assert!(tree_row.contains("aria_selected"));
+
+        // §7.4: the native `disabled` attribute was reverted — a
+        // non-openable row stays focusable and announced via
+        // `aria-disabled`, not removed from the tab order.
+        assert!(tree_row.contains("aria_disabled"));
+        assert!(!tree_row.contains("disabled: !is_openable"));
+        assert!(!explorer.contains("disabled: !is_openable"));
+
+        // §7.1: navigation logic lives in the pure module, not inline in the
+        // RSX closure (§11 prohibited shortcuts).
+        assert!(tree_row.contains("tree_nav::navigate"));
+        assert!(tree_nav.contains("pub fn navigate"));
+
+        // §12: only an index reaches the eval'd script — no per-row id, no
+        // path-derived string, and `focus_element`/the trigger constants are
+        // untouched by this slice.
+        assert!(tree_row.contains("shell_focus::focus_tree_row"));
+        assert!(!tree_row.contains("shell_focus::focus_element"));
+        let shell_focus = include_str!("shell_focus.rs");
+        assert!(shell_focus.contains("pub fn focus_element(id: &'static str)"));
+        assert!(shell_focus.contains("pub fn focus_tree_row(index: usize)"));
+
+        // §6 non-change scope: the focus-authority accessors are consumed,
+        // not extended — this slice adds no new method to SourceSyncState.
+        let controller = include_str!("source_sync/controller.rs");
+        assert!(controller.contains("pub fn acquire_shell_focus"));
+        assert!(controller.contains("pub fn release_shell_focus"));
+        assert!(controller.contains("pub fn shell_focus_held"));
+
+        // DEC-011: no drag path reintroduced.
+        assert!(!explorer.contains("DirectoryTreeView"));
+        assert!(!tree_row.contains("DirectoryTreeView"));
+        assert!(!explorer.contains("DragState"));
+        assert!(!tree_row.contains("DragState"));
     }
 }

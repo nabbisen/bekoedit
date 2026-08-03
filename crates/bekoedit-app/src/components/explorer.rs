@@ -22,14 +22,16 @@ use bekoedit_ui_contract::EditorMode;
 use crate::components::{search_panel::SearchPanel, toast::Toast};
 use crate::i18n::{Lang, tr};
 use crate::shell_focus;
-use crate::source_sync::{
-    SourceCommand, SourceSyncState, cancel_source_focus, submit_source_command,
-};
+use crate::source_sync::{SourceSyncState, cancel_source_focus};
 use crate::state::{
     BacklinksOpen, HistoryOpen, NewFileOpen, OpenMenu, OpenMenuState, OutlineOpen, SearchOpen,
 };
 
-use dioxus_swdir_tree::{ScanRequest, TreeNode};
+use dioxus_swdir_tree::TreeNode;
+
+mod tree_nav;
+mod tree_row;
+use tree_row::TreeRowItem;
 
 #[component]
 pub fn Explorer() -> Element {
@@ -123,6 +125,20 @@ pub fn Explorer() -> Element {
         .into_iter()
         .map(|(n, d)| (n.clone(), d))
         .collect();
+
+    // Roving tabindex target, tracked by path so it survives a rescan,
+    // expand, collapse, or refresh that renumbers rows (RFC-042 §7.2).
+    let active_path = use_signal(|| None::<PathBuf>);
+    let active_index = match active_path.read().as_deref() {
+        Some(tracked) => {
+            let paths: Vec<PathBuf> = rows.iter().map(|(n, _)| n.path.clone()).collect();
+            tree_nav::resolve_active_row(&paths, tracked)
+        }
+        None => (!rows.is_empty()).then_some(0),
+    };
+    // The open document's row is "selected" — distinct from "active", the
+    // roving focus target (RFC-042 §7.3).
+    let selected_path = state.read().session.as_ref().map(|s| s.path.clone());
 
     rsx! {
         aside { class: "explorer", role: "complementary", aria_label: tr(ui_lang, "explorer.label"),
@@ -246,11 +262,14 @@ pub fn Explorer() -> Element {
 
             // ── Tree rows (custom renderer, no drag) ───────────────────────
             div { class: "tree-rows", role: "tree",
-                for (node, depth) in rows {
+                for (index , (node , depth)) in rows.into_iter().enumerate() {
                     TreeRowItem {
                         key: "{node.path.display()}",
+                        is_active: active_index == Some(index),
+                        is_selected: selected_path.as_deref() == Some(node.path.as_path()),
                         node,
                         depth,
+                        index,
                         root: root_memo(),
                         tree_sig,
                         scan_ch,
@@ -258,88 +277,10 @@ pub fn Explorer() -> Element {
                         mode_sig,
                         source_sync,
                         toasts,
+                        active_path,
                     }
                 }
             }
-        }
-    }
-}
-
-#[derive(Props, Clone, PartialEq)]
-struct TreeRowItemProps {
-    node: TreeNode,
-    depth: u32,
-    root: PathBuf,
-    tree_sig: Signal<DirectoryTree>,
-    scan_ch: Coroutine<ScanRequest>,
-    state: Signal<AppState>,
-    mode_sig: Signal<EditorMode>,
-    source_sync: Signal<SourceSyncState>,
-    toasts: Signal<Vec<Toast>>,
-}
-
-#[component]
-fn TreeRowItem(props: TreeRowItemProps) -> Element {
-    let TreeRowItemProps {
-        node,
-        depth,
-        root,
-        mut tree_sig,
-        scan_ch,
-        state,
-        mode_sig,
-        source_sync,
-        toasts,
-    } = props;
-
-    let indent_px = depth * 16;
-    let path = node.path.clone();
-    let is_dir = node.is_dir;
-    let name = node
-        .path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| node.path.display().to_string());
-
-    let is_openable = is_dir || bekoedit_fs::paths::is_markdown_path(&path);
-    let (icon, row_class) = if is_dir {
-        let arrow = if node.is_expanded { "▾" } else { "▸" };
-        (arrow, "tree-row tree-dir")
-    } else if is_openable {
-        ("·", "tree-row tree-file")
-    } else {
-        ("·", "tree-row tree-file disabled")
-    };
-
-    rsx! {
-        button {
-            class: row_class,
-            style: "padding-left: {indent_px}px",
-            role: "treeitem",
-            aria_expanded: if is_dir { "{node.is_expanded}" } else { "false" },
-            aria_disabled: "{!is_openable}",
-            disabled: !is_openable,
-            title: "{name}",
-            onclick: move |_| {
-                if is_dir {
-                    if let Some(req) = tree_sig.write().on_toggled(&path) {
-                        scan_ch.send(req);
-                    }
-                } else if is_openable {
-                    let rel = path.strip_prefix(&root)
-                        .map(|r| r.to_path_buf())
-                        .unwrap_or_else(|_| path.clone());
-                    submit_source_command(
-                        source_sync,
-                        state,
-                        mode_sig,
-                        toasts,
-                        SourceCommand::OpenDocument(rel),
-                    );
-                }
-            },
-            span { class: "tree-icon", "{icon} " }
-            span { class: "tree-name", "{name}" }
         }
     }
 }

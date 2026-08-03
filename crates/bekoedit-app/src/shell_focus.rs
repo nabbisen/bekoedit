@@ -22,3 +22,15 @@ pub fn focus_element(id: &'static str) {
         r#"requestAnimationFrame(() => document.getElementById('{id}')?.focus())"#,
     ));
 }
+
+/// Focus the nth element matching `[data-tree-row]`, on the next frame. A
+/// missing or out-of-range element is a no-op, never a panic.
+///
+/// `index` is a `usize`, not a path-derived string (RFC-042 slice 2 handoff
+/// §7.5/§12): only an integer is interpolated, so there is no caller-
+/// controlled text for this script to carry, and nothing to sanitize.
+pub fn focus_tree_row(index: usize) {
+    document::eval(&format!(
+        r#"requestAnimationFrame(() => document.querySelectorAll('[data-tree-row]')[{index}]?.focus())"#,
+    ));
+}
