@@ -2,7 +2,9 @@
 
 **Governing RFC:** [RFC-042](../../proposed/RFC-042-shell-interaction-focus-and-accessibility-conformance.md) §7.1
 **Slice:** 2 of 7 (see RFC-042 §13)
-**Depends on:** slice 1 (focus authority) — specifically `shell_focus::focus_element`
+**Depends on:** slice 1 (focus authority) — specifically the `shell_focus`
+module, to which this slice adds `focus_tree_row` (§7.5). Slice 2 does not call
+`focus_element` and must not modify it.
 **Status:** inherited from RFC-042 (Proposed — do not start until the RFC is approved and slice 1 is merged)
 **Date:** 2026-07-31
 
@@ -50,6 +52,8 @@ drag path.**
 - `crates/bekoedit-app/src/components/explorer/tree_nav.rs` — **new**, pure
   navigation logic
 - `crates/bekoedit-app/src/components/explorer/tree_nav/tests.rs` — **new**
+- `crates/bekoedit-app/src/shell_focus.rs` — add `focus_tree_row` (§7.5); do
+  not modify `focus_element` or the trigger constants
 - `crates/bekoedit-app/src/tests.rs` — guard assertions
 - `crates/bekoedit-app/src/i18n.rs` — only if new visible strings are required
 - `crates/bekoedit-app/assets/style.css` — focus-visible styling for the active
@@ -63,7 +67,10 @@ blocks inside the implementation file.
 
 - Menu and tab keyboard navigation (slice 3).
 - Conflict, Recovery, Settings metadata (slice 4).
-- The focus-authority accessors from slice 1 — consume them, do not extend them.
+- The focus-authority accessors from slice 1 (`acquire_shell_focus`,
+  `release_shell_focus`, `shell_focus_held`) — consume them, do not extend or
+  modify them. Adding `focus_tree_row` to `shell_focus.rs` per §7.5 is the one
+  permitted addition; `focus_element` itself stays exactly as slice 1 left it.
 - `dioxus-swdir-tree` version, its drag machinery, or `DirectoryTreeView`.
 - Tree scanning, lazy loading, Git status badges, or the context menu.
 - `bekoedit-core`, `bekoedit-fs`, `bekoedit-markdown`.
@@ -154,15 +161,37 @@ Keep the change from `div` to `button` — that part is correct and stays.
 ### 7.5 Activation and focus
 
 - Enter or Space: toggle a directory, open a file, no-op on a non-openable row.
-- Arrow-key movement moves DOM focus to the newly active row via
-  `shell_focus::focus_element` from slice 1. Give each row a stable id derived
-  from its path.
 - Opening a file hands focus onward through the normal controller path. The
   tree does not focus CodeMirror directly (RFC-042 §6.2 rule 3).
 
-Row ids are derived from paths, which are user-controlled. **Sanitize before
-embedding in an id**, and never interpolate a raw path into an eval'd script —
-see §12.
+**Focus rows by index, not by id.** *(Revised 2026-07-31 — see the note below;
+the original instruction here is superseded.)*
+
+Add to `shell_focus.rs`:
+
+```rust
+/// Focus the nth element matching `[data-tree-row]`, on the next frame.
+/// Only a `usize` is interpolated, so no caller-controlled text reaches the
+/// script.
+pub fn focus_tree_row(index: usize);
+```
+
+Rows carry a bare `data-tree-row` attribute — no per-row id at all. Arrow-key
+movement resolves the active path to its position in the current
+`visible_rows()` list and calls `focus_tree_row(position)`.
+
+**Why this replaces the original instruction.** Slice 1 tightened
+`focus_element` to `&'static str` (review item R5). A path-derived id is a
+runtime `String`, so the original §7.5 text no longer compiles — and rather
+than widen `focus_element` back out or bolt on a sanitizing newtype, indexing
+removes the problem at the root: an integer cannot carry an injection payload,
+so there is nothing to sanitize and no way to get the sanitizing wrong.
+
+This composes with §7.2 rather than conflicting with it: **state** still tracks
+the active row by path, so it survives rescans; **focus** resolves that path to
+a position at render time. Roving tabindex uses real DOM focus rather than
+`aria-activedescendant`, so per-row ids are not needed for accessibility
+either.
 
 ## 8. Required tests
 
@@ -225,11 +254,17 @@ No SSR, hook, or Playwright harness — RFC-026 declined them.
 
 - No bridge protocol change; no payload shape change.
 - No new filesystem, network, or process access.
-- **Row DOM ids come from user-controlled paths.** Derive ids from a hash or a
-  sanitized slug — never interpolate a raw path into an element id or into an
-  eval'd script string. A file named with quotes or angle brackets must not be
-  able to alter the emitted script. State in the review request how you
-  guaranteed this.
+- **No caller-controlled text may reach an eval'd script.** §7.5's
+  index-based focus is designed so this cannot happen: only a `usize` is
+  interpolated. Do not reintroduce path-derived element ids, do not widen
+  `focus_element` beyond `&'static str`, and do not add a
+  sanitize-then-interpolate helper. A file named with quotes or angle brackets
+  must not be able to reach the emitted script at all — not "be escaped on the
+  way through".
+
+  If you find a requirement that seems to need a per-row id, **stop and
+  escalate** rather than solving it locally. That requirement would be a
+  design change, not an implementation detail.
 
 ## 13. Known risks
 
@@ -237,7 +272,7 @@ No SSR, hook, or Playwright harness — RFC-026 declined them.
 |---|---|
 | Active row lost after a rescan renumbers rows | Track by path with the fallback chain in §7.2; pure test 8 |
 | Roving tabindex fights the browser's native focus after activation | Move focus explicitly on activation; cover in the manual check |
-| Path-derived ids collide or break the focus script | Sanitize/hash; §12 |
+| Index drifts between the Rust-side row list and the DOM order | Both derive from the same `visible_rows()` render; assert the `data-tree-row` count matches the row count before focusing |
 | `explorer.rs` drifting toward the ELOC hard limit | Split into `explorer/` submodules as the module layout already anticipates |
 | Scope creep into menus or tabs | §6 is explicit; those are slice 3 |
 
@@ -248,8 +283,10 @@ No SSR, hook, or Playwright harness — RFC-026 declined them.
 - The pure test names and results.
 - A manual note: Tab into the tree, arrow to a nested file, Enter to open it,
   confirm the editor takes focus and that Shift+Tab returns to a single tree
-  tab stop.
-- A statement of how §12's id-sanitization requirement was met.
+  tab stop. If no safe display is available, say so plainly rather than
+  omitting the item — do not drive the owner's session (RFC-042 §10).
+- Confirmation that no caller-controlled text reaches an eval'd script (§12),
+  and that `focus_element` was not widened.
 
 ## 15. Required review-request format
 
@@ -262,4 +299,5 @@ static-analysis results, unresolved issues, known limitations, requested review
 focus.
 
 Call out explicitly: the selection mechanism chosen in §7.3 and whether it
-touches the library drag path, and the id-sanitization approach from §12.
+touches the library drag path, and confirmation of §12 (no caller-controlled
+text in any eval'd script; `focus_element` unchanged).
