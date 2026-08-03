@@ -1,6 +1,6 @@
 # RFC-031: Lexical Integration Decision
 
-**Status:** Proposed (decision reached v0.4.0, 2026-06-07; no implementation required)  
+**Status:** Implemented (v0.4.0, 2026-06-07) — decision shipped as standing guidance: Lexical is not adopted and the custom projection approach is retained. No code implementation was required; moved from `proposed/` to `done/` on 2026-07-31 because a reached decision is not open for review.  
 **Milestone:** M8 (post-MVP)  
 **Priority:** Post-MVP — decision reached as part of v0.4.0 research
 

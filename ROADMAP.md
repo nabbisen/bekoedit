@@ -3,18 +3,27 @@
 Authoritative sequencing lives in `rfcs/`. This file is the orientation view.
 **1.0.0 requires explicit maintainer sign-off before any release.**
 
+## Active — v0.14.0
+
+UI/UX stabilization of the existing desktop application: focus, keyboard and
+menu behavior, accessibility metadata, and responsive workspace/editor
+controls. This work does not open the 1.0 release path.
+
 ## Current proposed / deferred RFCs
 
-- **RFC-031** — decided (no Lexical; see rfcs/proposed/)
+- **RFC-042** — proposed; governs the active v0.14.0 UI/UX stabilization theme
 - **RFC-032** — deferred until profiling shows need
 - **RFC-039/040** — future evaluation only
+
+RFC-031 (no Lexical) is a reached decision and now lives in `rfcs/done/`.
 
 ## Shipped MVP / post-MVP RFCs
 
 - **RFC-005** — native filesystem watcher (inotify / FSEvents /
   ReadDirectoryChanges) replacing the current poll-on-tick model.
-- **RFC-010** — outline panel tab, resizable sidebar panes, split-pane
-  Text+Preview mode.
+- **RFC-010** — outline panel tab, explorer collapse/expand, split-pane
+  Text+Preview mode. (Corrected 2026-07-31: no pane is resizable; the earlier
+  "resizable sidebar panes" claim was never implemented.)
 - **RFC-012** — preview scroll-synchronisation with the editor.
 - **RFC-024/025** — packaging scripts, unsigned binary guidance, CI
   smoke-test suite (launch + basic workflow).

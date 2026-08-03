@@ -60,9 +60,15 @@ Resolved 2026-06-07 rather than renumbering the cross-referenced corpus.
 
 ## Current proposed / deferred (`proposed/`)
 
+`proposed/` holds RFCs that are open — under active review, or accepted in
+principle but deliberately not started. A deferral is not an abandonment: each
+file below carries a dated in-file qualifier explaining why it has not been
+implemented. An RFC whose question has been *answered* does not belong here;
+it moves to `done/` (decision shipped) or `archive/` (withdrawn or superseded).
+
 | RFC | Title | Notes |
 |-----|-------|-------|
-| RFC-031 | Lexical integration decision | Decision reached: do not adopt Lexical; retained in `proposed/` as a deferred decision record |
+| RFC-042 | [Shell interaction, focus & accessibility conformance](proposed/RFC-042-shell-interaction-focus-and-accessibility-conformance.md) | **Under review** — governs the v0.14.0 UI/UX stabilization theme |
 | RFC-032 | Performance optimization and incremental parsing | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | Plugin system evaluation | Future evaluation only |
 | RFC-040 | Sync and collaboration evaluation | Future evaluation only |
@@ -90,11 +96,11 @@ Resolved 2026-06-07 rather than renumbering the cross-referenced corpus.
 | RFC-033 | Full-text search | `bekoedit_fs::search_workspace` + workspace search panel with ranked results |
 | RFC-035 | Export profiles | `AppState::export_html` → standalone self-contained HTML file |
 
-## Decision reached — v0.4.0 (still `proposed/`)
+## Decision reached — v0.4.0
 
 | RFC | Title | Decision |
 |-----|-------|---------|
-| RFC-031 | Lexical integration decision | **Do not adopt Lexical.** Custom projection approach retained. See RFC for detailed rationale. |
+| RFC-031 | [Lexical integration decision](done/RFC-031-lexical-integration-decision.md) | **Do not adopt Lexical.** Custom projection approach retained. See RFC for detailed rationale. Moved to `done/` on 2026-07-31; the decision shipped in v0.4.0 and is standing guidance, not open review. |
 | RFC-032 | Performance optimization & incremental parsing | Full-reparse-after-mutation confirmed adequate for current document sizes. Deferred until profiling demonstrates a need. |
 
 ## Implemented — v0.5.0 (`done/`)
