@@ -7,6 +7,7 @@ mod error_keys;
 mod i18n;
 mod persistence;
 mod settings;
+mod shell_focus;
 mod smoke_test;
 pub mod source_sync;
 mod state;

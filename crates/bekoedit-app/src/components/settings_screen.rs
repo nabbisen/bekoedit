@@ -6,6 +6,8 @@ use bekoedit_ui_contract::EditorMode;
 
 use crate::i18n::{Lang, tr};
 use crate::persistence::AppPersistence;
+use crate::shell_focus;
+use crate::source_sync::SourceSyncState;
 use crate::state::SettingsOpen;
 
 #[component]
@@ -14,7 +16,20 @@ pub fn SettingsScreen() -> Element {
     let mut lang_signal = use_context::<Signal<Lang>>();
     let mut mode_signal = use_context::<Signal<EditorMode>>();
     let persistence = use_context::<AppPersistence>();
+    let mut source_sync = use_context::<Signal<SourceSyncState>>();
     let lang = *lang_signal.read();
+
+    // Settings is a screen replacement (RFC-042 §7.5): exit releases the
+    // shell authority acquired when Settings was opened and restores focus
+    // to the app-bar menu trigger — the only persistent invoking control,
+    // since the "Settings" menu item itself unmounts when its menu closes.
+    // Any future Settings exit path (e.g. Escape, slice 4) must also route
+    // through this closure — do not add a second, uncoordinated exit.
+    let mut close_settings = move || {
+        source_sync.write().release_shell_focus();
+        shell_focus::focus_element(shell_focus::TRIGGER_APP_MENU);
+        settings_open.set(false);
+    };
 
     let mut settings = use_signal(|| persistence.load_settings());
 
@@ -93,12 +108,12 @@ pub fn SettingsScreen() -> Element {
                         lang_signal.set(s.lang);
                         mode_signal.set(s.default_mode);
                         persistence.save_settings(&s);
-                        settings_open.set(false);
+                        close_settings();
                     },
                     {tr(lang, "settings.save")}
                 }
                 button {
-                    onclick: move |_| settings_open.set(false),
+                    onclick: move |_| close_settings(),
                     {tr(lang, "settings.close")}
                 }
             }

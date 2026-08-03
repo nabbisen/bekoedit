@@ -21,10 +21,13 @@ use bekoedit_ui_contract::EditorMode;
 
 use crate::components::{search_panel::SearchPanel, toast::Toast};
 use crate::i18n::{Lang, tr};
+use crate::shell_focus;
 use crate::source_sync::{
     SourceCommand, SourceSyncState, cancel_source_focus, submit_source_command,
 };
-use crate::state::{BacklinksOpen, HistoryOpen, OpenMenu, OpenMenuState, OutlineOpen, SearchOpen};
+use crate::state::{
+    BacklinksOpen, HistoryOpen, NewFileOpen, OpenMenu, OpenMenuState, OutlineOpen, SearchOpen,
+};
 
 use dioxus_swdir_tree::{ScanRequest, TreeNode};
 
@@ -32,7 +35,7 @@ use dioxus_swdir_tree::{ScanRequest, TreeNode};
 pub fn Explorer() -> Element {
     let mut state = use_context::<Signal<AppState>>();
     let mode_sig = use_context::<Signal<EditorMode>>();
-    let source_sync = use_context::<Signal<SourceSyncState>>();
+    let mut source_sync = use_context::<Signal<SourceSyncState>>();
     let ui_lang = *use_context::<Signal<Lang>>().read();
     let toasts = use_context::<Signal<Vec<Toast>>>();
     let mut search_open = use_context::<SearchOpen>().0;
@@ -66,10 +69,21 @@ pub fn Explorer() -> Element {
 
     // ── New-file form ──────────────────────────────────────────────────────
     let mut new_name = use_signal(String::new);
-    let mut show_new = use_signal(|| false);
+    // Shared context, not local state (RFC-042 K1): the app-menu and
+    // editor-tools-menu triggers must be able to close this disclosure to
+    // keep the four shell-authority-holding surfaces mutually exclusive.
+    let mut show_new = use_context::<NewFileOpen>().0;
     let mut form_error = use_signal(String::new);
     let templates = state.read().list_templates();
     let mut tpl_content = use_signal(String::new);
+
+    use_effect(move || {
+        if *show_new.read() {
+            document::eval(
+                r#"requestAnimationFrame(() => document.getElementById('workspace-new-file-name')?.focus())"#,
+            );
+        }
+    });
 
     let mut do_create = move || {
         let name = new_name.read().clone();
@@ -90,6 +104,8 @@ pub fn Explorer() -> Element {
                 form_error.set(String::new());
                 show_new.set(false);
                 new_name.set(String::new());
+                source_sync.write().release_shell_focus();
+                shell_focus::focus_element(shell_focus::TRIGGER_NEW_FILE);
             }
             Err(e) => form_error.set(e.to_string()),
         }
@@ -114,24 +130,58 @@ pub fn Explorer() -> Element {
             // ── Toolbar ──────────────────────────────────────────────────
             div { class: "explorer-toolbar",
                 button {
+                    id: shell_focus::TRIGGER_WORKSPACE_SEARCH,
                     class: if *search_open.read() { "explorer-tool-btn active" } else { "explorer-tool-btn" },
                     aria_label: tr(ui_lang, "search.label"),
+                    aria_controls: "workspace-search-panel",
+                    aria_expanded: "{search_open}",
+                    title: tr(ui_lang, "search.label"),
                     onclick: move |_| {
-                        cancel_source_focus(source_sync);
                         let next = !*search_open.read();
+                        if next {
+                            cancel_source_focus(source_sync);
+                        } else {
+                            source_sync.write().release_shell_focus();
+                            shell_focus::focus_element(shell_focus::TRIGGER_WORKSPACE_SEARCH);
+                        }
                         search_open.set(next);
                         outline_open.set(false);
                         backlinks_open.set(false);
                         history_open.set(false);
                         open_menu.set(OpenMenu::None);
+                        // RFC-042 K1: the four shell-authority-holding
+                        // surfaces (both menus, search, new-file) stay
+                        // mutually exclusive.
+                        show_new.set(false);
                     },
                     {tr(ui_lang, "search.label")}
                 }
                 div { class: "explorer-toolbar-spacer" }
                 button {
-                    class: "icon-btn",
+                    id: shell_focus::TRIGGER_NEW_FILE,
+                    class: if *show_new.read() { "icon-btn active" } else { "icon-btn" },
                     title: tr(ui_lang, "explorer.new_file"),
-                    onclick: move |_| { let v = *show_new.read(); show_new.set(!v); },
+                    aria_label: tr(ui_lang, "explorer.new_file"),
+                    aria_controls: "workspace-new-file-form",
+                    aria_expanded: "{show_new}",
+                    onclick: move |_| {
+                        let next = !*show_new.read();
+                        if next {
+                            cancel_source_focus(source_sync);
+                            // RFC-042 K1: the four shell-authority-holding
+                            // surfaces (both menus, search, new-file) stay
+                            // mutually exclusive.
+                            search_open.set(false);
+                            open_menu.set(OpenMenu::None);
+                        } else {
+                            source_sync.write().release_shell_focus();
+                            shell_focus::focus_element(shell_focus::TRIGGER_NEW_FILE);
+                        }
+                        show_new.set(next);
+                        if !next {
+                            form_error.set(String::new());
+                        }
+                    },
                     "+"
                 }
             }
@@ -142,14 +192,24 @@ pub fn Explorer() -> Element {
             }
 
             if *show_new.read() {
-                div { class: "new-file-row",
+                div { id: "workspace-new-file-form", class: "new-file-row",
                     input {
+                        id: "workspace-new-file-name",
                         r#type: "text",
                         placeholder: "filename.md",
                         aria_label: tr(ui_lang, "explorer.new_file_name"),
                         value: "{new_name}",
                         oninput:   move |e| new_name.set(e.value()),
-                        onkeydown: move |e| { if e.key() == Key::Enter { do_create(); } },
+                        onkeydown: move |e| match e.key() {
+                            Key::Enter => do_create(),
+                            Key::Escape => {
+                                source_sync.write().release_shell_focus();
+                                shell_focus::focus_element(shell_focus::TRIGGER_NEW_FILE);
+                                show_new.set(false);
+                                form_error.set(String::new());
+                            }
+                            _ => {}
+                        },
                     }
                     if !templates.is_empty() {
                         select {
@@ -166,6 +226,18 @@ pub fn Explorer() -> Element {
                         }
                     }
                     button { class: "btn-primary", onclick: move |_| do_create(), {tr(ui_lang, "explorer.create")} }
+                    button {
+                        class: "new-file-close",
+                        aria_label: tr(ui_lang, "explorer.cancel_new_file"),
+                        title: tr(ui_lang, "explorer.cancel_new_file"),
+                        onclick: move |_| {
+                            source_sync.write().release_shell_focus();
+                            shell_focus::focus_element(shell_focus::TRIGGER_NEW_FILE);
+                            show_new.set(false);
+                            form_error.set(String::new());
+                        },
+                        "×"
+                    }
                 }
                 if !form_error.read().is_empty() {
                     p { class: "error-inline", "{form_error}" }
@@ -240,12 +312,13 @@ fn TreeRowItem(props: TreeRowItemProps) -> Element {
     };
 
     rsx! {
-        div {
+        button {
             class: row_class,
             style: "padding-left: {indent_px}px",
             role: "treeitem",
             aria_expanded: if is_dir { "{node.is_expanded}" } else { "false" },
             aria_disabled: "{!is_openable}",
+            disabled: !is_openable,
             title: "{name}",
             onclick: move |_| {
                 if is_dir {

@@ -13,7 +13,7 @@ use crate::components::icons::{FolderIcon, NewFileIcon};
 use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
 use crate::source_sync::{
-    SourceCommand, SourceInteractionOrigin, SourceSyncState, cancel_source_focus,
+    SourceCommand, SourceInteractionOrigin, SourceSyncState, cancel_pending_source_focus,
     submit_source_interaction,
 };
 use crate::state::now_ms;
@@ -47,7 +47,11 @@ pub fn StartScreen() -> Element {
                         class: "btn-primary start-btn",
                         aria_label: tr(lang, "start.open_folder"),
                         onclick: move |_| {
-                            cancel_source_focus(source_sync);
+                            // A native OS dialog, not an in-app shell surface —
+                            // cancel any pending focus intent but don't claim
+                            // shell authority; there is no close path to
+                            // release it from (RFC-042 slice 1 re-review, C1).
+                            cancel_pending_source_focus(source_sync);
                             let mut st = state;
                             spawn(async move {
                                 if let Some(handle) = rfd::AsyncFileDialog::new()

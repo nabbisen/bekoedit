@@ -94,6 +94,13 @@ mod app_tests {
             "search.submit",
             "search.close",
             "search.empty",
+            "explorer.cancel_new_file",
+            "explorer.new_file_name",
+            "explorer.create",
+            "explorer.label",
+            "explorer.no_workspace",
+            "menu.app",
+            "menu.editor_tools",
             "lang.switch",
             "settings.title",
         ];
@@ -166,6 +173,8 @@ mod app_tests {
         assert!(include_str!("components/explorer.rs").contains("SearchOpen"));
         assert!(include_str!("components/explorer.rs").contains("SearchPanel {}"));
         assert!(include_str!("components/explorer.rs").contains("is_markdown_path"));
+        assert!(include_str!("components/explorer.rs").contains("disabled: !is_openable"));
+        assert!(include_str!("components/explorer.rs").contains("workspace-new-file-name"));
         assert!(include_str!("components/explorer.rs").contains("search.label"));
         assert!(include_str!("state.rs").contains("pub enum OpenMenu"));
         assert!(app_bar.contains("stop_propagation"));
@@ -201,5 +210,189 @@ mod app_tests {
         let used_width = |preferred: u32, viewport: u32| preferred.min(viewport.saturating_sub(16));
         assert_eq!(used_width(200, 120), 104);
         assert_eq!(used_width(180, 120), 104);
+    }
+
+    #[test]
+    fn rfc_042_slice_1_shell_focus_authority_is_acquired_and_restored_everywhere() {
+        let shell_focus = include_str!("shell_focus.rs");
+        let app_bar = include_str!("components/app_bar.rs");
+        let header = include_str!("components/editor_header.rs");
+        let explorer = include_str!("components/explorer.rs");
+        let settings = include_str!("components/settings_screen.rs");
+        let search_panel = include_str!("components/search_panel.rs");
+        let start = include_str!("components/start_screen.rs");
+        let app = include_str!("app.rs");
+        let focus = include_str!("source_sync/focus.rs");
+
+        // shell_focus.rs exposes the four stable trigger ids and a single
+        // centralised restore primitive — no scattered eval strings. The id
+        // parameter is `&'static str`, not `&str` (review R5): slice 2's
+        // user-controlled row ids must never reach it unsanitized.
+        assert!(shell_focus.contains("pub const TRIGGER_APP_MENU"));
+        assert!(shell_focus.contains("pub const TRIGGER_EDITOR_TOOLS"));
+        assert!(shell_focus.contains("pub const TRIGGER_WORKSPACE_SEARCH"));
+        assert!(shell_focus.contains("pub const TRIGGER_NEW_FILE"));
+        assert!(shell_focus.contains("pub fn focus_element(id: &'static str)"));
+
+        // cancel_source_focus routes through acquire_shell_focus (handoff §7.3);
+        // cancel_pending_source_focus exists as the non-acquiring counterpart
+        // for native-dialog call sites (re-review C1/C2).
+        assert!(focus.contains("sync.write().acquire_shell_focus()"));
+        assert!(focus.contains("pub fn cancel_pending_source_focus"));
+
+        // Native-dialog call sites acquire no authority they cannot release
+        // (re-review C1, C2): Start Screen's Open Folder and Save As use the
+        // non-acquiring cancel, not cancel_source_focus.
+        assert!(start.contains("cancel_pending_source_focus(source_sync)"));
+        assert!(header.contains("cancel_pending_source_focus(source_sync)"));
+
+        // App menu trigger: stable id, acquires on open, releases/restores on
+        // explicit close. The home-logo click releases WITHOUT restoring
+        // (implicit dismissal, re-review C3) — never
+        // release_and_restore_menu_focus there.
+        assert!(app_bar.contains("id: shell_focus::TRIGGER_APP_MENU"));
+        assert!(app_bar.contains("cancel_source_focus(source_sync)"));
+        assert!(app_bar.contains("fn release_menu_focus"));
+        assert!(app_bar.contains("fn release_and_restore_menu_focus"));
+        assert!(app_bar.contains("release_shell_focus()"));
+        assert!(app_bar.contains("shell_focus::focus_element(trigger)"));
+        let logo_onclick = app_bar
+            .split("class: \"app-bar-logo\"")
+            .nth(1)
+            .and_then(|rest| rest.split('}').next())
+            .expect("app-bar-logo button body");
+        assert!(logo_onclick.contains("release_menu_focus(source_sync"));
+        assert!(!logo_onclick.contains("release_and_restore_menu_focus"));
+
+        // Editor tools trigger: same contract.
+        assert!(header.contains("id: shell_focus::TRIGGER_EDITOR_TOOLS"));
+        assert!(header.contains("close_editor_tools_menu"));
+        assert!(header.contains("release_shell_focus()"));
+        assert!(header.contains("shell_focus::focus_element(shell_focus::TRIGGER_EDITOR_TOOLS)"));
+
+        // Explorer: workspace-search trigger and new-file disclosure trigger.
+        assert!(explorer.contains("id: shell_focus::TRIGGER_WORKSPACE_SEARCH"));
+        assert!(
+            explorer.contains("shell_focus::focus_element(shell_focus::TRIGGER_WORKSPACE_SEARCH)")
+        );
+        assert!(explorer.contains("id: shell_focus::TRIGGER_NEW_FILE"));
+        assert!(explorer.contains("shell_focus::focus_element(shell_focus::TRIGGER_NEW_FILE)"));
+
+        // M4: shell surfaces stay mutually exclusive — opening either menu
+        // also closes the workspace-search disclosure, not just the reverse.
+        assert!(app_bar.contains("RFC-042 M4"));
+        assert!(header.contains("RFC-042 M4"));
+
+        // Settings screen replacement: acquires on entry, releases/restores on exit.
+        assert!(app_bar.contains("SourceCommand::OpenSettings"));
+        assert!(settings.contains("close_settings"));
+        assert!(settings.contains("release_shell_focus()"));
+        assert!(settings.contains("shell_focus::focus_element(shell_focus::TRIGGER_APP_MENU)"));
+
+        // Search panel's own close paths (×, Escape, result click) release too.
+        assert!(search_panel.contains("close_search"));
+        assert!(search_panel.contains("release_shell_focus()"));
+        assert!(
+            search_panel
+                .contains("shell_focus::focus_element(shell_focus::TRIGGER_WORKSPACE_SEARCH)")
+        );
+
+        // Outside-click / focus-leave (app.rs) releases WITHOUT restoring
+        // (implicit dismissal, re-review C3) — must not fight focus the
+        // RFC-041 controller just placed in CodeMirror.
+        assert!(app.contains("release_menu_focus"));
+        assert!(!app.contains("release_and_restore_menu_focus"));
+    }
+
+    #[test]
+    fn rfc_042_every_shell_focus_acquire_has_a_release_in_the_same_file() {
+        // Re-review correction C-ALL, then K2. `cancel_source_focus` claims
+        // shell focus authority; every file that calls it must also release
+        // that authority somewhere in the same file — or be named here with
+        // the reason it doesn't (e.g. authority is handed to a different
+        // screen that owns the close path). This is intentionally coarse —
+        // a per-file existence check, not a per-call-site pairing proof —
+        // but it turns "the next person must remember" into a failing test.
+        //
+        // K2: the file list is enumerated from disk at runtime, not
+        // hardcoded, so a file this pass never touched — e.g. a future
+        // slice's `conflict_banner.rs` or `recovery_screen.rs` — is covered
+        // automatically the moment it starts calling `cancel_source_focus`.
+        //
+        // Settings is the one legitimate hand-off: app_bar.rs's Settings
+        // menu item acquires, but settings_screen.rs releases, because the
+        // menu item itself unmounts when the dropdown closes. app_bar.rs
+        // still passes this check unaided — it also releases for its own
+        // menu's other close paths — so no allow-list entry is needed.
+        const ALLOW_LISTED_NO_RELEASE_IN_FILE: &[&str] = &[];
+
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut checked = Vec::new();
+        collect_rust_sources(
+            &manifest_dir.join("src/components"),
+            "components",
+            &mut checked,
+        );
+        checked.push((
+            "app.rs".to_string(),
+            std::fs::read_to_string(manifest_dir.join("src/app.rs"))
+                .expect("src/app.rs is readable"),
+        ));
+
+        // Sanity: the walk actually found the known acquiring files, so a
+        // broken or empty directory read can't silently pass this test by
+        // finding nothing to check.
+        assert!(
+            checked
+                .iter()
+                .any(|(path, _)| path == "components/app_bar.rs")
+        );
+        assert!(
+            checked
+                .iter()
+                .any(|(path, _)| path == "components/editor_header.rs")
+        );
+        assert!(
+            checked.len() >= 6,
+            "expected at least 6 files, found {}",
+            checked.len()
+        );
+
+        for (path, source) in &checked {
+            let acquires = source.contains("cancel_source_focus(");
+            let releases = source.contains("release_shell_focus()");
+            if acquires && !releases {
+                assert!(
+                    ALLOW_LISTED_NO_RELEASE_IN_FILE.contains(&path.as_str()),
+                    "{path} calls cancel_source_focus (acquires shell focus authority) \
+                     but never calls release_shell_focus in the same file, and is not \
+                     on the allow-list. Either add a release path or document why \
+                     authority is released elsewhere and add it to the allow-list.",
+                );
+            }
+        }
+    }
+
+    /// Recursively collects `(relative_path, source)` for every `.rs` file
+    /// under `dir`, labeling each with `label` (e.g. `"components"`) so the
+    /// relative path matches what a reader sees in the repository.
+    fn collect_rust_sources(dir: &std::path::Path, label: &str, out: &mut Vec<(String, String)>) {
+        let entries = std::fs::read_dir(dir)
+            .unwrap_or_else(|error| panic!("read_dir({}): {error}", dir.display()));
+        for entry in entries {
+            let entry = entry.expect("directory entry is readable");
+            let path = entry.path();
+            let file_name = entry.file_name().to_string_lossy().into_owned();
+            if path.is_dir() {
+                collect_rust_sources(&path, &format!("{label}/{file_name}"), out);
+                continue;
+            }
+            if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+            out.push((format!("{label}/{file_name}"), source));
+        }
     }
 }

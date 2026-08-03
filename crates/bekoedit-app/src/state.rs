@@ -29,6 +29,9 @@ pub struct BacklinksOpen(pub Signal<bool>);
 #[derive(Clone, Copy)]
 pub struct HistoryOpen(pub Signal<bool>);
 
+#[derive(Clone, Copy)]
+pub struct NewFileOpen(pub Signal<bool>);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpenMenu {
     None,

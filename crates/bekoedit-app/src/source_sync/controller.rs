@@ -92,6 +92,7 @@ pub struct SourceSyncState {
     next_focus_token: u64,
     provisional_focus: Option<FocusInteraction>,
     pending_focus: Option<FocusInteraction>,
+    shell_focus_held: bool,
 }
 
 impl SourceSyncState {
@@ -155,8 +156,29 @@ impl SourceSyncState {
         self.protected_focus_token = None;
         self.provisional_focus = None;
         self.pending_focus = None;
+        self.shell_focus_held = false;
         self.actions.clear();
         self.lifecycle.begin_unmount(now_ms).ok().flatten()
+    }
+
+    /// Shell surfaces (menus, transient panels, screen replacements) call this
+    /// before moving DOM focus. It cancels any pending source-focus intent —
+    /// same as `cancel_focus_interactions` — and additionally claims shell
+    /// authority so no *new* focus intent can be recorded until released
+    /// (RFC-042 §6). Returns the cancelled interaction's guard token, if any.
+    pub fn acquire_shell_focus(&mut self) -> Option<u64> {
+        self.shell_focus_held = true;
+        self.cancel_focus_interactions()
+    }
+
+    /// Releases shell authority. Source-focus intents may be recorded again.
+    pub fn release_shell_focus(&mut self) {
+        self.shell_focus_held = false;
+    }
+
+    /// True while a shell surface holds focus authority.
+    pub fn shell_focus_held(&self) -> bool {
+        self.shell_focus_held
     }
 
     pub fn submit(

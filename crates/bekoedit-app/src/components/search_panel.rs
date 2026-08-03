@@ -13,6 +13,7 @@ use bekoedit_ui_contract::EditorMode;
 
 use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
+use crate::shell_focus;
 use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
 use crate::state::SearchOpen;
 
@@ -51,7 +52,7 @@ fn run_search(
 pub fn SearchPanel() -> Element {
     let state = use_context::<Signal<AppState>>();
     let mode_sig = use_context::<Signal<EditorMode>>();
-    let source_sync = use_context::<Signal<SourceSyncState>>();
+    let mut source_sync = use_context::<Signal<SourceSyncState>>();
     let toasts = use_context::<Signal<Vec<Toast>>>();
     let lang = *use_context::<Signal<Lang>>().read();
     let mut query = use_signal(String::new);
@@ -72,8 +73,17 @@ pub fn SearchPanel() -> Element {
         );
     });
 
+    // Closes the search disclosure: releases shell authority and restores
+    // focus to the explorer's search trigger (RFC-042 §6.2 rule 3, §7.4).
+    let mut close_search = move || {
+        source_sync.write().release_shell_focus();
+        shell_focus::focus_element(shell_focus::TRIGGER_WORKSPACE_SEARCH);
+        search_open.set(false);
+    };
+
     rsx! {
         section {
+            id: "workspace-search-panel",
             class: "search-panel",
             role: "search",
             aria_label: tr(lang, "search.label"),
@@ -84,7 +94,7 @@ pub fn SearchPanel() -> Element {
                     class: "search-close",
                     aria_label: tr(lang, "search.close"),
                     title: tr(lang, "search.close"),
-                    onclick: move |_| search_open.set(false),
+                    onclick: move |_| close_search(),
                     "×"
                 }
             }
@@ -107,15 +117,17 @@ pub fn SearchPanel() -> Element {
                         generation.set(next);
                     },
                     onkeydown: move |evt| {
-                        if evt.key() == Key::Enter {
-                            run_search(
-                                root_for_key.clone(),
-                                query.read().clone(),
-                                results,
-                                running,
-                                generation,
-                                searched,
-                            );
+                        match evt.key() {
+                            Key::Enter => run_search(
+                                    root_for_key.clone(),
+                                    query.read().clone(),
+                                    results,
+                                    running,
+                                    generation,
+                                    searched,
+                                ),
+                            Key::Escape => close_search(),
+                            _ => {}
                         }
                     },
                 }
@@ -151,6 +163,7 @@ pub fn SearchPanel() -> Element {
                             onclick: {
                                 let path = m.relative_path.clone();
                                 move |_| {
+                                    close_search();
                                     submit_source_command(
                                         source_sync,
                                         state,

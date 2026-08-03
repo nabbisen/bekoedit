@@ -11,7 +11,7 @@ use bekoedit_fs::{FsWatcher, WatchEvent};
 use bekoedit_ui_contract::EditorMode;
 
 use crate::components::{
-    app_bar::AppBar,
+    app_bar::{AppBar, release_menu_focus},
     backlinks_panel::BacklinksPanel,
     conflict_banner::ConflictBanner,
     editor_header::EditorHeader,
@@ -34,8 +34,8 @@ use crate::source_sync::{
     SourceCommand, SourceSyncState, submit_source_command, submit_source_shortcut_interaction,
 };
 use crate::state::{
-    BacklinksOpen, ExplorerCollapsed, HistoryOpen, OpenMenu, OpenMenuState, OutlineOpen,
-    SearchOpen, SettingsOpen, create_app_state, now_ms,
+    BacklinksOpen, ExplorerCollapsed, HistoryOpen, NewFileOpen, OpenMenu, OpenMenuState,
+    OutlineOpen, SearchOpen, SettingsOpen, create_app_state, now_ms,
 };
 use crate::webview_smoke::{WebViewSmokeDriver, launch_config};
 
@@ -66,6 +66,7 @@ pub fn App() -> Element {
     use_context_provider(|| SearchOpen(Signal::new(false_val())));
     use_context_provider(|| BacklinksOpen(Signal::new(false_val())));
     use_context_provider(|| HistoryOpen(Signal::new(false_val())));
+    use_context_provider(|| NewFileOpen(Signal::new(false_val())));
     let mut open_menu = use_context_provider(|| OpenMenuState(Signal::new(OpenMenu::None))).0;
     use_context_provider(|| Signal::new(Vec::<Toast>::new()));
     let source_sync = use_context_provider(|| Signal::new(SourceSyncState::default()));
@@ -207,8 +208,22 @@ pub fn App() -> Element {
         ToastLayer {}
         div {
             class: "app-frame",
-            onclick: move |_| open_menu.set(OpenMenu::None),
-            onfocusin: move |_| open_menu.set(OpenMenu::None),
+            // Outside-click / focus-leaving-the-menu close path (RFC-042
+            // §6.2 rule 3, §7.2): app_bar.rs's menu items call
+            // `stop_propagation`, so this only fires for genuine
+            // outside-click/focus-loss, never for in-menu interaction.
+            // Release only — never restore here. Focus already moved
+            // somewhere else (that's *why* this fired); forcing it back to
+            // the trigger would fight that move, including the RFC-041
+            // controller placing focus in CodeMirror (re-review C3).
+            onclick: move |_| {
+                release_menu_focus(source_sync, *open_menu.read());
+                open_menu.set(OpenMenu::None);
+            },
+            onfocusin: move |_| {
+                release_menu_focus(source_sync, *open_menu.read());
+                open_menu.set(OpenMenu::None);
+            },
             AppBar {}
             if settings_open {
                 SettingsScreen {}

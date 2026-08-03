@@ -85,8 +85,10 @@ input[type="text"]:focus, textarea:focus { outline: 2px solid var(--accent); out
   padding: 10px; background: var(--panel);
   box-shadow: 0 4px 14px rgba(0,0,0,.12);
 }
-.new-file-row { display: flex; gap: 6px; margin-bottom: 10px; }
+.new-file-row { display: flex; gap: 6px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
 .new-file-row input { width: 100%; min-width: 0; }
+.new-file-row input:first-child { flex: 1 1 150px; width: auto; }
+.new-file-close { flex: 0 0 auto; padding: 3px 7px; font-size: 1.05em; line-height: 1.2; }
 .tree { list-style: none; margin: 0; padding: 0; }
 .tree li { padding: 4px 8px; border-radius: 6px; cursor: pointer; }
 .tree li:hover { background: #e7e3d8; }
@@ -471,7 +473,8 @@ pre.math-block code { font-style: italic; color: #444; }
   display: flex; align-items: center; gap: 4px;
   padding: 3px 8px; cursor: pointer; border-radius: 4px;
   font-size: .85em; white-space: nowrap; overflow: hidden;
-  user-select: none;
+  user-select: none; width: 100%; border: none; background: transparent;
+  color: inherit; text-align: left;
 }
 .tree-row:hover { background: var(--hover-bg); }
 .tree-row.disabled { cursor: default; opacity: .5; }

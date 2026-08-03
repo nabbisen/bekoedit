@@ -19,8 +19,8 @@ pub mod lifecycle;
 pub use bekoedit_ui_contract::source_editor::SourceEditorId;
 pub use controller::{EditorMountHandle, MountOutcome, SourceSyncState, SubmitOutcome};
 pub use focus::{
-    SourceInteractionOrigin, cancel_source_focus, submit_source_interaction,
-    submit_source_shortcut_interaction,
+    SourceInteractionOrigin, cancel_pending_source_focus, cancel_source_focus,
+    submit_source_interaction, submit_source_shortcut_interaction,
 };
 pub use lifecycle::MountIntent;
 

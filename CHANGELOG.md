@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Made Explorer file and directory rows keyboard-operable, with unsupported
+  files remaining visibly and natively disabled.
+- Improved new-file, workspace-search, and overflow-menu focus, dismissal,
+  disclosure state, and bilingual accessible labels.
+
 ## [0.13.1] - 2026-07-21
 
 ### Changed

@@ -19,6 +19,14 @@ impl SourceSyncState {
         target: SourceEditorId,
         fingerprint: String,
     ) -> Option<(u64, Option<u64>)> {
+        if self.shell_focus_held {
+            // A shell surface owns focus authority; a source-focus intent is
+            // cancelled immediately rather than recorded as pending (RFC-042
+            // §6.2 rule 2). The caller's existing "no target" fallback path
+            // submits the command without focus tracking — commands are
+            // never gated by shell authority, only focus is.
+            return None;
+        }
         let token = self.next_focus_token.checked_add(1)?;
         if token > MAX_JAVASCRIPT_FOCUS_TOKEN {
             return None;

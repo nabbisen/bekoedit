@@ -418,6 +418,88 @@ fn focus_token_exhaustion_never_reuses_the_javascript_maximum() {
     );
 }
 
+#[test]
+fn acquire_shell_focus_cancels_a_pending_focus_interaction_and_returns_its_token() {
+    let mut sync = SourceSyncState::default();
+    let (token, _) = sync
+        .allocate_focus_interaction(SourceEditorId::Text, "trigger".into())
+        .unwrap();
+    assert_eq!(
+        sync.claim_focus_interaction(token, FocusResolution::Armed),
+        FocusClaim::Claimed
+    );
+
+    assert_eq!(sync.acquire_shell_focus(), Some(token));
+    assert!(sync.shell_focus_held());
+    assert!(sync.pending_focus.is_none());
+    assert!(sync.provisional_focus.is_none());
+}
+
+#[test]
+fn focus_interaction_is_cancelled_not_recorded_while_shell_authority_is_held() {
+    let mut sync = SourceSyncState::default();
+    assert_eq!(sync.acquire_shell_focus(), None);
+
+    assert_eq!(
+        sync.allocate_focus_interaction(SourceEditorId::Text, "attempt".into()),
+        None
+    );
+    assert!(sync.provisional_focus.is_none());
+    assert!(sync.pending_focus.is_none());
+}
+
+#[test]
+fn release_shell_focus_restores_normal_focus_intent_handling() {
+    let mut sync = SourceSyncState::default();
+    sync.acquire_shell_focus();
+    assert_eq!(
+        sync.allocate_focus_interaction(SourceEditorId::Text, "blocked".into()),
+        None
+    );
+
+    sync.release_shell_focus();
+
+    assert!(!sync.shell_focus_held());
+    assert!(
+        sync.allocate_focus_interaction(SourceEditorId::Text, "allowed".into())
+            .is_some()
+    );
+}
+
+#[test]
+fn protected_command_still_executes_normally_while_shell_authority_is_held() {
+    let mut app = app();
+    let mut sync = SourceSyncState::default();
+    make_ready(&mut sync, &mut app);
+    let document_id = app.session.as_ref().unwrap().document_id;
+
+    sync.acquire_shell_focus();
+    assert!(sync.shell_focus_held());
+
+    // Authority gates focus intents only — a protected command submitted
+    // while a shell surface holds authority must still reach its normal
+    // outcome (RFC-042 §6.2 rule 2, handoff §7.1 constraint).
+    assert!(matches!(
+        sync.submit(
+            SourceCommand::SwitchMode(EditorMode::Split),
+            Some(document_id),
+            10,
+        ),
+        SubmitOutcome::SnapshotRequested(_)
+    ));
+}
+
+#[test]
+fn shell_focus_held_is_false_after_controller_shutdown() {
+    let mut sync = SourceSyncState::default();
+    sync.acquire_shell_focus();
+    assert!(sync.shell_focus_held());
+
+    sync.shutdown(10);
+
+    assert!(!sync.shell_focus_held());
+}
+
 mod protocol;
 
 mod instance_drop;

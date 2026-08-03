@@ -19,7 +19,25 @@ const ARM_TIMEOUT: Duration = Duration::from_millis(250);
 const FOCUS_GUARD_BOOTSTRAP: &str = include_str!("../../assets/focus-guard-bundle.js");
 const FOCUS_GUARD_PROTOCOL_VERSION: u32 = 2;
 
+/// Shell surfaces call this before moving DOM focus (RFC-042 §6.2 rule 1).
+/// It routes through `acquire_shell_focus`, so every caller claims shell
+/// focus authority — not just cancels a pending source-focus interaction.
+/// Only call this for an actual shell surface with a close path that will
+/// call `release_shell_focus` (menus, disclosure panels, screen
+/// replacements). For a one-shot native OS dialog that isn't a shell
+/// surface at all, use `cancel_pending_source_focus` instead — see the
+/// review correction that split these (RFC-042 slice 1 re-review, C1/C2).
 pub fn cancel_source_focus(mut sync: Signal<SourceSyncState>) {
+    if let Some(token) = sync.write().acquire_shell_focus() {
+        cancel_focus_guards_through(token);
+    }
+}
+
+/// Cancels a pending source-focus interaction without claiming shell focus
+/// authority. For call sites that briefly steal OS-level focus (a native
+/// file dialog) but have no in-app close path to release authority from —
+/// there is no shell surface here for RFC-042 §6 to arbitrate.
+pub fn cancel_pending_source_focus(mut sync: Signal<SourceSyncState>) {
     if let Some(token) = sync.write().cancel_focus_interactions() {
         cancel_focus_guards_through(token);
     }
