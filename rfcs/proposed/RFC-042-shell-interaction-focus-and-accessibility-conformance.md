@@ -243,12 +243,40 @@ over live content; there is no background content to trap focus away from.
 
 ### 7.6 Conflict banner
 
-The banner is an alert with actions (F-6). It exposes `role="alert"`, an
-accessible name, and moves focus to its first action when it appears, because
-it blocks autosave and demands a decision. Action order stays safest-first per
-RFC-041 §9. Its appearance must not steal focus from an in-progress IME
-composition; if a composition is active the focus move waits for
-`compositionend`.
+The banner is an alert with actions (F-6). It exposes `role="alert"` and an
+accessible name.
+
+**It must not move focus when it appears.** `role="alert"` already announces
+it to assistive technology without taking focus, which is what the APG
+prescribes for a non-modal alert.
+
+*(Amended 2026-08-04. The original text required focus to move to the banner's
+first action "because it blocks autosave and demands a decision." That was a
+data-loss hazard, and it was my error. Checking what those actions do:*
+
+| Order | Action | Effect |
+|---|---|---|
+| 1 | Keep my version | `atomic_write` over the disk file — destroys the external change |
+| 2 | Reload from disk | `DocumentSession::load` — **discards all unsaved local edits** |
+| 3 | Save my version as a copy | preserves both; the only non-destructive option |
+
+*The banner appears in response to an external event, not a user action, and
+can arrive mid-keystroke. Placing keyboard focus on action 1 means a stray
+Space or Enter overwrites the on-disk version, and one arrow key away destroys
+the user's own unsaved work. For a product whose central promise is that
+neither version is ever lost silently, an unrequested focus move onto a
+destructive control is the wrong default. Announce; do not seize.)*
+
+The banner's actions are reachable by Tab in document order like any other
+controls; no special focus handling is required or permitted.
+
+Because focus never moves, the IME-composition guard the original text called
+for is unnecessary — there is no focus move to defer. Do not implement one.
+
+**Open question carried to RFC-041 §9.** That RFC describes these actions as
+"ordered safest-first," but Save-a-copy — the only option that loses nothing —
+is rendered last. Either the ordering or the description is wrong. Out of scope
+for this RFC; recorded so it is not lost.
 
 ## 8. Accessibility metadata
 
