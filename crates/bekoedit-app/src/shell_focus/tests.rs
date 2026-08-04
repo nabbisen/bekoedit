@@ -25,21 +25,66 @@ fn is_balanced(script: &str) -> bool {
     parens == 0 && braces == 0
 }
 
+/// Every string `shell_focus` passes to `document::eval`, across every
+/// `FocusMove` variant for the two helpers that take one. The single source
+/// both `is_balanced` and the parse-check emitter below draw from, so a
+/// script added to one is added to the other by construction — the one part
+/// of coverage this task could make structural (task 004 §5). Naming a new
+/// helper here is still a step a future change must remember to take; that
+/// limitation is not eliminated, only narrowed to one call site instead of
+/// two.
+fn all_eval_scripts() -> Vec<(String, String)> {
+    let mut scripts = vec![
+        (
+            "focus_element".to_string(),
+            focus_element_script(TRIGGER_APP_MENU),
+        ),
+        ("focus_tree_row".to_string(), focus_tree_row_script(0)),
+    ];
+    for (label, position) in [
+        ("first", FocusMove::First),
+        ("last", FocusMove::Last),
+        ("next", FocusMove::Next),
+        ("previous", FocusMove::Previous),
+    ] {
+        scripts.push((
+            format!("focus_menu_item_{label}"),
+            focus_menu_item_script(MENU_APP_OVERFLOW, position),
+        ));
+        scripts.push((format!("focus_tab_{label}"), focus_tab_script(position)));
+    }
+    scripts
+}
+
 #[test]
 fn every_eval_script_has_balanced_parens_and_braces() {
-    assert!(is_balanced(&focus_element_script(TRIGGER_APP_MENU)));
-    assert!(is_balanced(&focus_tree_row_script(0)));
-    for position in [
-        FocusMove::First,
-        FocusMove::Last,
-        FocusMove::Next,
-        FocusMove::Previous,
-    ] {
-        assert!(is_balanced(&focus_menu_item_script(
-            MENU_APP_OVERFLOW,
-            position
-        )));
-        assert!(is_balanced(&focus_tab_script(position)));
+    for (name, script) in all_eval_scripts() {
+        assert!(is_balanced(&script), "unbalanced script: {name}");
+    }
+}
+
+/// Writes every eval script (§`all_eval_scripts`) to `target/eval-scripts/`
+/// as its own `.js` file, so a separate CI step can run a real JavaScript
+/// parser (`node --check`) over them (task 004). This test only writes
+/// files — it never invokes Node itself, so `cargo test` keeps working on
+/// machines and CI jobs without Node installed.
+#[test]
+fn emit_eval_scripts_for_node_parse_check() {
+    let dir = eval_scripts_dir();
+    std::fs::create_dir_all(&dir)
+        .unwrap_or_else(|e| panic!("create eval-scripts output dir {dir:?}: {e}"));
+    for (name, script) in all_eval_scripts() {
+        let path = dir.join(format!("{name}.js"));
+        std::fs::write(&path, script).unwrap_or_else(|e| panic!("write {path:?}: {e}"));
+    }
+}
+
+fn eval_scripts_dir() -> std::path::PathBuf {
+    match std::env::var("CARGO_TARGET_DIR") {
+        Ok(dir) => std::path::Path::new(&dir).join("eval-scripts"),
+        Err(_) => {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/eval-scripts")
+        }
     }
 }
 

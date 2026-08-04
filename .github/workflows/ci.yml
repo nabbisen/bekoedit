@@ -195,6 +195,20 @@ jobs:
         run: git diff --exit-code -- crates/bekoedit-app/assets/editor-bundle.js crates/bekoedit-app/assets/focus-guard-bundle.js
       - name: Test desktop application
         run: cargo +1.88.0 test -p bekoedit --locked
+      - name: Parse-check emitted eval scripts (RFC-042 slice 3 C1)
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          scripts=(target/eval-scripts/*.js)
+          if [ ${#scripts[@]} -eq 0 ]; then
+            echo "no emitted eval scripts found under target/eval-scripts/ — did the Rust test that writes them run?"
+            exit 1
+          fi
+          for f in "${scripts[@]}"; do
+            echo "Checking $f"
+            node --check "$f"
+          done
       - name: Build desktop app
         run: cargo +1.88.0 build -p bekoedit --release --locked
       - run: git diff --exit-code -- Cargo.lock
