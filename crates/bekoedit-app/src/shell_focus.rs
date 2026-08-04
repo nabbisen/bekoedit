@@ -18,9 +18,11 @@ pub const TRIGGER_NEW_FILE: &str = "workspace-new-file-trigger";
 /// must never reach this function unsanitized. The type keeps that true by
 /// construction instead of by convention (review recommendation R5).
 pub fn focus_element(id: &'static str) {
-    document::eval(&format!(
-        r#"requestAnimationFrame(() => document.getElementById('{id}')?.focus())"#,
-    ));
+    document::eval(&focus_element_script(id));
+}
+
+fn focus_element_script(id: &'static str) -> String {
+    format!(r#"requestAnimationFrame(() => document.getElementById('{id}')?.focus())"#)
 }
 
 /// Focus the nth element matching `[data-tree-row]`, on the next frame. A
@@ -30,9 +32,13 @@ pub fn focus_element(id: &'static str) {
 /// §7.5/§12): only an integer is interpolated, so there is no caller-
 /// controlled text for this script to carry, and nothing to sanitize.
 pub fn focus_tree_row(index: usize) {
-    document::eval(&format!(
+    document::eval(&focus_tree_row_script(index));
+}
+
+fn focus_tree_row_script(index: usize) -> String {
+    format!(
         r#"requestAnimationFrame(() => document.querySelectorAll('[data-tree-row]')[{index}]?.focus())"#,
-    ));
+    )
 }
 
 /// The two overflow-menu container ids (RFC-042 slice 3, handoff §5.7).
@@ -59,16 +65,20 @@ pub enum FocusMove {
 /// from what is actually rendered (RFC-042 slice 3 handoff §5.3). A missing
 /// menu or empty item list is a no-op, never a panic.
 pub fn focus_menu_item(menu_id: &'static str, position: FocusMove) {
+    document::eval(&focus_menu_item_script(menu_id, position));
+}
+
+fn focus_menu_item_script(menu_id: &'static str, position: FocusMove) -> String {
     let target = focus_move_expr("items", position);
-    document::eval(&format!(
+    format!(
         r#"requestAnimationFrame(() => {{
             const menu = document.getElementById('{menu_id}');
             const items = menu ? [...menu.querySelectorAll('[role="menuitem"]')] : [];
             if (items.length === 0) return;
             const current = items.indexOf(document.activeElement);
             {target}?.focus();
-        }})());"#,
-    ));
+        }});"#,
+    )
 }
 
 /// Move focus among the mode tablist's `[role="tab"]` descendants, on the
@@ -77,16 +87,20 @@ pub fn focus_menu_item(menu_id: &'static str, position: FocusMove) {
 /// arrow navigation last landed, so the current position can only be read
 /// from `document.activeElement`, not from Rust-known state.
 pub fn focus_tab(position: FocusMove) {
+    document::eval(&focus_tab_script(position));
+}
+
+fn focus_tab_script(position: FocusMove) -> String {
     let target = focus_move_expr("tabs", position);
-    document::eval(&format!(
+    format!(
         r#"requestAnimationFrame(() => {{
             const list = document.getElementById('{TABLIST_MODE_SWITCH}');
             const tabs = list ? [...list.querySelectorAll('[role="tab"]')] : [];
             if (tabs.length === 0) return;
             const current = tabs.indexOf(document.activeElement);
             {target}?.focus();
-        }})());"#,
-    ));
+        }});"#,
+    )
 }
 
 fn focus_move_expr(array: &'static str, position: FocusMove) -> String {

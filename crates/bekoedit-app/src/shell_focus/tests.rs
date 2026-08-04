@@ -1,5 +1,48 @@
 use super::*;
 
+/// A defect in a `document::eval` template — an unbalanced paren or brace —
+/// throws a `SyntaxError` in the WebView and silently disables whatever it
+/// was supposed to do. No Rust gate (fmt, clippy, unit tests over the
+/// fragments they're built from) catches this: the defect lives in the
+/// *assembly*, not in any tested fragment (RFC-042 slice 3 re-review C1/C2).
+/// Rust cannot parse JavaScript, so this only checks delimiter balance — but
+/// that is exactly what the slice-3 defect violated.
+fn is_balanced(script: &str) -> bool {
+    let mut parens = 0i32;
+    let mut braces = 0i32;
+    for c in script.chars() {
+        match c {
+            '(' => parens += 1,
+            ')' => parens -= 1,
+            '{' => braces += 1,
+            '}' => braces -= 1,
+            _ => {}
+        }
+        if parens < 0 || braces < 0 {
+            return false;
+        }
+    }
+    parens == 0 && braces == 0
+}
+
+#[test]
+fn every_eval_script_has_balanced_parens_and_braces() {
+    assert!(is_balanced(&focus_element_script(TRIGGER_APP_MENU)));
+    assert!(is_balanced(&focus_tree_row_script(0)));
+    for position in [
+        FocusMove::First,
+        FocusMove::Last,
+        FocusMove::Next,
+        FocusMove::Previous,
+    ] {
+        assert!(is_balanced(&focus_menu_item_script(
+            MENU_APP_OVERFLOW,
+            position
+        )));
+        assert!(is_balanced(&focus_tab_script(position)));
+    }
+}
+
 #[test]
 fn trigger_down_and_enter_and_space_open_to_first() {
     assert_eq!(trigger_key_intent(&Key::ArrowDown), Some(FocusMove::First));
