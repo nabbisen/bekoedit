@@ -70,6 +70,17 @@ pub fn AppBar() -> Element {
         open_menu.set(OpenMenu::None);
     };
 
+    // Opens the app menu: acquires shell authority and enforces the
+    // RFC-042 M4/K1 mutual-exclusion set. Shared by the trigger's mouse
+    // click and its keyboard Enter/Space/Down/Up (handoff §5.2) so both
+    // stay in sync.
+    let mut open_app_menu = move || {
+        cancel_source_focus(source_sync);
+        search_open.set(false);
+        new_file_open.set(false);
+        open_menu.set(OpenMenu::App);
+    };
+
     rsx! {
         header { class: "app-bar",
             // ── Logo / Home ───────────────────────────────────────────────
@@ -103,6 +114,16 @@ pub fn AppBar() -> Element {
                 onkeydown: move |event| {
                     if event.key() == Key::Escape {
                         close_app_menu();
+                        return;
+                    }
+                    // Inside-menu navigation only (handoff §5.2). The
+                    // trigger's own Down/Up/Enter/Space are handled on the
+                    // trigger button itself and stop propagation before
+                    // reaching here, so this only ever sees a keydown that
+                    // originated from an already-open menu item.
+                    if let Some(target) = shell_focus::menu_item_key_intent(&event.key()) {
+                        event.prevent_default();
+                        shell_focus::focus_menu_item(shell_focus::MENU_APP_OVERFLOW, target);
                     }
                 },
                 button {
@@ -111,26 +132,31 @@ pub fn AppBar() -> Element {
                     aria_label: tr(ui_lang, "menu.app"),
                     aria_haspopup: "menu",
                     aria_expanded: "{menu_open}",
-                    aria_controls: "app-overflow-menu",
+                    aria_controls: shell_focus::MENU_APP_OVERFLOW,
                     title: tr(ui_lang, "menu.app"),
                     onclick: move |_| {
                         if *open_menu.read() == OpenMenu::App {
                             close_app_menu();
                         } else {
-                            cancel_source_focus(source_sync);
-                            // RFC-042 M4/K1: shell surfaces are mutually
-                            // exclusive — opening this menu closes the
-                            // workspace-search and new-file disclosures too.
-                            search_open.set(false);
-                            new_file_open.set(false);
-                            open_menu.set(OpenMenu::App);
+                            open_app_menu();
                         }
+                    },
+                    onkeydown: move |event: KeyboardEvent| {
+                        let Some(target) = shell_focus::trigger_key_intent(&event.key()) else {
+                            return;
+                        };
+                        event.prevent_default();
+                        event.stop_propagation();
+                        if *open_menu.read() != OpenMenu::App {
+                            open_app_menu();
+                        }
+                        shell_focus::focus_menu_item(shell_focus::MENU_APP_OVERFLOW, target);
                     },
                     "⋯"
                 }
                 if menu_open {
                     div {
-                        id: "app-overflow-menu",
+                        id: shell_focus::MENU_APP_OVERFLOW,
                         class: "app-bar-dropdown",
                         role: "menu",
                         tabindex: "-1",
@@ -139,6 +165,7 @@ pub fn AppBar() -> Element {
                         button {
                             class: "dropdown-item",
                             role: "menuitem",
+                            tabindex: "-1",
                             onclick: move |_| {
                                 close_app_menu();
                                 let st = state;
@@ -168,6 +195,7 @@ pub fn AppBar() -> Element {
                             class: "dropdown-item",
                             "data-source-focus-launch": "appbar-new",
                             role: "menuitem",
+                            tabindex: "-1",
                             onclick: move |_| {
                                 crate::bridge::trace("app_bar.new_file.click", "");
                                 submit_source_interaction(
@@ -189,6 +217,7 @@ pub fn AppBar() -> Element {
                             button {
                                 class: "dropdown-item",
                                 role: "menuitem",
+                                tabindex: "-1",
                                 onclick: move |_| {
                                     close_app_menu();
                                     submit_source_command(
@@ -209,6 +238,7 @@ pub fn AppBar() -> Element {
                         button {
                             class: "dropdown-item",
                             role: "menuitem",
+                            tabindex: "-1",
                             onclick: move |_| {
                                 crate::bridge::trace("app_bar.settings.click", "");
                                 // Settings is a screen replacement (RFC-042

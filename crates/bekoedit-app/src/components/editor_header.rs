@@ -24,6 +24,9 @@ use crate::state::{
     OutlineOpen, SearchOpen,
 };
 
+mod mode_tabs;
+use mode_tabs::ModeTabs;
+
 #[component]
 pub fn EditorHeader() -> Element {
     let state = use_context::<Signal<AppState>>();
@@ -75,6 +78,16 @@ pub fn EditorHeader() -> Element {
         open_menu.set(OpenMenu::None);
     };
 
+    // Opens the editor-tools menu: acquires shell authority and enforces the
+    // RFC-042 M4/K1 mutual-exclusion set. Shared by the trigger's mouse
+    // click and its keyboard Enter/Space/Down/Up (handoff §5.2).
+    let mut open_editor_tools_menu = move || {
+        cancel_source_focus(source_sync);
+        search_open.set(false);
+        new_file_open.set(false);
+        open_menu.set(OpenMenu::EditorTools);
+    };
+
     rsx! {
         header { class: "editor-header", role: "toolbar", aria_label: tr(ui_lang, "editor.toolbar_label"),
             // ── Explorer toggle (keep as-is, single icon) ─────────────────
@@ -98,52 +111,7 @@ pub fn EditorHeader() -> Element {
 
             // ── Tier 1: mode tabs (Text + Preview only by default) ────────
             if has_doc {
-                nav { class: "mode-switch", role: "tablist", aria_label: tr(ui_lang, "editor.mode_label"),
-                    for (m, key) in [
-                        (EditorMode::Text,    "mode.text"),
-                        (EditorMode::Preview, "mode.preview"),
-                    ] {
-                        button {
-                            class: if mode == m { "mode-tab active" } else { "mode-tab" },
-                            "data-source-focus-launch": if m == EditorMode::Text { "mode-text" } else { "mode-preview" },
-                            role: "tab",
-                            aria_selected: "{mode == m}",
-                            onclick: move |_| {
-                                submit_source_interaction(
-                                    source_sync,
-                                    state,
-                                    mode_sig,
-                                    toasts,
-                                    SourceCommand::SwitchMode(m),
-                                    SourceInteractionOrigin::persistent_control(
-                                        if m == EditorMode::Text { "mode-text" } else { "mode-preview" },
-                                    ),
-                                    || {},
-                                );
-                            },
-                            {tr(ui_lang, key)}
-                        }
-                    }
-                    // Form Mode — still in the primary bar but AFTER Text/Preview
-                    button {
-                        class: if mode == EditorMode::Form { "mode-tab active" } else { "mode-tab mode-tab-secondary" },
-                        "data-source-focus-launch": "mode-form",
-                        role: "tab",
-                        aria_selected: "{mode == EditorMode::Form}",
-                        onclick: move |_| {
-                            submit_source_interaction(
-                                source_sync,
-                                state,
-                                mode_sig,
-                                toasts,
-                                SourceCommand::SwitchMode(EditorMode::Form),
-                                SourceInteractionOrigin::persistent_control("mode-form"),
-                                || {},
-                            );
-                        },
-                        {tr(ui_lang, "mode.form")}
-                    }
-                }
+                ModeTabs { mode, ui_lang, state, mode_sig, source_sync, toasts }
             }
 
             div { class: "header-spacer" }
@@ -214,6 +182,15 @@ pub fn EditorHeader() -> Element {
                     onkeydown: move |event| {
                         if event.key() == Key::Escape {
                             close_editor_tools_menu();
+                            return;
+                        }
+                        // Inside-menu navigation only (handoff §5.2). The
+                        // trigger's own Down/Up/Enter/Space are handled on
+                        // the trigger button and stop propagation before
+                        // reaching here.
+                        if let Some(target) = shell_focus::menu_item_key_intent(&event.key()) {
+                            event.prevent_default();
+                            shell_focus::focus_menu_item(shell_focus::MENU_EDITOR_TOOLS, target);
                         }
                     },
                     button {
@@ -223,29 +200,34 @@ pub fn EditorHeader() -> Element {
                         aria_label: tr(ui_lang, "menu.editor_tools"),
                         aria_haspopup: "menu",
                         aria_expanded: "{adv_open}",
-                        aria_controls: "editor-tools-menu",
+                        aria_controls: shell_focus::MENU_EDITOR_TOOLS,
                         onclick: move |_| {
                             if *open_menu.read() == OpenMenu::EditorTools {
                                 close_editor_tools_menu();
                             } else {
-                                cancel_source_focus(source_sync);
-                                // RFC-042 M4/K1: shell surfaces are mutually
-                                // exclusive — opening this menu closes the
-                                // workspace-search and new-file disclosures
-                                // too.
-                                search_open.set(false);
-                                new_file_open.set(false);
-                                open_menu.set(OpenMenu::EditorTools);
+                                open_editor_tools_menu();
                             }
+                        },
+                        onkeydown: move |event: KeyboardEvent| {
+                            let Some(target) = shell_focus::trigger_key_intent(&event.key()) else {
+                                return;
+                            };
+                            event.prevent_default();
+                            event.stop_propagation();
+                            if *open_menu.read() != OpenMenu::EditorTools {
+                                open_editor_tools_menu();
+                            }
+                            shell_focus::focus_menu_item(shell_focus::MENU_EDITOR_TOOLS, target);
                         },
                         "•••"
                     }
                     if adv_open {
-                    div { id: "editor-tools-menu", class: "adv-dropdown", role: "menu",
+                    div { id: shell_focus::MENU_EDITOR_TOOLS, class: "adv-dropdown", role: "menu",
                         // Split
                         button {
                             class: if mode == EditorMode::Split { "dropdown-item active" } else { "dropdown-item" },
                             role: "menuitem",
+                            tabindex: "-1",
                             "data-source-focus-launch": "mode-split",
                             onclick: move |_| {
                                 let target = if mode == EditorMode::Split {
@@ -274,6 +256,7 @@ pub fn EditorHeader() -> Element {
                         button {
                             class: "dropdown-item",
                             role: "menuitem",
+                            tabindex: "-1",
                             onclick: move |_| {
                                 let o = *outline_open.read();
                                 outline_open.set(!o);
@@ -289,6 +272,7 @@ pub fn EditorHeader() -> Element {
                             button {
                                 class: "dropdown-item",
                                 role: "menuitem",
+                                tabindex: "-1",
                                 onclick: move |_| {
                                     let o = *backlinks_open.read();
                                     backlinks_open.set(!o);
@@ -304,6 +288,7 @@ pub fn EditorHeader() -> Element {
                         button {
                             class: "dropdown-item",
                             role: "menuitem",
+                            tabindex: "-1",
                             onclick: move |_| {
                                 let o = *history_open.read();
                                 history_open.set(!o);
@@ -319,6 +304,7 @@ pub fn EditorHeader() -> Element {
                         button {
                             class: "dropdown-item",
                             role: "menuitem",
+                            tabindex: "-1",
                             onclick: move |_| {
                                 close_editor_tools_menu();
                                 let st = state.read();

@@ -451,4 +451,78 @@ mod app_tests {
         assert!(!explorer.contains("DragState"));
         assert!(!tree_row.contains("DragState"));
     }
+
+    #[test]
+    fn rfc_042_slice_3_menu_and_tab_keyboard_contracts() {
+        let app_bar = include_str!("components/app_bar.rs");
+        let header = include_str!("components/editor_header.rs");
+        let mode_tabs = include_str!("components/editor_header/mode_tabs.rs");
+        let shell_focus = include_str!("shell_focus.rs");
+
+        // §5.1: menu items are not tab stops — every item carries
+        // tabindex="-1". app_bar.rs: 4 items (Open Folder, New File, Close
+        // Workspace, Settings) plus the pre-existing container-level
+        // tabindex="-1" on the dropdown itself = 5. editor_header.rs: 5
+        // items (Split, Outline, Backlinks, History, Export), no container
+        // tabindex there.
+        assert_eq!(app_bar.matches("tabindex: \"-1\"").count(), 5);
+        assert_eq!(header.matches("tabindex: \"-1\"").count(), 5);
+
+        // §5.5: exactly one tab's tabindex is bound to *selection*
+        // (`mode == m` / `mode == EditorMode::Form`), not to a separately
+        // tracked "last focused" signal — this is what keeps tabbing into
+        // the tablist always landing on the current mode.
+        assert!(mode_tabs.contains(r#"tabindex: if mode == m { "0" } else { "-1" }"#));
+        assert!(
+            mode_tabs.contains(r#"tabindex: if mode == EditorMode::Form { "0" } else { "-1" }"#)
+        );
+
+        // §5.4 / C3 regression guard, the most valuable assertion in this
+        // set: Escape is explicit dismissal (routes through the
+        // release-*and-restore* helper via close_*_menu); Tab is implicit
+        // dismissal and must NOT be intercepted here at all — no
+        // competing handler, relying on app.rs's existing onfocusin route
+        // (release_menu_focus, no restore) once items stop being tab
+        // stops.
+        assert!(app_bar.contains("Key::Escape") && app_bar.contains("close_app_menu()"));
+        assert!(header.contains("Key::Escape") && header.contains("close_editor_tools_menu()"));
+        assert!(!app_bar.contains("Key::Tab"));
+        assert!(!header.contains("Key::Tab"));
+
+        // §5.3: item resolution is DOM-relative — no Rust-side mirror of
+        // the menu item list. `focus_menu_item` reads
+        // `[role="menuitem"]` from the DOM at the moment of use.
+        assert!(shell_focus.contains("querySelectorAll('[role=\"menuitem\"]')"));
+        assert!(shell_focus.contains("querySelectorAll('[role=\"tab\"]')"));
+
+        // §5.6: arrow-navigating tabs must not disturb source focus. The
+        // tablist's keydown handler calls only `shell_focus::tab_key_intent`
+        // and `shell_focus::focus_tab` — never anything from `source_sync`.
+        let onkeydown = mode_tabs
+            .split("onkeydown: move |event: KeyboardEvent| {")
+            .nth(1)
+            .and_then(|rest| rest.split("},").next())
+            .expect("mode-tabs onkeydown body");
+        assert!(!onkeydown.contains("source_sync"));
+        assert!(!onkeydown.contains("cancel_source_focus"));
+        assert!(!onkeydown.contains("acquire_shell_focus"));
+        assert!(!onkeydown.contains("submit_source"));
+
+        // §6 non-change scope: focus_element/focus_tree_row and the four
+        // trigger constants are untouched by this slice.
+        assert!(shell_focus.contains("pub fn focus_element(id: &'static str)"));
+        assert!(shell_focus.contains("pub fn focus_tree_row(index: usize)"));
+        assert!(shell_focus.contains("pub const TRIGGER_APP_MENU"));
+        assert!(shell_focus.contains("pub const TRIGGER_EDITOR_TOOLS"));
+        assert!(shell_focus.contains("pub const TRIGGER_WORKSPACE_SEARCH"));
+        assert!(shell_focus.contains("pub const TRIGGER_NEW_FILE"));
+
+        // §9.5: only &'static str and integers reach any eval'd script —
+        // the new focus movers take the same shape as slice 1/2's.
+        assert!(
+            shell_focus
+                .contains("pub fn focus_menu_item(menu_id: &'static str, position: FocusMove)")
+        );
+        assert!(shell_focus.contains("pub fn focus_tab(position: FocusMove)"));
+    }
 }
