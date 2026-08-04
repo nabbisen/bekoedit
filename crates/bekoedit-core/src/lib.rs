@@ -15,11 +15,6 @@ pub mod conflict;
 pub mod save;
 pub mod session;
 pub mod store;
-mod store_exports;
-mod store_file_ops;
-mod store_history;
-mod store_sections;
-mod store_templates;
 
 pub use conflict::{ConflictResolution, ConflictState};
 pub use save::{AutosaveScheduler, SaveState};
