@@ -263,5 +263,20 @@ mod app_tests {
         assert!(settings_screen.contains("if let Err(err) = persistence.save_settings(&s)"));
         assert!(settings_screen.contains("ToastKind::Error"));
         assert!(settings_screen.contains("settings.save_failed"));
+
+        // Re-review §2 correction: on a failed save the screen must stay
+        // open, not close — `settings` is component-local, so closing
+        // would unmount it, and reopening reloads the old values from
+        // disk, discarding the user's edits after only the toast's
+        // 4-second auto-dismiss. The failure branch returns early; the
+        // success-only actions (applying the live language/mode, closing)
+        // come after it, not inside it.
+        let err_branch = settings_screen
+            .split("if let Err(err) = persistence.save_settings(&s) {")
+            .nth(1)
+            .and_then(|rest| rest.split("}\n").next())
+            .expect("save-button Err branch");
+        assert!(err_branch.contains("return;"));
+        assert!(!err_branch.contains("close_settings()"));
     }
 }

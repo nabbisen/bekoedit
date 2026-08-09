@@ -122,21 +122,26 @@ pub fn SettingsScreen() -> Element {
                     class: "primary",
                     onclick: move |_| {
                         let s = settings.read().clone();
-                        lang_signal.set(s.lang);
-                        mode_signal.set(s.default_mode);
                         // Presentation of failure only (task 005 Part C) — a
-                        // failed write does not change when/what is saved,
-                        // and the screen still closes; the in-memory
-                        // `settings` value the user just edited is not lost
-                        // regardless, since it lives in this signal, not the
-                        // file.
+                        // failed write does not change when/what is saved.
+                        // It does mean the screen must stay open on failure
+                        // (re-review §2 correction): `settings` is
+                        // component-local (`use_signal` on this component),
+                        // so closing would unmount it, and reopening reloads
+                        // from disk — the user's edits really would be lost
+                        // after only the toast's 4-second auto-dismiss.
+                        // Applying the new language/mode live and closing
+                        // both wait for a confirmed write.
                         if let Err(err) = persistence.save_settings(&s) {
                             push_toast(
                                 &mut toasts,
                                 ToastKind::Error,
                                 format!("{}: {err}", tr(lang, "settings.save_failed")),
                             );
+                            return;
                         }
+                        lang_signal.set(s.lang);
+                        mode_signal.set(s.default_mode);
                         close_settings();
                     },
                     {tr(lang, "settings.save")}
