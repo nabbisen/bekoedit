@@ -10,6 +10,8 @@ use crate::shell_focus;
 use crate::source_sync::SourceSyncState;
 use crate::state::SettingsOpen;
 
+const SETTINGS_HEADING: &str = "settings-heading";
+
 #[component]
 pub fn SettingsScreen() -> Element {
     let mut settings_open = use_context::<SettingsOpen>().0;
@@ -33,10 +35,23 @@ pub fn SettingsScreen() -> Element {
 
     let mut settings = use_signal(|| persistence.load_settings());
 
+    // Focus moves to the heading on entry (RFC-042 §7.5, slice 4 handoff
+    // §5.3). Shell focus authority is already acquired at the call site
+    // that opens Settings (`cancel_source_focus` in app_bar.rs, before
+    // `SourceCommand::OpenSettings` is submitted) — this only adds the DOM
+    // focus move slice 4 requires; it does not acquire authority again.
+    // Reads no signal, so it fires once on mount, not on every re-render.
+    use_effect(|| {
+        shell_focus::focus_element(SETTINGS_HEADING);
+    });
+
     rsx! {
-        div { class: "settings-screen",
+        div {
+            class: "settings-screen",
+            role: "region",
+            aria_labelledby: SETTINGS_HEADING,
             div { class: "settings-header",
-                h1 { {tr(lang, "settings.title")} }
+                h1 { id: SETTINGS_HEADING, tabindex: "-1", {tr(lang, "settings.title")} }
             }
             div { class: "settings-body",
                 section { class: "settings-group",

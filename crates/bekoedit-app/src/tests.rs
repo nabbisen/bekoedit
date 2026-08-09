@@ -83,6 +83,7 @@ mod app_tests {
             "recovery.discard",
             "recovery.skip_all",
             "recovery.restored",
+            "recovery.recoverable_suffix",
             "toast.dismiss",
             "table.add_row",
             "templates.label",
@@ -524,5 +525,66 @@ mod app_tests {
                 .contains("pub fn focus_menu_item(menu_id: &'static str, position: FocusMove)")
         );
         assert!(shell_focus.contains("pub fn focus_tab(position: FocusMove)"));
+    }
+
+    #[test]
+    fn rfc_042_slice_4_conflict_recovery_and_settings_metadata() {
+        let banner = include_str!("components/conflict_banner.rs");
+        let recovery = include_str!("components/recovery_screen.rs");
+        let settings = include_str!("components/settings_screen.rs");
+        let shell_focus = include_str!("shell_focus.rs");
+        let app_bar = include_str!("components/app_bar.rs");
+
+        // §5.1, the most valuable assertion in this slice: the conflict
+        // banner performs no focus call, in any form. It announces via
+        // role="alert" and an accessible name; it never seizes focus,
+        // because action 1 ("Keep my version") is destructive and the
+        // banner can arrive mid-keystroke (RFC-042 §7.6, amended).
+        assert!(banner.contains(r#"role: "alert""#));
+        assert!(banner.contains("aria_label: tr(lang, title_key)"));
+        assert!(!banner.contains("shell_focus::"));
+        assert!(!banner.contains("focus_element"));
+        assert!(!banner.contains(".focus()"));
+
+        // §5.2: Recovery is a landmark region with an accessible name, a
+        // live region announcing the recoverable count, and acquires/
+        // releases shell focus authority on entry/exit through the
+        // existing slice-1 accessors (consumed, not extended).
+        assert!(recovery.contains(r#"role: "region""#));
+        assert!(recovery.contains("aria_labelledby: RECOVERY_HEADING"));
+        assert!(recovery.contains(r#"role: "status""#));
+        assert!(recovery.contains("recovery.recoverable_suffix"));
+        assert!(recovery.contains("cancel_source_focus(source_sync)"));
+        assert!(recovery.contains("sync.write().release_shell_focus()"));
+        assert!(recovery.contains("shell_focus::focus_element(RECOVERY_HEADING)"));
+        assert!(recovery.contains("shell_focus::focus_element(shell_focus::TRIGGER_APP_LOGO)"));
+        // Not trapped: no keydown handler cycling focus back inside the
+        // screen, no tabindex="-1" removing any of its own controls from
+        // the tab order (only the heading, which is off the tab order by
+        // design — a programmatic focus target, not a Tab stop).
+        assert_eq!(recovery.matches("tabindex: \"-1\"").count(), 1);
+
+        // §5.3: Settings gains the same landmark + entry-focus treatment.
+        // Its exit path (close_settings, unchanged) already acquired and
+        // already releases via the slice-1 accessors — this slice adds
+        // only the entry-focus move, not a second acquire.
+        assert!(settings.contains(r#"role: "region""#));
+        assert!(settings.contains("aria_labelledby: SETTINGS_HEADING"));
+        assert!(settings.contains("shell_focus::focus_element(SETTINGS_HEADING)"));
+        assert!(settings.contains("let mut close_settings"));
+        assert!(settings.matches("acquire_shell_focus").count() == 0);
+
+        // §6 non-change scope: no new eval script. Reusing the existing,
+        // already balance-tested `focus_element` for all three new focus
+        // moves (Recovery entry/exit, Settings entry) means this slice adds
+        // zero new `document::eval` call sites — confirmed by their absence
+        // from both new-surface files.
+        assert!(!recovery.contains("document::eval"));
+        assert!(!settings.contains("document::eval"));
+
+        // The one new shell_focus.rs addition this slice makes: an
+        // additive trigger constant, not an edit to any slice 1-3 helper.
+        assert!(shell_focus.contains("pub const TRIGGER_APP_LOGO"));
+        assert!(app_bar.contains("id: shell_focus::TRIGGER_APP_LOGO"));
     }
 }

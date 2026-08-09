@@ -38,7 +38,10 @@ pub fn ConflictBanner() -> Element {
     };
 
     rsx! {
-        div { class: "conflict-banner",
+        div {
+            class: "conflict-banner",
+            role: "alert",
+            aria_label: tr(lang, title_key),
             p { {tr(lang, title_key)} }
             div { class: "conflict-actions",
                 button { onclick: move |_| resolve(ConflictResolution::KeepMine),

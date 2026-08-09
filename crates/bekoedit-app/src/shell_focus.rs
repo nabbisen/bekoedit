@@ -9,6 +9,12 @@ pub const TRIGGER_APP_MENU: &str = "app-menu-trigger";
 pub const TRIGGER_EDITOR_TOOLS: &str = "editor-tools-trigger";
 pub const TRIGGER_WORKSPACE_SEARCH: &str = "workspace-search-trigger";
 pub const TRIGGER_NEW_FILE: &str = "workspace-new-file-trigger";
+/// The app bar's home/logo button (RFC-042 slice 4, handoff §5.2) — the one
+/// control guaranteed present in whatever screen replaces Recovery on exit
+/// (MainShell or StartScreen both render the app bar above their own
+/// content), so it stands in for "the next screen's natural first control"
+/// rather than an invented phantom trigger.
+pub const TRIGGER_APP_LOGO: &str = "app-bar-logo-trigger";
 
 /// Focus an element by id on the next animation frame. A missing element is
 /// a no-op, never a panic.

@@ -85,6 +85,7 @@ pub fn AppBar() -> Element {
         header { class: "app-bar",
             // ── Logo / Home ───────────────────────────────────────────────
             button {
+                id: shell_focus::TRIGGER_APP_LOGO,
                 class: "app-bar-logo",
                 title: tr(ui_lang, "app.title"),
                 onclick: move |_| {
