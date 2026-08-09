@@ -42,6 +42,18 @@ impl AppPersistence {
         }
     }
 
+    /// True if `PlatformDefault` settings would be read from (or written
+    /// to) the temp-directory fallback because the platform config
+    /// directory could not be resolved. Always false for `Isolated`, which
+    /// never touches the fallback — it always has an explicit path.
+    /// Checked once at startup (task 005 Part A), not on every load/save.
+    pub fn settings_used_temp_fallback(&self) -> bool {
+        match self {
+            Self::PlatformDefault => AppSettings::resolve_settings_path().used_temp_fallback,
+            Self::Isolated(_) => false,
+        }
+    }
+
     pub fn save_settings(&self, settings: &AppSettings) {
         match self {
             Self::PlatformDefault => settings.save(),

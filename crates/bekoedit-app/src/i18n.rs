@@ -132,6 +132,9 @@ fn tr_en(key: &str) -> &'static str {
         "settings.reopen" => "Reopen last workspace on start",
         "settings.autosave_ms" => "Autosave delay",
         "settings.prefer_trash" => "Move deleted files to trash",
+        "settings.temp_fallback_warning" => {
+            "Settings cannot be stored persistently in this environment"
+        }
         "recovery.title" => "Recover unsaved changes",
         "recovery.description" => {
             "bekoedit found unsaved recovery snapshots from a previous session."
@@ -255,6 +258,7 @@ fn tr_ja(key: &str) -> &'static str {
         "settings.reopen" => "起動時に最後のワークスペースを再開",
         "settings.autosave_ms" => "自動保存の遅延",
         "settings.prefer_trash" => "削除したファイルをゴミ箱に移動",
+        "settings.temp_fallback_warning" => "この環境では設定を永続的に保存できません",
         "recovery.title" => "未保存の変更を復元",
         "recovery.description" => {
             "前回のセッションで保存されなかった復元スナップショットが見つかりました。"

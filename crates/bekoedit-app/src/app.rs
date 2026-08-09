@@ -26,7 +26,7 @@ use crate::components::{
     start_screen::StartScreen,
     status_bar::StatusBar,
     text_mode::TextMode,
-    toast::{Toast, ToastLayer},
+    toast::{Toast, ToastKind, ToastLayer, push_toast},
 };
 use crate::i18n::{Lang, tr};
 use crate::source_sync::host::SourceEditorControllerHost;
@@ -68,10 +68,29 @@ pub fn App() -> Element {
     use_context_provider(|| HistoryOpen(Signal::new(false_val())));
     use_context_provider(|| NewFileOpen(Signal::new(false_val())));
     let mut open_menu = use_context_provider(|| OpenMenuState(Signal::new(OpenMenu::None))).0;
-    use_context_provider(|| Signal::new(Vec::<Toast>::new()));
+    let mut toasts = use_context_provider(|| Signal::new(Vec::<Toast>::new()));
     let source_sync = use_context_provider(|| Signal::new(SourceSyncState::default()));
     let recovery_pending_at_launch = use_signal(|| has_pending_recovery(&state.read()));
     let recovery_dismissed = use_signal(|| false);
+
+    // Surfaced once at startup, not per save (task 005 Part A): the
+    // temp-directory fallback is now observable
+    // (`AppPersistence::settings_used_temp_fallback`) rather than silently
+    // discarded inside `unwrap_or_else`. Reads no signal — `persistence`
+    // and `settings.lang` are plain values captured at this render, not
+    // `Signal` reads — so this effect fires once on mount, not on every
+    // re-render.
+    let startup_persistence = persistence.clone();
+    let startup_lang = settings.lang;
+    use_effect(move || {
+        if startup_persistence.settings_used_temp_fallback() {
+            push_toast(
+                &mut toasts,
+                ToastKind::Warning,
+                tr(startup_lang, "settings.temp_fallback_warning"),
+            );
+        }
+    });
 
     // Background: native fs watcher + autosave + external-change poll.
     use_future(move || {
