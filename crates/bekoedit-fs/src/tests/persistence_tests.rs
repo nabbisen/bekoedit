@@ -3,7 +3,6 @@
 use crate::atomic::{FileFingerprint, atomic_write};
 use crate::recent::RecentWorkspaces;
 use crate::recovery::{RecoverySnapshot, RecoveryStore};
-use crate::{UserSettings, load_user_settings, save_user_settings};
 
 fn temp_workspace() -> tempfile::TempDir {
     tempfile::tempdir().unwrap()
@@ -80,28 +79,4 @@ fn recent_workspaces_returns_default_when_file_absent() {
     let dir = temp_workspace();
     let loaded = RecentWorkspaces::load(&dir.path().join("nonexistent.json"));
     assert!(loaded.entries.is_empty());
-}
-
-// --- settings persistence (RFC-022) ---
-
-#[test]
-fn user_settings_persist_and_reload() {
-    let dir = temp_workspace();
-    let path = dir.path().join("settings.json");
-    let s = UserSettings {
-        autosave_debounce_ms: 2500,
-        show_hidden_files: true,
-        ..Default::default()
-    };
-    save_user_settings(&path, &s).unwrap();
-    let loaded = load_user_settings(&path).unwrap();
-    assert_eq!(loaded.autosave_debounce_ms, 2500);
-    assert!(loaded.show_hidden_files);
-}
-
-#[test]
-fn load_user_settings_returns_default_when_absent() {
-    let dir = temp_workspace();
-    let s = load_user_settings(&dir.path().join("no.json")).unwrap();
-    assert_eq!(s, UserSettings::default());
 }

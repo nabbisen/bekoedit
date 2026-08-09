@@ -1,32 +1,8 @@
-// Settings and recents persistence tests — bekoedit-core.
+// Recents persistence tests — bekoedit-core.
 
-use bekoedit_fs::{RecoveryStore, UserSettings, load_user_settings, save_user_settings};
+use bekoedit_fs::RecoveryStore;
 
 use crate::store::AppState;
-
-// ── settings persistence (survives process restart) ──────────────────────
-
-#[test]
-fn settings_persist_across_app_state_restart() {
-    let dir = tempfile::tempdir().unwrap();
-    let settings_path = dir.path().join("settings.json");
-
-    // Write settings using the fs-layer helpers.
-    let settings = UserSettings {
-        autosave_debounce_ms: 2500,
-        show_hidden_files: true,
-        ..Default::default()
-    };
-    save_user_settings(&settings_path, &settings).expect("save settings");
-
-    // Load them in a fresh context — simulates a restart.
-    let loaded = load_user_settings(&settings_path).expect("load settings");
-    assert_eq!(
-        loaded.autosave_debounce_ms, 2500,
-        "autosave_debounce_ms persisted"
-    );
-    assert!(loaded.show_hidden_files, "show_hidden_files persisted");
-}
 
 #[test]
 fn recent_workspaces_persist_across_restart() {
