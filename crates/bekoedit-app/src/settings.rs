@@ -93,17 +93,17 @@ impl AppSettings {
             .unwrap_or_default()
     }
 
-    pub fn save(&self) {
-        self.save_to(&Self::settings_path());
+    pub fn save(&self) -> std::io::Result<()> {
+        self.save_to(&Self::settings_path())
     }
 
-    pub fn save_to(&self, path: &Path) {
+    pub fn save_to(&self, path: &Path) -> std::io::Result<()> {
         if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
+            std::fs::create_dir_all(dir)?;
         }
-        if let Ok(json) = serde_json::to_string_pretty(self) {
-            let _ = bekoedit_fs::atomic_write(path, &json);
-        }
+        let json = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
+        bekoedit_fs::atomic_write(path, &json)?;
+        Ok(())
     }
 }
 
@@ -130,6 +130,24 @@ mod tests {
             std::env::temp_dir()
                 .join("bekoedit")
                 .join("app-settings.json")
+        );
+    }
+
+    #[test]
+    fn save_to_reports_failure_instead_of_discarding_it() {
+        // `parent()` of the target path is an ordinary file, not a
+        // directory, so `create_dir_all` fails — a reliable, portable way
+        // to force a write failure without relying on permissions.
+        let dir = tempfile::tempdir().unwrap();
+        let blocking_file = dir.path().join("not-a-directory");
+        std::fs::write(&blocking_file, "occupied").unwrap();
+        let unwritable_path = blocking_file.join("app-settings.json");
+
+        let result = AppSettings::default().save_to(&unwritable_path);
+
+        assert!(
+            result.is_err(),
+            "save_to must report the failure, not swallow it"
         );
     }
 }

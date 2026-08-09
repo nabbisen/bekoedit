@@ -12,7 +12,7 @@ fn isolated_persistence_routes_every_store_below_its_root() {
     assert!(paths.all_within_root());
 
     let settings = AppSettings::default();
-    persistence.save_settings(&settings);
+    persistence.save_settings(&settings).unwrap();
     assert!(paths.settings_file().exists());
 
     let workspace = parent.path().join("workspace");

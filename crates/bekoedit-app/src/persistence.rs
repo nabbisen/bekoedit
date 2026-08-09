@@ -54,7 +54,7 @@ impl AppPersistence {
         }
     }
 
-    pub fn save_settings(&self, settings: &AppSettings) {
+    pub fn save_settings(&self, settings: &AppSettings) -> std::io::Result<()> {
         match self {
             Self::PlatformDefault => settings.save(),
             Self::Isolated(paths) => settings.save_to(&paths.settings_file),

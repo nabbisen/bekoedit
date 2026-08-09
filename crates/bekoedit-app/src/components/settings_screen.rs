@@ -4,6 +4,7 @@ use dioxus::prelude::*;
 
 use bekoedit_ui_contract::EditorMode;
 
+use crate::components::toast::{Toast, ToastKind, push_toast};
 use crate::i18n::{Lang, tr};
 use crate::persistence::AppPersistence;
 use crate::shell_focus;
@@ -19,6 +20,7 @@ pub fn SettingsScreen() -> Element {
     let mut mode_signal = use_context::<Signal<EditorMode>>();
     let persistence = use_context::<AppPersistence>();
     let mut source_sync = use_context::<Signal<SourceSyncState>>();
+    let mut toasts = use_context::<Signal<Vec<Toast>>>();
     let lang = *lang_signal.read();
 
     // Settings is a screen replacement (RFC-042 §7.5): exit releases the
@@ -122,7 +124,19 @@ pub fn SettingsScreen() -> Element {
                         let s = settings.read().clone();
                         lang_signal.set(s.lang);
                         mode_signal.set(s.default_mode);
-                        persistence.save_settings(&s);
+                        // Presentation of failure only (task 005 Part C) — a
+                        // failed write does not change when/what is saved,
+                        // and the screen still closes; the in-memory
+                        // `settings` value the user just edited is not lost
+                        // regardless, since it lives in this signal, not the
+                        // file.
+                        if let Err(err) = persistence.save_settings(&s) {
+                            push_toast(
+                                &mut toasts,
+                                ToastKind::Error,
+                                format!("{}: {err}", tr(lang, "settings.save_failed")),
+                            );
+                        }
                         close_settings();
                     },
                     {tr(lang, "settings.save")}
