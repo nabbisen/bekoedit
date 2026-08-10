@@ -15,9 +15,12 @@ code.
    disposable, and rebuilt after every accepted mutation. Projections are
    never edited in place and never serialized back into Markdown.
 3. **Rust owns source mutation and the filesystem.** The WebView UI sends
-   *intent* (`bekoedit_ui_contract::UiToCoreCommand`); Rust validates,
-   resolves, and mutates. JavaScript never owns authoritative byte ranges
-   and never receives filesystem handles.
+   *intent*, never mutation: in-process `bekoedit_app::source_sync::SourceCommand`
+   values and Dioxus signals for everything that stays in Rust, and the
+   versioned `bekoedit_ui_contract::source_editor` request/event protocol
+   for the one boundary that genuinely crosses into the WebView's
+   JavaScript. Rust validates, resolves, and mutates. JavaScript never
+   owns authoritative byte ranges and never receives filesystem handles.
 4. **Mutations are minimal source patches.** Form Mode semantic commands
    (`FormBlockEdit`) resolve to `SourcePatch` values that replace exactly
    the targeted bytes (`bekoedit_markdown::form::resolve_form_edit`).

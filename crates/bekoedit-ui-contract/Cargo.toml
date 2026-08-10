@@ -9,9 +9,5 @@ authors.workspace       = true
 repository.workspace    = true
 
 [dependencies]
-bekoedit-core               = { workspace = true }
-bekoedit-fs                 = { workspace = true }
-bekoedit-markdown           = { workspace = true }
-
 serde                       = { workspace = true }
 serde_json                  = { workspace = true }

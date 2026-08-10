@@ -226,9 +226,6 @@ dependencies = [
 name = "bekoedit-ui-contract"
 version = "0.13.1"
 dependencies = [
- "bekoedit-core",
- "bekoedit-fs",
- "bekoedit-markdown",
  "serde",
  "serde_json",
 ]
