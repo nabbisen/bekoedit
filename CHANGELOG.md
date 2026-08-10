@@ -6,11 +6,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-08-10
+
+### Added
+- Full keyboard navigation for the workspace file tree — arrow keys, Home/End,
+  Enter and Space — with the tree as a single tab stop and the open document
+  announced as the selected row.
+- Keyboard navigation for the application and editor-tools menus and for the
+  editor mode tabs, following the WAI-ARIA menu-button and tabs patterns.
+- Accessibility roles, names, and announcements for the conflict banner, the
+  Recovery screen, and the Settings screen. Recovery announces how many
+  documents can be recovered.
+- A warning when settings cannot be written to the platform configuration
+  directory and fall back to temporary storage, where they may not survive a
+  restart.
+
 ### Changed
-- Made Explorer file and directory rows keyboard-operable, with unsupported
-  files remaining visibly and natively disabled.
-- Improved new-file, workspace-search, and overflow-menu focus, dismissal,
-  disclosure state, and bilingual accessible labels.
+- Keyboard focus is arbitrated by a single authority shared between the
+  application shell and the source editor, replacing two independent owners
+  that could each move focus without the other's knowledge.
+- Settings failures are reported instead of discarded, and the Settings screen
+  stays open when a save fails so that edits are not lost.
+
+### Fixed
+- The split divider no longer displays a resize cursor for a drag it cannot
+  perform.
+
+### Removed
+- `bekoedit-fs`: `UserSettings::default_path`, `UserSettings::load`,
+  `UserSettings::save`, `load_user_settings`, and `save_user_settings`. None had
+  a caller; the `UserSettings` type itself is unchanged.
+- `bekoedit-ui-contract`: the unused `UiToCoreCommand` and `CoreToUiEvent`
+  payload types, and with them the crate's dependencies on `bekoedit-core`,
+  `bekoedit-fs`, and `bekoedit-markdown` — it is now a leaf crate.
+  `BRIDGE_SCHEMA_VERSION`, `EditorMode`, and the `source_editor` protocol are
+  unchanged.
+
+Both removals are breaking for library consumers, which is why this is a minor
+release rather than a patch.
+
+Accessibility work in this release covers the shell: file tree, menus, mode
+tabs, conflict banner, Recovery, and Settings. **Form Mode block editing does
+not yet expose accessibility metadata** and is tracked by RFC-042 slice 5.
+
+[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.14.0...HEAD
+[0.14.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.14.0
 
 ## [0.13.1] - 2026-07-21
 
@@ -34,7 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added shared verification for release archive names, checksums, safe root
   members, target provenance, and complete cross-platform artifact sets.
 
-[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.13.1...HEAD
 [0.13.1]: https://github.com/nabbisen/bekoedit/releases/tag/0.13.1
 
 ## [0.13.0] - 2026-07-15

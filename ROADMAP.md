@@ -3,15 +3,11 @@
 Authoritative sequencing lives in `rfcs/`. This file is the orientation view.
 **1.0.0 requires explicit maintainer sign-off before any release.**
 
-## Active — v0.14.0
-
-UI/UX stabilization of the existing desktop application: focus, keyboard and
-menu behavior, accessibility metadata, and responsive workspace/editor
-controls. This work does not open the 1.0 release path.
-
 ## Current proposed / deferred RFCs
 
-- **RFC-042** — proposed; governs the active v0.14.0 UI/UX stabilization theme
+- **RFC-042** — proposed; slices 1–4 shipped in v0.14.0. Remains open pending
+  slice 5 (Form Mode accessibility metadata); slice 6 (responsive/resize) was
+  withdrawn.
 - **RFC-032** — deferred until profiling shows need
 - **RFC-039/040** — future evaluation only
 
@@ -38,6 +34,17 @@ Full-text search, backlinks, export profiles, Git awareness, workspace
 templates, extension policy, plugin system, sync/collaboration.
 
 **1.0.0 requires explicit maintainer sign-off on the acceptance checklist.**
+
+## Shipped — v0.14.0 (2026-08-10)
+RFC-042 slices 1–4: a single focus authority shared between the application
+shell and the source editor; full keyboard navigation for the workspace file
+tree, the application and editor-tools menus, and the editor mode tabs;
+accessibility roles, names, and announcements for the conflict banner, the
+Recovery screen, and the Settings screen. Settings save failures are now
+reported instead of discarded. `bekoedit-fs` and `bekoedit-ui-contract` shed
+unused public API, the breaking change this minor release exists to carry.
+Form Mode block editing does not yet expose accessibility metadata
+(RFC-042 slice 5, not yet shipped).
 
 ## Shipped — v0.13.1 (2026-07-21)
 Patch-level dependency maintenance resolves the accepted `anyhow` and
