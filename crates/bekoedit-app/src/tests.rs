@@ -3,80 +3,45 @@ mod rfc_042;
 
 #[cfg(test)]
 mod app_tests {
-    /// Every i18n key exercised by the coverage test and the plain-language
-    /// wording guard below — one list, so the two checks cannot silently
-    /// diverge over which keys are covered (same principle as task 004's
-    /// `all_eval_scripts`).
-    const ALL_KEYS: &[&str] = &[
-        "app.title",
-        "app.tagline",
-        "start.open_folder",
-        "start.new_file",
-        "status.words",
-        "status.chars",
-        "status.islands_hint",
-        "status.diag_hint",
-        "save.clean",
-        "save.dirty",
-        "save.saving",
-        "save.failed",
-        "save.external_change",
-        "save.conflict",
-        "editor.no_document",
-        "editor.loading",
-        "editor.unavailable",
-        "editor.retry",
-        "editor.untitled",
-        "editor.save_as",
-        "mode.text",
-        "mode.form",
-        "mode.preview",
-        "mode.split",
-        "mode.close_split",
-        "outline.title",
-        "outline.empty",
-        "outline.label",
-        "outline.move_up",
-        "outline.move_down",
-        "backlinks.title",
-        "backlinks.empty",
-        "backlinks.label",
-        "backlinks.count_suffix",
-        "history.title",
-        "history.empty",
-        "history.label",
-        "history.restore",
-        "history.restored",
-        "recovery.title",
-        "recovery.description",
-        "recovery.restore",
-        "recovery.discard",
-        "recovery.skip_all",
-        "recovery.restored",
-        "recovery.recoverable_suffix",
-        "toast.dismiss",
-        "table.add_row",
-        "templates.label",
-        "templates.empty",
-        "templates.blank",
-        "island.footnote",
-        "search.label",
-        "search.placeholder",
-        "search.submit",
-        "search.close",
-        "search.empty",
-        "explorer.cancel_new_file",
-        "explorer.new_file_name",
-        "explorer.create",
-        "explorer.label",
-        "explorer.no_workspace",
-        "menu.app",
-        "menu.editor_tools",
-        "lang.switch",
-        "settings.title",
-        "settings.save_failed",
-        "settings.temp_fallback_warning",
-    ];
+    /// A floor for `all_keys()`'s result, comfortably below the current
+    /// count (117 as of task 008) but far above what a broken derivation
+    /// would produce — a regex or parser that stops matching yields a
+    /// handful of keys or zero, never something close to the real count.
+    /// Not `> 0`: a derivation that only finds three keys must fail as
+    /// loudly as one that finds none (task 008 §4).
+    const MIN_PLAUSIBLE_KEY_COUNT: usize = 100;
+
+    /// Derives every key `tr_en` matches on, by reading `i18n.rs`'s own
+    /// source text — not a hand-maintained sample (task 008). A key added
+    /// to `tr_en` tomorrow is covered by both the parity test and the
+    /// wording guard below without anyone remembering to list it.
+    ///
+    /// Scrapes match-arm key literals only, never values: every arm —
+    /// whether its value is a single-line string or a multi-line `{ }`
+    /// block — opens with the same `"key.name" => ` shape on its own
+    /// line, so finding that shape is enough; nothing here needs to
+    /// parse what the arm's value looks like. A value-only line (the
+    /// second line of a block-form arm) starts with `"` too but has
+    /// nothing after its closing quote, so it does not match.
+    fn all_keys() -> Vec<&'static str> {
+        let source = include_str!("i18n.rs");
+        let body = source
+            .split("fn tr_en(key: &str) -> &'static str {")
+            .nth(1)
+            .and_then(|rest| rest.split("\n}\n").next())
+            .expect("tr_en function body");
+        body.lines()
+            .filter_map(|line| {
+                let rest = line.trim_start().strip_prefix('"')?;
+                let end = rest.find('"')?;
+                let key = &rest[..end];
+                rest[end + 1..]
+                    .trim_start()
+                    .starts_with("=>")
+                    .then_some(key)
+            })
+            .collect()
+    }
 
     #[test]
     fn rust_and_javascript_bridge_versions_match() {
@@ -115,17 +80,16 @@ mod app_tests {
     #[test]
     fn i18n_all_keys_have_both_languages() {
         use crate::i18n::{Lang, tr};
-        // ALL_KEYS is a const, so clippy can prove this statically and
-        // calls it dead logic -- but the point (task 007 §4) is that the
-        // test's own failure output says so too, the same way emptying
-        // the list and re-running the test was used to prove this
-        // non-vacuous, not that the branch is reachable at runtime.
-        #[allow(clippy::const_is_empty)]
-        {
-            assert!(!ALL_KEYS.is_empty(), "guard must check a non-empty key set");
-        }
+        let all_keys = all_keys();
+        assert!(
+            all_keys.len() >= MIN_PLAUSIBLE_KEY_COUNT,
+            "derived key set implausibly small ({} keys, expected at least {}) \
+             — the tr_en scraper likely broke",
+            all_keys.len(),
+            MIN_PLAUSIBLE_KEY_COUNT
+        );
         let mut missing = Vec::new();
-        for key in ALL_KEYS {
+        for key in &all_keys {
             if tr(Lang::En, key).is_empty() {
                 missing.push(format!("EN missing: {key}"));
             }
@@ -226,18 +190,17 @@ mod app_tests {
     #[test]
     fn visible_strings_use_plain_language() {
         use crate::i18n::{Lang, tr};
-        // ALL_KEYS is a const, so clippy can prove this statically and
-        // calls it dead logic -- but the point (task 007 §4) is that the
-        // test's own failure output says so too, the same way emptying
-        // the list and re-running the test was used to prove this
-        // non-vacuous, not that the branch is reachable at runtime.
-        #[allow(clippy::const_is_empty)]
-        {
-            assert!(!ALL_KEYS.is_empty(), "guard must check a non-empty key set");
-        }
+        let all_keys = all_keys();
+        assert!(
+            all_keys.len() >= MIN_PLAUSIBLE_KEY_COUNT,
+            "derived key set implausibly small ({} keys, expected at least {}) \
+             — the tr_en scraper likely broke",
+            all_keys.len(),
+            MIN_PLAUSIBLE_KEY_COUNT
+        );
 
         let mut offenders = Vec::new();
-        for key in ALL_KEYS {
+        for key in &all_keys {
             let en = tr(Lang::En, key).to_lowercase();
             for term in JARGON_EN {
                 if en.contains(&term.to_lowercase()) && !JARGON_EXCEPTIONS.contains(&(*key, *term))
