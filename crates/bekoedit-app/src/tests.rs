@@ -3,6 +3,81 @@ mod rfc_042;
 
 #[cfg(test)]
 mod app_tests {
+    /// Every i18n key exercised by the coverage test and the plain-language
+    /// wording guard below — one list, so the two checks cannot silently
+    /// diverge over which keys are covered (same principle as task 004's
+    /// `all_eval_scripts`).
+    const ALL_KEYS: &[&str] = &[
+        "app.title",
+        "app.tagline",
+        "start.open_folder",
+        "start.new_file",
+        "status.words",
+        "status.chars",
+        "status.islands_hint",
+        "status.diag_hint",
+        "save.clean",
+        "save.dirty",
+        "save.saving",
+        "save.failed",
+        "save.external_change",
+        "save.conflict",
+        "editor.no_document",
+        "editor.loading",
+        "editor.unavailable",
+        "editor.retry",
+        "editor.untitled",
+        "editor.save_as",
+        "mode.text",
+        "mode.form",
+        "mode.preview",
+        "mode.split",
+        "mode.close_split",
+        "outline.title",
+        "outline.empty",
+        "outline.label",
+        "outline.move_up",
+        "outline.move_down",
+        "backlinks.title",
+        "backlinks.empty",
+        "backlinks.label",
+        "backlinks.count_suffix",
+        "history.title",
+        "history.empty",
+        "history.label",
+        "history.restore",
+        "history.restored",
+        "recovery.title",
+        "recovery.description",
+        "recovery.restore",
+        "recovery.discard",
+        "recovery.skip_all",
+        "recovery.restored",
+        "recovery.recoverable_suffix",
+        "toast.dismiss",
+        "table.add_row",
+        "templates.label",
+        "templates.empty",
+        "templates.blank",
+        "island.footnote",
+        "search.label",
+        "search.placeholder",
+        "search.submit",
+        "search.close",
+        "search.empty",
+        "explorer.cancel_new_file",
+        "explorer.new_file_name",
+        "explorer.create",
+        "explorer.label",
+        "explorer.no_workspace",
+        "menu.app",
+        "menu.editor_tools",
+        "lang.switch",
+        "settings.title",
+        "settings.save_failed",
+        "settings.temp_fallback_warning",
+    ];
+
     #[test]
     fn rust_and_javascript_bridge_versions_match() {
         let lifecycle = include_str!("../js/src/lifecycle.js");
@@ -40,78 +115,9 @@ mod app_tests {
     #[test]
     fn i18n_all_keys_have_both_languages() {
         use crate::i18n::{Lang, tr};
-        let sample_keys = [
-            "app.title",
-            "app.tagline",
-            "start.open_folder",
-            "start.new_file",
-            "status.words",
-            "status.chars",
-            "status.islands_hint",
-            "status.diag_hint",
-            "save.clean",
-            "save.dirty",
-            "save.saving",
-            "save.failed",
-            "save.external_change",
-            "save.conflict",
-            "editor.no_document",
-            "editor.loading",
-            "editor.unavailable",
-            "editor.retry",
-            "editor.untitled",
-            "editor.save_as",
-            "mode.text",
-            "mode.form",
-            "mode.preview",
-            "mode.split",
-            "mode.close_split",
-            "outline.title",
-            "outline.empty",
-            "outline.label",
-            "outline.move_up",
-            "outline.move_down",
-            "backlinks.title",
-            "backlinks.empty",
-            "backlinks.label",
-            "backlinks.count_suffix",
-            "history.title",
-            "history.empty",
-            "history.label",
-            "history.restore",
-            "history.restored",
-            "recovery.title",
-            "recovery.description",
-            "recovery.restore",
-            "recovery.discard",
-            "recovery.skip_all",
-            "recovery.restored",
-            "recovery.recoverable_suffix",
-            "toast.dismiss",
-            "table.add_row",
-            "templates.label",
-            "templates.empty",
-            "templates.blank",
-            "island.footnote",
-            "search.label",
-            "search.placeholder",
-            "search.submit",
-            "search.close",
-            "search.empty",
-            "explorer.cancel_new_file",
-            "explorer.new_file_name",
-            "explorer.create",
-            "explorer.label",
-            "explorer.no_workspace",
-            "menu.app",
-            "menu.editor_tools",
-            "lang.switch",
-            "settings.title",
-            "settings.save_failed",
-            "settings.temp_fallback_warning",
-        ];
+        assert!(!ALL_KEYS.is_empty(), "guard must check a non-empty key set");
         let mut missing = Vec::new();
-        for key in sample_keys {
+        for key in ALL_KEYS {
             if tr(Lang::En, key).is_empty() {
                 missing.push(format!("EN missing: {key}"));
             }
@@ -123,6 +129,117 @@ mod app_tests {
             missing.is_empty(),
             "i18n coverage gaps:\n{}",
             missing.join("\n")
+        );
+    }
+
+    /// Developer jargon that must not leak into user-visible strings
+    /// (RFC-041 §4, DEC-015) — internal terminology stays precise
+    /// (`ConflictState`, `RawIsland`, `SourcePatch`); what the user reads
+    /// uses plain language. A short explicit list, not a heuristic: a
+    /// clever detector produces false positives, and false positives get
+    /// "fixed" by weakening the detector until it enforces nothing
+    /// (task 007 §2). Case-insensitive against the English arm; the
+    /// Japanese arm has its own list below it, not a translation of this
+    /// one — the failure mode there is a katakana loanword, not the
+    /// English word itself.
+    const JARGON_EN: &[&str] = &[
+        "patch",
+        "buffer",
+        "serialize",
+        "deserialize",
+        "mutex",
+        "thread",
+        "async",
+        "signal",
+        "widget",
+        "DOM",
+        "WebView",
+        "bridge",
+        "protocol",
+        "revision",
+        "fingerprint",
+        "epoch",
+        "snapshot",
+        "island",
+        "canonical",
+        "projection",
+        "reducer",
+        "invariant",
+        "ELOC",
+        "RFC",
+    ];
+
+    const JARGON_JA: &[&str] = &[
+        "パッチ",         // patch
+        "バッファ",       // buffer
+        "シリアライズ",   // serialize
+        "デシリアライズ", // deserialize
+        "ミューテックス", // mutex
+        "スレッド",       // thread
+        "非同期",         // async
+        "シグナル",       // signal
+        "ウィジェット",   // widget
+        "DOM",
+        "WebView",
+        "ブリッジ",           // bridge
+        "プロトコル",         // protocol
+        "リビジョン",         // revision
+        "フィンガープリント", // fingerprint
+        "エポック",           // epoch
+        "スナップショット",   // snapshot
+        "アイランド",         // island
+        "キャノニカル",       // canonical
+        "プロジェクション",   // projection
+        "リデューサー",       // reducer
+        "インバリアント",     // invariant
+        "ELOC",
+        "RFC",
+    ];
+
+    /// Per-key exceptions: a blocklisted term is allowed to appear in this
+    /// one key's value, and nowhere else — removing a term from
+    /// `JARGON_EN`/`JARGON_JA` entirely because one string needs it would
+    /// disable the check everywhere (task 007 §3). Adding an entry here is
+    /// a deliberate act; both entries below are justified at the point of
+    /// use, not asserted without reasoning.
+    const JARGON_EXCEPTIONS: &[(&str, &str)] = &[
+        // Names a thing the user is being offered back by its product
+        // name (a "recovery snapshot" — bekoedit_fs::RecoverySnapshot),
+        // not an internal storage mechanism described to the user.
+        ("recovery.description", "snapshot"),
+        ("recovery.description", "スナップショット"),
+        // "Raw Markdown Islands" is bekoedit's own public feature name,
+        // documented in the README itself — not accidental internal
+        // vocabulary leaking through.
+        ("status.islands_hint", "island"),
+        ("status.islands_hint", "アイランド"),
+    ];
+
+    #[test]
+    fn visible_strings_use_plain_language() {
+        use crate::i18n::{Lang, tr};
+        assert!(!ALL_KEYS.is_empty(), "guard must check a non-empty key set");
+
+        let mut offenders = Vec::new();
+        for key in ALL_KEYS {
+            let en = tr(Lang::En, key).to_lowercase();
+            for term in JARGON_EN {
+                if en.contains(&term.to_lowercase()) && !JARGON_EXCEPTIONS.contains(&(*key, *term))
+                {
+                    offenders.push(format!("EN {key}: contains {term:?}"));
+                }
+            }
+            let ja = tr(Lang::Ja, key);
+            for term in JARGON_JA {
+                if ja.contains(term) && !JARGON_EXCEPTIONS.contains(&(*key, *term)) {
+                    offenders.push(format!("JA {key}: contains {term:?}"));
+                }
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "developer jargon in visible strings:\n{}",
+            offenders.join("\n")
         );
     }
 
