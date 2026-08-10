@@ -11,6 +11,7 @@
 # For Developers
 
 - [Architecture Overview](architecture.md)
+- [Architectural Invariants](architectural-invariants.md)
 - [Source Preservation Model](source-preservation.md)
 - [Contributing and RFC Process](contributing.md)
 

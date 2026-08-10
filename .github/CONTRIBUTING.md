@@ -34,7 +34,7 @@ crates/
 docs/                 mdBook documentation
 rfcs/                 done/ (implemented), proposed/ (decision or deferred)
 scripts/              check-rfcs.sh (RFC integrity), release steps
-benches/              Performance benchmarks (reparse.rs)
+crates/bekoedit-markdown/benches/  Performance benchmarks (reparse.rs)
 ```
 
 ## Building

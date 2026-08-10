@@ -1,7 +1,7 @@
 # bekoedit Architecture
 
 This document restates the architectural invariants of
-`rfcs/proposed/RFC-000-project-charter-and-architectural-invariants.md`
+`rfcs/done/RFC-000-project-charter-and-architectural-invariants.md`
 (per its §8, these are repeated here normatively) and maps them to the
 code.
 
