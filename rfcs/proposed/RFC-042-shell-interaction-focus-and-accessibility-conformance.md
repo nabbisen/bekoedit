@@ -296,6 +296,16 @@ and plain-language guard tests apply unchanged.
 
 ## 9. Responsive and resizable layout
 
+### 9. Status — withdrawn 2026-08-10
+
+**This entire section is withdrawn.** §9.1 was resolved toward withdrawal by the
+project owner (D-1) and the lying `col-resize` cursor is removed by task 006.
+§9.2 is withdrawn with it: narrow-width behaviour is polish with no demand
+signal behind it, and a deferral with no trigger is worse than a decision. See
+§13.1 for the reopening trigger.
+
+The original text is kept below as the record of what was considered.
+
 ### 9.1 Resize
 
 The `col-resize` cursor on a non-draggable 1px divider (F-9) is an affordance
@@ -397,7 +407,43 @@ Independently reviewable, in dependency order:
 6. Responsive and resize disposition (section 9).
 7. Document corrections (section 12).
 
-Slices 1 and 2 carry the theme's value; 6 depends on the section 15 decision.
+Slices 1 and 2 carry the theme's value.
+
+### 13.1 Slice status — recorded 2026-08-10
+
+Owner-approved disposition at the RFC-042 checkpoint. Recorded here rather than
+left as an open "deferred" note, because an unbounded deferral is how an RFC
+rots in `proposed/` — the failure this project has already corrected once.
+
+| Slice | Status |
+|---|---|
+| 1 | **Implemented** — v0.14.0 |
+| 2 | **Implemented** — v0.14.0 |
+| 3 | **Implemented** — v0.14.0 |
+| 4 | **Implemented** — v0.14.0 |
+| 5 | **Scheduled** — this RFC does not close until it lands |
+| 6 | **Withdrawn** — see below |
+| 7 | **Implemented** — completed by task 006 |
+
+**Slice 5 is scheduled, not deferred.** Form Mode is one of three primary
+editing modes and currently carries no accessibility metadata at all. Leaving it
+unlabeled while the tree, menus, tabs, conflict banner, Recovery, and Settings
+all conform is an incoherent end state, and it would undercut this RFC's own
+declare-or-implement rule. It needs no new design — section 8 already specifies
+it. **This RFC stays in `proposed/` until slice 5 is implemented**; it is
+unfinished work, not deferred work.
+
+**Slice 6 is withdrawn in full.** Its resize half was already resolved toward
+withdrawal (D-1) and removed by task 006. Its remaining half — narrow-width
+behaviour, section 9.2 — is polish with no demand signal and no user report
+behind it. Withdrawing it honestly is better than a deferral nobody revisits.
+
+*Reopening trigger, should one be wanted:* a user reports the layout unusable at
+their window size. Absent that, section 9 is closed.
+
+**Release note.** v0.14.0 shipped slices 1–4, which was its approved scope. This
+RFC's disposition is a portfolio question and is not a release gate; slice 5 is
+expected in a later release.
 
 ## 14. Alternatives considered
 
