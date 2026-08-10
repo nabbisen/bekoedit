@@ -262,7 +262,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .split-left { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .split-left .text-mode-cm { flex: 1; height: auto; }
 .split-left .cm-editor { height: 100%; }
-.split-divider { width: 1px; background: var(--line); flex-shrink: 0; cursor: col-resize; }
+.split-divider { width: 1px; background: var(--line); flex-shrink: 0; }
 .split-right { flex: 1; min-width: 0; overflow-y: auto; }
 .surface-row { flex: 1; display: flex; overflow: hidden; }
 .surface { flex: 1; overflow: auto; display: flex; flex-direction: column; }
