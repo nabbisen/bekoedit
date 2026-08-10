@@ -115,7 +115,15 @@ mod app_tests {
     #[test]
     fn i18n_all_keys_have_both_languages() {
         use crate::i18n::{Lang, tr};
-        assert!(!ALL_KEYS.is_empty(), "guard must check a non-empty key set");
+        // ALL_KEYS is a const, so clippy can prove this statically and
+        // calls it dead logic -- but the point (task 007 §4) is that the
+        // test's own failure output says so too, the same way emptying
+        // the list and re-running the test was used to prove this
+        // non-vacuous, not that the branch is reachable at runtime.
+        #[allow(clippy::const_is_empty)]
+        {
+            assert!(!ALL_KEYS.is_empty(), "guard must check a non-empty key set");
+        }
         let mut missing = Vec::new();
         for key in ALL_KEYS {
             if tr(Lang::En, key).is_empty() {
@@ -218,7 +226,15 @@ mod app_tests {
     #[test]
     fn visible_strings_use_plain_language() {
         use crate::i18n::{Lang, tr};
-        assert!(!ALL_KEYS.is_empty(), "guard must check a non-empty key set");
+        // ALL_KEYS is a const, so clippy can prove this statically and
+        // calls it dead logic -- but the point (task 007 §4) is that the
+        // test's own failure output says so too, the same way emptying
+        // the list and re-running the test was used to prove this
+        // non-vacuous, not that the branch is reachable at runtime.
+        #[allow(clippy::const_is_empty)]
+        {
+            assert!(!ALL_KEYS.is_empty(), "guard must check a non-empty key set");
+        }
 
         let mut offenders = Vec::new();
         for key in ALL_KEYS {
