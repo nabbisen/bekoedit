@@ -375,4 +375,65 @@ mod app_tests {
         assert!(err_branch.contains("return;"));
         assert!(!err_branch.contains("close_settings()"));
     }
+
+    #[test]
+    fn rfc_042_slice_5_form_mode_blocks_are_named_groups() {
+        let block_view = include_str!("components/form_mode/block_view.rs");
+
+        // §5.1: every rendered block is a role="group" carrying an
+        // accessible name — asserted once, since the role/aria_label pair
+        // sits on the one wrapper shared by every variant, not duplicated
+        // per arm.
+        assert!(block_view.contains(r#"role: "group""#));
+        assert!(block_view.contains(r#"aria_label: "{group_name}""#));
+
+        // Per variant, not once for the file (§7.1): each of the eight
+        // non-island kinds names itself from its own translated key, so a
+        // variant added later without one is caught by this list falling
+        // short rather than by a single file-wide substring match.
+        for key in [
+            "block.kind.heading",
+            "block.kind.paragraph",
+            "block.kind.blockquote",
+            "block.kind.list",
+            "block.kind.code",
+            "block.kind.horizontal_rule",
+            "block.kind.table",
+            "block.kind.image",
+        ] {
+            assert!(
+                block_view.contains(&format!("tr(lang, \"{key}\").to_string()")),
+                "missing group-name key: {key}"
+            );
+        }
+
+        // §5.2: RawIsland's group name reuses label_key (the existing
+        // per-type island reason) and island.hint — no new literal reason
+        // text. Checked as the exact format! expression, not as two loose
+        // substring checks: `tr(lang, &label_key)` and
+        // `tr(lang, "island.hint")` each already appear elsewhere in this
+        // file (the pre-existing visible island-label/island-hint spans),
+        // so either alone would pass even if the group name itself used
+        // neither — only the full expression pins down what this slice
+        // actually added.
+        assert!(
+            block_view
+                .contains(r#"format!("{}: {}", tr(lang, &label_key), tr(lang, "island.hint"))"#)
+        );
+
+        // §7.3: the new keys are picked up by task 008's derived key set
+        // automatically — not re-listed in ALL_KEYS by hand. Spot-checks
+        // the already-derived result rather than maintaining a second
+        // parallel list of the same keys.
+        let derived = all_keys();
+        let block_kind_keys: Vec<&&str> = derived
+            .iter()
+            .filter(|k| k.starts_with("block.kind."))
+            .collect();
+        assert_eq!(
+            block_kind_keys.len(),
+            8,
+            "expected 8 block.kind.* keys picked up automatically, found {block_kind_keys:?}"
+        );
+    }
 }
