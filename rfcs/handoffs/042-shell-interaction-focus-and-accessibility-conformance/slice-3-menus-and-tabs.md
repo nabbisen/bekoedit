@@ -1,6 +1,6 @@
 # RFC-042 handoff — slice 3: menu and tab keyboard contracts
 
-**Governing RFC:** [RFC-042](../../proposed/RFC-042-shell-interaction-focus-and-accessibility-conformance.md) §7.2, §7.3
+**Governing RFC:** [RFC-042](../../done/RFC-042-shell-interaction-focus-and-accessibility-conformance.md) §7.2, §7.3
 **Slice:** 3 of 7 (see RFC-042 §13)
 **Depends on:** slice 1 (focus authority), slice 2 (`shell_focus` conventions)
 **Baseline:** `main` at `60f9ad8`

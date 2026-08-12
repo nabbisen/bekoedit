@@ -1,6 +1,6 @@
 # RFC-042 handoff — slice 4: conflict, recovery, and settings
 
-**Governing RFC:** [RFC-042](../../proposed/RFC-042-shell-interaction-focus-and-accessibility-conformance.md) §7.5, §7.6, §8
+**Governing RFC:** [RFC-042](../../done/RFC-042-shell-interaction-focus-and-accessibility-conformance.md) §7.5, §7.6, §8
 **Slice:** 4 of 7 — the last slice in v0.14.0 scope
 **Depends on:** slices 1–3
 **Status:** inherited from RFC-042 (Proposed). **Ready to start once slice 3 merges.**

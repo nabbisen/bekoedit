@@ -1,12 +1,14 @@
 # RFC-042: Shell Interaction, Focus, and Accessibility Conformance
 
 **Project:** bekoedit
-**Status:** Proposed
+**Status:** Implemented — slices 1–4 shipped in **0.14.0** (tagged 2026-08-10);
+slice 5 merged to `main` as `84f2e7e` on 2026-08-12 and ships in the next
+release; slice 6 withdrawn; slice 7 completed by task 006. See §13.1.
 **Track:** UI/UX stabilization
 **Milestone:** v0.14.0
 **Priority:** High
 **Date:** 2026-07-31
-**Related RFCs:** [RFC-010](../done/RFC-010-main-shell-layout-and-navigation-ux.md), [RFC-021](../done/RFC-021-accessibility-baseline-and-interaction-contracts.md), [RFC-023](../done/RFC-023-error-surfaces-status-bar-and-user-feedback.md), [RFC-041](../done/RFC-041-source-editor-lifecycle-and-synchronization-controller.md)
+**Related RFCs:** [RFC-010](./RFC-010-main-shell-layout-and-navigation-ux.md), [RFC-021](./RFC-021-accessibility-baseline-and-interaction-contracts.md), [RFC-023](./RFC-023-error-surfaces-status-bar-and-user-feedback.md), [RFC-041](./RFC-041-source-editor-lifecycle-and-synchronization-controller.md)
 
 ---
 
@@ -421,9 +423,17 @@ rots in `proposed/` — the failure this project has already corrected once.
 | 2 | **Implemented** — v0.14.0 |
 | 3 | **Implemented** — v0.14.0 |
 | 4 | **Implemented** — v0.14.0 |
-| 5 | **Scheduled** — this RFC does not close until it lands |
+| 5 | **Implemented** — `84f2e7e`, 2026-08-12; not in 0.14.0, ships next release |
 | 6 | **Withdrawn** — see below |
 | 7 | **Implemented** — completed by task 006 |
+
+*Slice 5 closed this RFC. Updated 2026-08-12 when it merged; the RFC moved to
+`done/` in the same change.*
+
+**Why slice 5 is not in 0.14.0.** It merged after the `0.14.0` tag, deliberately.
+That release's CHANGELOG and ROADMAP both state that Form Mode block editing
+exposes no accessibility metadata, and merging slice 5 first would have made the
+tag contain work its own notes deny.
 
 **Slice 5 is scheduled, not deferred.** Form Mode is one of three primary
 editing modes and currently carries no accessibility metadata at all. Leaving it

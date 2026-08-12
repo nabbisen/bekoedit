@@ -68,8 +68,7 @@ it moves to `done/` (decision shipped) or `archive/` (withdrawn or superseded).
 
 | RFC | Title | Notes |
 |-----|-------|-------|
-| RFC-042 | [Shell interaction, focus & accessibility conformance](proposed/RFC-042-shell-interaction-focus-and-accessibility-conformance.md) | **Under review** — governs the v0.14.0 UI/UX stabilization theme; slice 1 implemented |
-| RFC-043 | [Reopen last workspace on launch](proposed/RFC-043-reopen-last-workspace-on-launch.md) | **Under review** — implements the inert `reopen_last_workspace` setting |
+| RFC-043 | [Reopen last workspace on launch](proposed/RFC-043-reopen-last-workspace-on-launch.md) | **Approved for implementation** 2026-08-04; not yet built |
 | RFC-032 | Performance optimization and incremental parsing | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | Plugin system evaluation | Future evaluation only |
 | RFC-040 | Sync and collaboration evaluation | Future evaluation only |
@@ -133,6 +132,15 @@ it moves to `done/` (decision shipped) or `archive/` (withdrawn or superseded).
 | RFC-002 | Runtime architecture and WebView boundary | Typed versioned payloads, eval relay with auto-restart (v0.9.0), rfd native dialogs replacing text-path input (v0.10.0) |
 
 **All MVP RFCs now implemented.** Remaining proposed: RFC-031 (decided), RFC-032 (deferred), RFC-039/040 (future evaluation only).
+
+## Implemented — v0.14.0 (`done/`)
+
+| RFC | Title | Notes |
+|-----|-------|-------|
+| RFC-042 | [Shell interaction, focus & accessibility conformance](done/RFC-042-shell-interaction-focus-and-accessibility-conformance.md) | One arbitrated focus authority shared by the shell and the RFC-041 controller; WAI-ARIA keyboard contracts for the workspace tree, overflow menus, and mode tabs; accessibility metadata for the conflict banner, Recovery, Settings, and Form Mode blocks. Slices 1–4 in 0.14.0; slice 5 merged after the tag and ships next release; slice 6 withdrawn. See its §13.1. |
+
+Companion handoffs: [`handoffs/042-shell-interaction-focus-and-accessibility-conformance/`](handoffs/042-shell-interaction-focus-and-accessibility-conformance/)
+— five slice documents, status inherited from this RFC.
 
 ## Implemented — v0.13.0 (`done/`)
 

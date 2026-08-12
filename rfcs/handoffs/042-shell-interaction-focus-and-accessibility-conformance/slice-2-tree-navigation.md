@@ -1,6 +1,6 @@
 # RFC-042 handoff — slice 2: workspace tree navigation
 
-**Governing RFC:** [RFC-042](../../proposed/RFC-042-shell-interaction-focus-and-accessibility-conformance.md) §7.1
+**Governing RFC:** [RFC-042](../../done/RFC-042-shell-interaction-focus-and-accessibility-conformance.md) §7.1
 **Slice:** 2 of 7 (see RFC-042 §13)
 **Depends on:** slice 1 (focus authority) — specifically the `shell_focus`
 module, to which this slice adds `focus_tree_row` (§7.5). Slice 2 does not call
