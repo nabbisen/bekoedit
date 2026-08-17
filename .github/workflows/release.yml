@@ -244,6 +244,16 @@ jobs:
       - name: Verify complete release artifact set
         shell: bash
         run: bash scripts/check-release-artifacts.sh "$EXPECTED_VERSION" "$ARTIFACT_DIR"
+      - name: Cross-distribution portability check (RFC-045 slice 2)
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXTRACT_DIR="$RUNNER_TEMP/bekoedit-linux-portability-check"
+          mkdir -p "$EXTRACT_DIR"
+          tar -C "$EXTRACT_DIR" -xzf \
+            "$ARTIFACT_DIR/bekoedit-$EXPECTED_VERSION-x86_64-unknown-linux-gnu.tar.gz" \
+            bekoedit
+          bash scripts/check-linux-portability-containers.sh "$EXTRACT_DIR/bekoedit"
       - name: Publish verified release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:

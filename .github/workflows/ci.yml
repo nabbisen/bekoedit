@@ -232,3 +232,5 @@ jobs:
         run: |
           file target/release/bekoedit
           du -sh target/release/bekoedit
+      - name: Cross-distribution portability check (RFC-045 slice 2)
+        run: bash scripts/check-linux-portability-containers.sh target/release/bekoedit
