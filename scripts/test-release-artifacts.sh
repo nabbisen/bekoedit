@@ -25,9 +25,9 @@ import zipfile
 
 VERSION = "0.13.1"
 TARGETS = (
-    ("x86_64-unknown-linux-gnu", ".tar.gz", "bekoedit"),
-    ("aarch64-apple-darwin", ".tar.gz", "bekoedit"),
-    ("x86_64-pc-windows-msvc", ".zip", "bekoedit.exe"),
+    ("x86_64-unknown-linux-gnu", ".tar.gz", "bekoedit", "run-linux.sh"),
+    ("aarch64-apple-darwin", ".tar.gz", "bekoedit", "run-macos.sh"),
+    ("x86_64-pc-windows-msvc", ".zip", "bekoedit.exe", "run-windows.ps1"),
 )
 DOCUMENTS = ("README.md", "LICENSE", "NOTICE", "CHANGELOG.md")
 PAYLOADS = {
@@ -37,6 +37,9 @@ PAYLOADS = {
     "LICENSE": b"license\n",
     "NOTICE": b"notice\n",
     "CHANGELOG.md": b"changelog\n",
+    "run-linux.sh": b"#!/bin/sh\necho linux-fixture\n",
+    "run-macos.sh": b"#!/bin/sh\necho macos-fixture\n",
+    "run-windows.ps1": b"Write-Host 'windows-fixture'\n",
 }
 
 
@@ -96,18 +99,19 @@ def write_zip(
                 raise AssertionError(kind)
 
 
-def normal_members(executable: str) -> list[tuple[str, str, bytes]]:
+def normal_members(executable: str, script: str) -> list[tuple[str, str, bytes]]:
     return [
         *[(executable, "file", PAYLOADS[executable])],
+        *[(script, "file", PAYLOADS[script])],
         *[(name, "file", PAYLOADS[name]) for name in DOCUMENTS],
     ]
 
 
 def create_valid(directory: pathlib.Path) -> None:
     directory.mkdir()
-    for target, suffix, executable in TARGETS:
+    for target, suffix, executable, script in TARGETS:
         archive = archive_path(directory, target, suffix)
-        members = normal_members(executable)
+        members = normal_members(executable, script)
         if suffix == ".tar.gz":
             write_tar(archive, members)
         else:
@@ -174,7 +178,7 @@ def main() -> None:
         )
     print(f"PASS accept valid: {accepted.stdout.strip()}")
 
-    linux_members = normal_members("bekoedit")
+    linux_members = normal_members("bekoedit", "run-linux.sh")
     expect_rejected(
         verifier,
         valid,
@@ -253,7 +257,10 @@ def main() -> None:
         "zip-symlink-member",
         lambda case: rewrite_windows(
             case,
-            [("bekoedit.exe", "symlink", b""), *normal_members("bekoedit.exe")[1:]],
+            [
+                ("bekoedit.exe", "symlink", b""),
+                *normal_members("bekoedit.exe", "run-windows.ps1")[1:],
+            ],
         ),
     )
     expect_rejected(
@@ -263,7 +270,10 @@ def main() -> None:
         "zip-fifo-member",
         lambda case: rewrite_windows(
             case,
-            [("bekoedit.exe", "fifo", b"bad"), *normal_members("bekoedit.exe")[1:]],
+            [
+                ("bekoedit.exe", "fifo", b"bad"),
+                *normal_members("bekoedit.exe", "run-windows.ps1")[1:],
+            ],
         ),
     )
     expect_rejected(
@@ -287,6 +297,28 @@ def main() -> None:
         "wrong-executable",
         lambda case: rewrite_linux(
             case, [("bekoedit.exe", "file", b"wrong"), *linux_members[1:]]
+        ),
+    )
+    expect_rejected(
+        verifier,
+        valid,
+        run_root,
+        "missing-script",
+        lambda case: rewrite_linux(
+            case, [member for member in linux_members if member[0] != "run-linux.sh"]
+        ),
+    )
+    expect_rejected(
+        verifier,
+        valid,
+        run_root,
+        "wrong-platform-script",
+        lambda case: rewrite_linux(
+            case,
+            [
+                member if member[0] != "run-linux.sh" else ("run-macos.sh", "file", b"wrong platform")
+                for member in linux_members
+            ],
         ),
     )
     expect_rejected(

@@ -14,9 +14,9 @@ import zipfile
 
 
 TARGETS = (
-    ("x86_64-unknown-linux-gnu", ".tar.gz", "bekoedit"),
-    ("aarch64-apple-darwin", ".tar.gz", "bekoedit"),
-    ("x86_64-pc-windows-msvc", ".zip", "bekoedit.exe"),
+    ("x86_64-unknown-linux-gnu", ".tar.gz", "bekoedit", "run-linux.sh"),
+    ("aarch64-apple-darwin", ".tar.gz", "bekoedit", "run-macos.sh"),
+    ("x86_64-pc-windows-msvc", ".zip", "bekoedit.exe", "run-windows.ps1"),
 )
 DOCUMENTS = ("README.md", "LICENSE", "NOTICE", "CHANGELOG.md")
 
@@ -139,12 +139,12 @@ def main() -> None:
         fail(f"artifact directory is missing, not a directory, or a symlink: {artifact_dir}")
 
     expected_names: set[str] = set()
-    archives: list[tuple[pathlib.Path, pathlib.Path, str]] = []
-    for target, suffix, executable in TARGETS:
+    archives: list[tuple[pathlib.Path, pathlib.Path, str, str]] = []
+    for target, suffix, executable, script in TARGETS:
         archive = artifact_dir / f"bekoedit-{version}-{target}{suffix}"
         sidecar = artifact_dir / f"{archive.name}.sha256"
         expected_names.update((archive.name, sidecar.name))
-        archives.append((archive, sidecar, executable))
+        archives.append((archive, sidecar, executable, script))
 
     entries = list(artifact_dir.iterdir())
     unsafe_entries = sorted(
@@ -161,9 +161,9 @@ def main() -> None:
             f"missing={missing}, unexpected={unexpected}, count={len(entries)}"
         )
 
-    for archive, sidecar, executable in archives:
+    for archive, sidecar, executable, script in archives:
         validate_sidecar(archive, sidecar)
-        expected_members = {executable, *DOCUMENTS}
+        expected_members = {executable, script, *DOCUMENTS}
         if archive.name.endswith(".tar.gz"):
             validate_tar(archive, expected_members)
         else:

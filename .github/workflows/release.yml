@@ -27,23 +27,31 @@ jobs:
             target: x86_64-unknown-linux-gnu
             binary: target/x86_64-unknown-linux-gnu/release/bekoedit
             archive_suffix: .tar.gz
+            script: scripts/run-linux.sh
+            script_name: run-linux.sh
           - os: macos-latest
             runner_os: macOS
             runner_arch: ARM64
             target: aarch64-apple-darwin
             binary: target/aarch64-apple-darwin/release/bekoedit
             archive_suffix: .tar.gz
+            script: scripts/run-macos.sh
+            script_name: run-macos.sh
           - os: windows-latest
             runner_os: Windows
             runner_arch: X64
             target: x86_64-pc-windows-msvc
             binary: target/x86_64-pc-windows-msvc/release/bekoedit.exe
             archive_suffix: .zip
+            script: scripts/run-windows.ps1
+            script_name: run-windows.ps1
     env:
       TARGET: ${{ matrix.target }}
       EXPECTED_RUNNER_OS: ${{ matrix.runner_os }}
       EXPECTED_RUNNER_ARCH: ${{ matrix.runner_arch }}
       BINARY_PATH: ${{ matrix.binary }}
+      SCRIPT_PATH: ${{ matrix.script }}
+      SCRIPT_NAME: ${{ matrix.script_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable action snapshot
@@ -129,7 +137,10 @@ jobs:
           mkdir -p stage
           cp "$BINARY_PATH" stage/bekoedit
           cp README.md LICENSE NOTICE CHANGELOG.md stage/
-          tar -C stage -czf "${NAME}.tar.gz" bekoedit README.md LICENSE NOTICE CHANGELOG.md
+          cp "$SCRIPT_PATH" "stage/$SCRIPT_NAME"
+          chmod +x "stage/$SCRIPT_NAME"
+          test -x "stage/$SCRIPT_NAME"
+          tar -C stage -czf "${NAME}.tar.gz" bekoedit README.md LICENSE NOTICE CHANGELOG.md "$SCRIPT_NAME"
           shasum -a 256 "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256"
       - name: Package (Windows)
         if: runner.os == 'Windows'
@@ -144,6 +155,7 @@ jobs:
           New-Item -ItemType Directory -Path "stage" -Force | Out-Null
           Copy-Item -LiteralPath $env:BINARY_PATH -Destination "stage/bekoedit.exe"
           Copy-Item README.md,LICENSE,NOTICE,CHANGELOG.md "stage/"
+          Copy-Item -LiteralPath $env:SCRIPT_PATH -Destination "stage/$env:SCRIPT_NAME"
           Compress-Archive -Path "stage/*" -DestinationPath "$name.zip"
           $hash = Get-FileHash "$name.zip" -Algorithm SHA256
           "$($hash.Hash.ToLower())  $name.zip" | Set-Content -Encoding ascii "$name.zip.sha256"
