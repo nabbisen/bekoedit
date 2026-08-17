@@ -60,10 +60,16 @@ chmod +x scripts/run-macos.sh && ./scripts/run-macos.sh ./bekoedit
 .\bekoedit.exe
 ```
 
-**Linux** — no extra step:
+**Linux** — the prebuilt binary needs `libxdo.so.3` and `libwebkit2gtk-4.1`;
+check first, since a missing library fails **silently** from a desktop
+launcher (no window, no dialog):
 ```sh
-chmod +x bekoedit && ./bekoedit
+chmod +x bekoedit scripts/run-linux.sh && ./scripts/run-linux.sh ./bekoedit
+./bekoedit
 ```
+Distributions shipping a different `libxdo` major (e.g. Arch: `libxdo.so.4`)
+can't use the prebuilt binary — build from source instead, which links
+locally: `cargo install bekoedit`.
 
 **Build from source** (requires Rust stable + Node.js >= 24):
 ```sh

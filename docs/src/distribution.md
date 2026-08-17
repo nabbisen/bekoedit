@@ -54,18 +54,52 @@ warnings will eventually disappear for signed/popular builds.
 
 ## Linux
 
-Linux distributions do not impose a blanket code-signing requirement.
-After extracting the archive, mark the binary executable if needed:
+Linux distributions do not impose a blanket code-signing requirement, but the
+prebuilt binary carries a runtime library requirement that is unsatisfiable
+on some distributions — read this before extracting.
+
+**Runtime requirements.** The Linux artifact is built on GitHub's
+`ubuntu-latest` runner, and links against the SONAMEs that runner provides,
+in particular `libwebkit2gtk-4.1` (the WebView) and `libxdo.so.3` (pulled in
+transitively through `dioxus-desktop`'s native-menu and tray-icon support,
+even though bekoedit uses neither). On Debian/Ubuntu, install with
+`sudo apt install libwebkit2gtk-4.1-0` if it is not already present.
+
+**`libxdo.so.3` vs `.so.4` — a hard incompatibility, not a missing package.**
+Arch and Arch-family distributions ship `libxdo.so.4` only. A `.so.3`
+requirement is a SONAME/ABI break, and there is no supported way around it —
+installing the `xdotool` package will not help on a `.so.4`-only system, and
+symlinking `.so.4` to `.so.3` is not something this project advises, since it
+defeats a versioning guarantee on a guess. On such distributions, the
+prebuilt binary cannot run; build from source instead, which links against
+whatever `libxdo` your system actually has:
 
 ```sh
-chmod +x bekoedit
+cargo install bekoedit
+```
+
+**The failure is silent from a desktop launcher.** If a required library is
+missing, the dynamic loader fails before bekoedit's own code runs — no
+window, no dialog, no log message. From a terminal, running the binary
+directly shows the real error, e.g.:
+
+```
+error while loading shared libraries: libxdo.so.3:
+cannot open shared object file: No such file or directory
+```
+
+**Check before you launch.** After extracting the archive, run the bundled
+preflight script, which checks every library the binary needs and reports
+any that don't resolve, by name:
+
+```sh
+chmod +x bekoedit scripts/run-linux.sh
+./scripts/run-linux.sh ./bekoedit
 ./bekoedit
 ```
 
-On distributions using AppArmor or SELinux you may need to allow the
-binary or place it in a permitted path. The WebView requires
-`libwebkit2gtk-4.1` (Debian/Ubuntu: `sudo apt install libwebkit2gtk-4.1-0`
-if it is not already installed).
+On distributions using AppArmor or SELinux you may also need to allow the
+binary or place it in a permitted path.
 
 ---
 
