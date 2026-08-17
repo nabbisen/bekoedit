@@ -66,8 +66,15 @@ DISTRO_INSTALL=(
   "dnf install -y webkit2gtk4.1 xdotool"
 )
 # Per RFC-045 SS3: --expect-missing libxdo.so.3 both permits and requires
-# it be unresolved on each distribution below. Slice 3 deletes these.
-DISTRO_EXPECT_MISSING=(libxdo.so.3 libxdo.so.3)
+# it be unresolved. NOT universal -- confirmed by the first real run of
+# this harness (CI run 32002864338): Arch's archlinux:base ships
+# libxdo.so.4 only (the confirmed-failing case), but Fedora 41 ships
+# libxdo.so.3 natively at /lib64/libxdo.so.3, and exempting it there
+# fails as a stale expectation, correctly. So the exemption is
+# Arch-only; leave a distribution's entry empty (not "libxdo.so.3") if
+# its container already resolves it. Slice 3 deletes the Arch entry
+# once bundling (or another fix) makes it resolve there too.
+DISTRO_EXPECT_MISSING=(libxdo.so.3 "")
 
 overall_status=0
 
@@ -90,6 +97,11 @@ for i in "${!DISTRO_NAMES[@]}"; do
   container_script=/work/check-linux-portability.sh
   container_bin=/work/bekoedit
 
+  check_args="$container_bin"
+  if [ -n "$expect_missing" ]; then
+    check_args="--expect-missing $expect_missing $container_bin"
+  fi
+
   # 97 is this script's own sentinel for "install failed inside the
   # container", distinct from the inspection script's 0/1, so the two
   # failure classes never get confused by exit code alone.
@@ -110,7 +122,7 @@ else
   echo 'no libxdo shared object found on this system'
 fi
 echo '--- portability check ---'
-sh $container_script --expect-missing $expect_missing $container_bin
+sh $container_script $check_args
 "
 
   set +e
