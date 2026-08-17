@@ -48,15 +48,18 @@ The invariant that holds across all modes:
 Download the latest release for your platform from
 [Releases](https://github.com/nabbisen/bekoedit/releases).
 
+Each archive is flat — the binary and its helper script sit at the root
+beside `README.md`, so the commands below work right after extracting.
+
 **macOS** — binary is unsigned; run once to clear the quarantine flag:
 ```sh
-chmod +x scripts/run-macos.sh && ./scripts/run-macos.sh ./bekoedit
+chmod +x run-macos.sh && ./run-macos.sh ./bekoedit
 ./bekoedit
 ```
 
 **Windows** — unblock in PowerShell once:
 ```powershell
-.\scripts\run-windows.ps1
+.\run-windows.ps1
 .\bekoedit.exe
 ```
 
@@ -64,15 +67,12 @@ chmod +x scripts/run-macos.sh && ./scripts/run-macos.sh ./bekoedit
 check first, since a missing library fails **silently** from a desktop
 launcher (no window, no dialog):
 ```sh
-chmod +x bekoedit
-ldd ./bekoedit | grep 'not found'   # empty output = every library resolves
+chmod +x run-linux.sh && ./run-linux.sh ./bekoedit
 ./bekoedit
 ```
 Distributions shipping a different `libxdo` major (e.g. Arch: `libxdo.so.4`)
-can't use the prebuilt binary — build from source instead, which links
-locally: `cargo install bekoedit`. (From a clone of this repository,
-`scripts/run-linux.sh` runs the same check with next-step guidance built
-in; it is not included in the release archive.)
+can't use the prebuilt binary — `run-linux.sh` says so and points at building
+from source instead, which links locally: `cargo install bekoedit`.
 
 **Build from source** (requires Rust stable + Node.js >= 24):
 ```sh

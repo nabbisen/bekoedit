@@ -108,14 +108,16 @@ wildcard.
 | macOS `.tar.gz` | `yes / no` | `yes / no` | `________` |
 | Windows `.zip` | `yes / no` | `yes / no` | `________` |
 
-Expected root layout after extraction:
+Expected root layout after extraction — six entries, the platform binary and
+helper script named per target (RFC-045 slice 1: the layout is deliberately
+flat, no `scripts/` subdirectory):
 
 ```text
-bekoedit[.exe]
-README.md
-LICENSE
-NOTICE
-CHANGELOG.md
+Linux (.tar.gz):    bekoedit       run-linux.sh
+macOS (.tar.gz):    bekoedit       run-macos.sh
+Windows (.zip):     bekoedit.exe   run-windows.ps1
+
+README.md  LICENSE  NOTICE  CHANGELOG.md
 ```
 
 Expected checksum sidecars:

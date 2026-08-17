@@ -88,23 +88,24 @@ error while loading shared libraries: libxdo.so.3:
 cannot open shared object file: No such file or directory
 ```
 
-**Check before you launch.** After extracting the archive, list any
-libraries the binary needs that don't resolve on your system:
+**Check before you launch.** The archive ships `run-linux.sh` at its root,
+beside the binary. It checks every library the binary needs, reports any
+that don't resolve by name, and — for `libxdo.so.3` specifically — explains
+the `.so.4` incompatibility above and points at `cargo install bekoedit`:
 
 ```sh
-chmod +x bekoedit
+chmod +x run-linux.sh && ./run-linux.sh ./bekoedit
+./bekoedit
+```
+
+If you'd rather check without running a script, the same underlying check is
+one line:
+
+```sh
 ldd ./bekoedit | grep 'not found'
 ```
 
-Empty output means every required library resolves and you can run
-`./bekoedit`. Anything listed will keep the binary from launching — see
-above for `libxdo.so.3` specifically.
-
-If you're working from a clone of this repository (for example, building
-from source), `scripts/run-linux.sh` runs the same check and prints
-next-step guidance for exactly what to do about each missing library. It is
-**not** included in the release archive, so the `ldd` command above is the
-one that works right after extracting a downloaded release.
+Empty output means every required library resolves.
 
 On distributions using AppArmor or SELinux you may also need to allow the
 binary or place it in a permitted path.
