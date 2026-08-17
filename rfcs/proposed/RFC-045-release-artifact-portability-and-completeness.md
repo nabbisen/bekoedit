@@ -1,7 +1,11 @@
 # RFC-045: Release Artifact Portability and Completeness
 
 **Project:** bekoedit
-**Status:** Proposed
+**Status:** Proposed — approved for implementation by the project owner
+2026-08-17. Remains in `proposed/` until implemented. §10's open questions are
+carried, not resolved: Q1 (bundle `libxdo` versus AppImage) is deliberately
+deferred to after slice 2 widens the evidence, and Q2/Q3 are owner actions
+outside the implementation path. Slices 1 and 2 are unblocked by all three.
 **Track:** Distribution
 **Priority:** High — the Linux artifact cannot start on a whole family of distributions
 **Date:** 2026-08-17
