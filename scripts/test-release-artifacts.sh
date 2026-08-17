@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "$#" -ne 1 ]; then
+if [ "$#" -ne 1 ] || [ -z "$1" ]; then
   echo "usage: test-release-artifacts.sh TEMPORARY_PARENT" >&2
   exit 2
 fi
