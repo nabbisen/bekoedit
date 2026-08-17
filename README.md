@@ -64,12 +64,15 @@ chmod +x scripts/run-macos.sh && ./scripts/run-macos.sh ./bekoedit
 check first, since a missing library fails **silently** from a desktop
 launcher (no window, no dialog):
 ```sh
-chmod +x bekoedit scripts/run-linux.sh && ./scripts/run-linux.sh ./bekoedit
+chmod +x bekoedit
+ldd ./bekoedit | grep 'not found'   # empty output = every library resolves
 ./bekoedit
 ```
 Distributions shipping a different `libxdo` major (e.g. Arch: `libxdo.so.4`)
 can't use the prebuilt binary — build from source instead, which links
-locally: `cargo install bekoedit`.
+locally: `cargo install bekoedit`. (From a clone of this repository,
+`scripts/run-linux.sh` runs the same check with next-step guidance built
+in; it is not included in the release archive.)
 
 **Build from source** (requires Rust stable + Node.js >= 24):
 ```sh
