@@ -17,11 +17,13 @@
 # a distribution's mirror being down is not a finding about bekoedit, and
 # must not be reported as one.
 #
-# libxdo.so.3 is expected missing on every distribution below until
-# RFC-045 slice 3 lands. Deleting each --expect-missing libxdo.so.3 is
-# slice 3's own job, not something to do here ahead of the fix landing --
-# the run must fail the moment it no longer needs the exemption, which is
-# exactly the coupling that keeps this honest.
+# libxdo.so.3's exemption is per-distribution, not universal: Fedora
+# ships it natively, Arch does not (confirmed by this harness's own first
+# real run -- see DISTRO_EXPECT_MISSING below). Only Arch carries
+# --expect-missing libxdo.so.3 today. Deleting it is RFC-045 slice 3's
+# job, once bundling or another fix makes it resolve there too -- the
+# run must fail the moment a distribution's entry no longer needs its
+# exemption, which is exactly the coupling that keeps this honest.
 
 set -euo pipefail
 
@@ -59,21 +61,21 @@ INSPECT_SCRIPT="$SCRIPT_DIR/check-linux-portability.sh"
 DISTRO_NAMES=(arch fedora)
 DISTRO_IMAGES=(
   "archlinux:base@sha256:b0deabeb3d283da2c7f7dbf0eea051b7b2cd0554e0b737cc457fd21683bdcdd1"
-  "fedora:41@sha256:f1a3fab47bcb3c3ddf3135d5ee7ba8b7b25f2e809a47440936212a3a50957f3d"
+  "fedora:44@sha256:6c75d5bf57cb0fa5aa4b92c6a83c86c791644496d9ac230de7711f5b8ec3b898"
 )
 DISTRO_INSTALL=(
-  "pacman -Sy --noconfirm --needed webkit2gtk-4.1 xdotool"
+  "pacman -Syu --noconfirm --needed webkit2gtk-4.1 xdotool"
   "dnf install -y webkit2gtk4.1 xdotool"
 )
 # Per RFC-045 SS3: --expect-missing libxdo.so.3 both permits and requires
 # it be unresolved. NOT universal -- confirmed by the first real run of
 # this harness (CI run 32002864338): Arch's archlinux:base ships
-# libxdo.so.4 only (the confirmed-failing case), but Fedora 41 ships
-# libxdo.so.3 natively at /lib64/libxdo.so.3, and exempting it there
-# fails as a stale expectation, correctly. So the exemption is
-# Arch-only; leave a distribution's entry empty (not "libxdo.so.3") if
-# its container already resolves it. Slice 3 deletes the Arch entry
-# once bundling (or another fix) makes it resolve there too.
+# libxdo.so.4 only (the confirmed-failing case), but Fedora ships
+# libxdo.so.3 natively, and exempting it there fails as a stale
+# expectation, correctly. So the exemption is Arch-only; leave a
+# distribution's entry empty (not "libxdo.so.3") if its container
+# already resolves it. Slice 3 deletes the Arch entry once bundling (or
+# another fix) makes it resolve there too.
 DISTRO_EXPECT_MISSING=(libxdo.so.3 "")
 
 overall_status=0
@@ -86,13 +88,16 @@ for i in "${!DISTRO_NAMES[@]}"; do
 
   echo "=== $name ($image) ==="
 
-  if ! docker pull --quiet "$image" >/tmp/bekoedit-pull-"$name".log 2>&1; then
+  pull_log="$(mktemp "${TMPDIR:-/tmp}/bekoedit-pull-$name.XXXXXX")"
+  if ! docker pull --quiet "$image" >"$pull_log" 2>&1; then
     echo "INFRASTRUCTURE FAILURE: could not pull $image for $name:" >&2
-    cat /tmp/bekoedit-pull-"$name".log >&2
+    cat "$pull_log" >&2
     echo "=== $name: INFRASTRUCTURE FAILURE (image pull) -- not a portability finding ===" >&2
     overall_status=1
+    rm -f "$pull_log"
     continue
   fi
+  rm -f "$pull_log"
 
   container_script=/work/check-linux-portability.sh
   container_bin=/work/bekoedit
@@ -138,6 +143,14 @@ sh $container_script $check_args
 
   if [ "$status" -eq 97 ]; then
     echo "=== $name: INFRASTRUCTURE FAILURE (package install) -- not a portability finding ==="
+    overall_status=1
+  elif [ "$status" -eq 125 ] || [ "$status" -eq 126 ] || [ "$status" -eq 127 ]; then
+    # Docker itself reserves these: 125 a daemon/run-invocation error, 126
+    # "command cannot be invoked", 127 "command not found". None of them
+    # are statements about bekoedit's libraries -- a container that never
+    # started is the same class of non-finding as a failed pull or a
+    # failed package install.
+    echo "=== $name: INFRASTRUCTURE FAILURE (container start, docker run exit $status) -- not a portability finding ==="
     overall_status=1
   elif [ "$status" -ne 0 ]; then
     echo "=== $name: PORTABILITY CHECK FAILED ==="

@@ -66,7 +66,22 @@ if ! command -v ldd >/dev/null 2>&1; then
   exit 1
 fi
 
-unresolved="$(ldd "$bin" 2>&1 | grep 'not found' | sed -E 's/^[[:space:]]*([^[:space:]]+).*/\1/' || true)"
+ldd_output="$(ldd "$bin" 2>&1 || true)"
+
+# ldd's own exit status and stderr are not trustworthy signals here: a
+# "not a dynamic executable" / wrong-architecture / permission error
+# produces no library listing at all, and without this check that would
+# be indistinguishable from "every library resolved" -- a gate whose
+# failure mode is silent success is worse than no gate. Every real
+# per-library line ldd prints, resolved or not, contains "=>"; requiring
+# at least one is confirmation something was actually inspected.
+if ! printf '%s\n' "$ldd_output" | grep -q '=>'; then
+  echo "Error: ldd produced no library list for $bin -- not a dynamic executable, wrong architecture, or ldd itself failed:" >&2
+  printf '%s\n' "$ldd_output" >&2
+  exit 1
+fi
+
+unresolved="$(printf '%s\n' "$ldd_output" | grep 'not found' | sed -E 's/^[[:space:]]*([^[:space:]]+).*/\1/' || true)"
 
 fail=0
 
