@@ -5,11 +5,16 @@ Authoritative sequencing lives in `rfcs/`. This file is the orientation view.
 
 ## Current proposed / deferred RFCs
 
-- **RFC-042** — proposed; slices 1–4 shipped in v0.14.0. Remains open pending
-  slice 5 (Form Mode accessibility metadata); slice 6 (responsive/resize) was
-  withdrawn.
+- **RFC-043** — proposed, approved for implementation; reopen the last
+  workspace on launch, wiring the existing `reopen_last_workspace` setting.
+- **RFC-044** — proposed; a second, independent WebView smoke run giving the
+  shell's keyboard and focus contracts (including RFC-042) reproducible
+  automated regression coverage. Depends on RFC-043.
 - **RFC-032** — deferred until profiling shows need
 - **RFC-039/040** — future evaluation only
+
+RFC-042 (shell interaction, focus, and accessibility conformance) shipped in
+full across v0.14.0 and v0.15.0 and now lives in `rfcs/done/`.
 
 RFC-031 (no Lexical) is a reached decision and now lives in `rfcs/done/`.
 
@@ -34,6 +39,13 @@ Full-text search, backlinks, export profiles, Git awareness, workspace
 templates, extension policy, plugin system, sync/collaboration.
 
 **1.0.0 requires explicit maintainer sign-off on the acceptance checklist.**
+
+## Shipped — v0.15.0 (2026-08-17)
+RFC-042 slice 5 completes the RFC: every Form Mode block is a named
+`role="group"` stating its kind, and raw Markdown islands state both that they
+are verbatim regions and why they could not be edited as a form, reusing the
+product's existing island reason strings. Also resolves RUSTSEC-2026-0257 by
+updating the transitive `webbrowser` dependency to 1.2.4 in `Cargo.lock`.
 
 ## Shipped — v0.14.0 (2026-08-10)
 RFC-042 slices 1–4: a single focus authority shared between the application

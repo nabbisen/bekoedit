@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-08-17
+
+### Added
+- Accessibility metadata for Form Mode block editing: every block is a named
+  group stating its kind, and raw Markdown islands state both that they are
+  verbatim regions and why they could not be edited as a form. This completes
+  RFC-042, whose remaining gap 0.14.0's notes recorded explicitly.
+
+### Security
+- Updated the transitive `webbrowser` dependency from 1.2.1 to 1.2.4, resolving
+  RUSTSEC-2026-0257 (Unix `BROWSER` handling allows browser argument injection).
+  The crate is reached only through `dioxus-desktop`; no bekoedit code opens
+  external links, and exploitation requires control of the user's `BROWSER`
+  environment variable. Selected in `Cargo.lock` under the existing upstream
+  requirement — no manifest pin was added.
+
 ## [0.14.0] - 2026-08-10
 
 ### Added
@@ -49,7 +65,8 @@ Accessibility work in this release covers the shell: file tree, menus, mode
 tabs, conflict banner, Recovery, and Settings. **Form Mode block editing does
 not yet expose accessibility metadata** and is tracked by RFC-042 slice 5.
 
-[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.14.0...HEAD
+[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.15.0...HEAD
+[0.15.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.15.0
 [0.14.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.14.0
 
 ## [0.13.1] - 2026-07-21
