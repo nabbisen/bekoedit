@@ -5,10 +5,10 @@
 #
 # Usage (run once in PowerShell after downloading the release archive):
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-#   .\scripts\run-windows.ps1
+#   .\run-windows.ps1
 #
 # Or to unblock a specific path:
-#   .\scripts\run-windows.ps1 -BinPath "C:\path\to\bekoedit.exe"
+#   .\run-windows.ps1 -BinPath "C:\path\to\bekoedit.exe"
 #
 # What this does:
 #   Unblock-File removes the Zone.Identifier alternate data stream that

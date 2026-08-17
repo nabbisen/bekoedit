@@ -5,8 +5,8 @@
 # Gatekeeper allows it to run without a paid Apple Developer certificate.
 #
 # Usage (run once after downloading the release archive):
-#   chmod +x scripts/run-macos.sh
-#   ./scripts/run-macos.sh
+#   chmod +x run-macos.sh
+#   ./run-macos.sh
 #
 # What this does:
 #   xattr -cr ./bekoedit

@@ -5,11 +5,11 @@
 # resolves on this system, and reports by name any that do not.
 #
 # Usage (run once after downloading the release archive, before launching):
-#   chmod +x scripts/run-linux.sh
-#   ./scripts/run-linux.sh
+#   chmod +x run-linux.sh
+#   ./run-linux.sh
 #
 # Or against a specific path:
-#   ./scripts/run-linux.sh /path/to/bekoedit
+#   ./run-linux.sh /path/to/bekoedit
 #
 # What this does:
 #   Runs `ldd` against the binary and reports any library it needs that
