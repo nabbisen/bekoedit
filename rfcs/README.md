@@ -70,6 +70,7 @@ it moves to `done/` (decision shipped) or `archive/` (withdrawn or superseded).
 |-----|-------|-------|
 | RFC-043 | [Reopen last workspace on launch](proposed/RFC-043-reopen-last-workspace-on-launch.md) | **Approved for implementation** 2026-08-04; not yet built |
 | RFC-044 | [Shell behaviour regression coverage](proposed/RFC-044-shell-behaviour-regression-coverage.md) | **Under review** — reproducible coverage for RFC-042's keyboard contracts; depends on RFC-043 |
+| RFC-045 | [Release artifact portability and completeness](proposed/RFC-045-release-artifact-portability-and-completeness.md) | **Under review** — the Linux binary cannot start on `libxdo.so.4` distributions, and the platform scripts are absent from every archive |
 | RFC-032 | Performance optimization and incremental parsing | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | Plugin system evaluation | Future evaluation only |
 | RFC-040 | Sync and collaboration evaluation | Future evaluation only |
