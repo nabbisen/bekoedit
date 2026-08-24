@@ -2,7 +2,11 @@
 
 **Governing RFC:** [RFC-043](../../proposed/RFC-043-reopen-last-workspace-on-launch.md)
 **Status:** inherited from RFC-043 (Proposed — approved for implementation by the project owner 2026-08-04)
-**Baseline:** `main` at `91760c7`
+**Baseline:** `main` at `3b4aa40` (refreshed 2026-08-24; originally written
+against `91760c7`). The four code references in §1 were re-verified against this
+baseline on 2026-08-24 and all still hold exactly — `settings.rs:23`, `:39`,
+`settings_screen.rs:89`, `:90`, and `reopen_last_workspace` is still read by no
+other code.
 **Date:** 2026-08-12
 
 ---
