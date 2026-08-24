@@ -160,15 +160,23 @@ version's feature table in the crates.io sparse index. Dioxus keeps per-minor
 release branches, and #5749 went to `main`, which is `0.8.0-alpha.1`. The `v0.7`
 branch is at 0.7.10 and has no `linux-libxdo` at all.
 
-Two routes, and the choice is the owner's:
+Two routes were available: backport #5749 to `v0.7` for a 0.7.x patch, or wait
+for 0.8.
 
-1. **Backport #5749 to `v0.7`** — a small PR reaching us in the next 0.7.x
-   patch. Diff in the status record below.
-2. **Wait for 0.8 stable** — currently alpha, unknown timing, and a
-   framework-line upgrade rather than a patch bump.
+**Decided 2026-08-24 — wait for Dioxus 0.8 stable.** The owner's call, on the
+grounds that the defect is not critical: `cargo install bekoedit` works on
+affected distributions today, and both `README.md` and
+`docs/src/distribution.md` say so accurately. Nothing is owed upstream — #5749
+is merged and closed — so the backport would have been a new optional PR, not
+an obligation, and it is not worth opening for a non-critical fix.
 
-Either way it is someone else's release cycle, so this RFC does not block on it
-(§4).
+**Trigger:** `dioxus-desktop` 0.8.x publishes as stable (not alpha) on
+crates.io. Re-open slice 3 then.
+
+**Consequence to plan for:** slice 3 is no longer a standalone dependency bump.
+0.8 is a framework-line upgrade for the whole application, so the `libxdo` fix
+will arrive as one line item inside that larger piece of work, and should be
+scoped with it rather than ahead of it.
 
 ### 5.2 Bundle `libxdo` beside the binary · the fallback, and worse than it looked
 
@@ -289,7 +297,7 @@ macOS and Windows have no equivalent cheap check and are out of scope here.
 |---|---|---|
 | 1 | Part 2 — ship the platform scripts | **Implemented** — merged `a9eb427` |
 | 2 | Part 3 — the cross-distribution check | **Implemented** — merged `f977fc7` |
-| 3 | Part 1 — Linux portability | Open — now a dependency bump; waiting on an upstream release (§5.1) |
+| 3 | Part 1 — Linux portability | **Deferred 2026-08-24** — fixed upstream, unreleased on the 0.7 line. Trigger: Dioxus 0.8 stable (§5.1) |
 
 Deliberately in that order, and it worked as intended: the two cheap slices made
 the expensive one measurable.
@@ -352,9 +360,13 @@ of the record rather than glossed over.
 Nothing to file. What remains is a published release containing the merge —
 see §5.1.
 
-### Q3 — does the release page need a Linux caveat? · **open, owner's call**
+### Q3 — does the release page need a Linux caveat? · **open, owner's call, and now sharper**
 
-Unchanged, and now time-boxed by Q1. Users on Arch-family distributions still
+No longer time-boxed. Slice 3's deferral to Dioxus 0.8 stable (§5.1) means the
+wait is open-ended, and any release cut in the meantime — including one carrying
+slices 1 and 2 — ships a binary that still cannot start on Arch-family systems.
+A caveat costs one paragraph on the release page; the alternative is a silent
+failure for those users on every release until 0.8 lands. Users on Arch-family distributions still
 download a binary that cannot start, and will until slice 3 lands.
 `docs/src/distribution.md` and `README.md` say so; the release page does not.
 `cargo install bekoedit` is the working route there and is unaffected by any of
