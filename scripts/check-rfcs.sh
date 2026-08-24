@@ -92,6 +92,25 @@ while IFS= read -r -d '' f; do
 done < <(find rfcs -name "*.md" -print0 2>/dev/null)
 [ "$BROKEN" -eq 0 ] && echo "ok: relative links inside rfcs/ resolve"
 
+# 7. RFC 000 is a verbatim mirror of a policy shared across projects. Its
+#    source lives outside the repository, so this can only run where that
+#    source is present -- CI cannot see it. The skip is announced rather than
+#    silent: a check that quietly stops running is worse than one that is
+#    honestly unavailable.
+POLICY_SRC=".git-exclude/rules/000-rfc-lifecycle-policy.md"
+POLICY_MIRROR="rfcs/done/000-rfc-lifecycle-policy.md"
+if [ ! -e "$POLICY_SRC" ]; then
+  echo "skip: RFC 000 mirror check -- $POLICY_SRC not present (expected in CI)"
+elif diff -q "$POLICY_SRC" "$POLICY_MIRROR" >/dev/null 2>&1; then
+  echo "ok: RFC 000 mirrors its shared source verbatim"
+else
+  echo "FAIL: $POLICY_MIRROR has diverged from $POLICY_SRC"
+  diff "$POLICY_SRC" "$POLICY_MIRROR" | head -20
+  echo "      (RFC 000 is shared across projects -- sync by copying the source"
+  echo "       over the mirror; project-specific notes belong in rfcs/README.md)"
+  ERRORS=$((ERRORS+1))
+fi
+
 echo ""
 echo "check-rfcs result: $ERRORS error(s)"
 [ "$ERRORS" -eq 0 ]
