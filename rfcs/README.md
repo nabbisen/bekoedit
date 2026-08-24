@@ -69,7 +69,7 @@ it moves to `done/` (decision shipped) or `archive/` (withdrawn or superseded).
 | RFC | Title | Notes |
 |-----|-------|-------|
 | RFC-043 | [Reopen last workspace on launch](proposed/RFC-043-reopen-last-workspace-on-launch.md) | **Approved for implementation** 2026-08-04; not yet built |
-| RFC-044 | [Shell behaviour regression coverage](proposed/RFC-044-shell-behaviour-regression-coverage.md) | **Under review** — reproducible coverage for RFC-042's keyboard contracts; depends on RFC-043 |
+| RFC-044 | [Shell behaviour regression coverage](proposed/RFC-044-shell-behaviour-regression-coverage.md) | **Accepted** 2026-08-24, all §14 questions resolved — reproducible coverage for RFC-042's keyboard contracts. Its slices are blocked on RFC-043 shipping (required dependency); the §7 JavaScript relocation is a prerequisite task outside the RFC and is dispatchable now |
 | RFC-045 | [Release artifact portability and completeness](proposed/RFC-045-release-artifact-portability-and-completeness.md) | **Approved for implementation** 2026-08-17. Slices 1–2 implemented: the platform scripts now ship in every archive, and a cross-distribution `ldd` check gates both pull requests and the publish job. Slice 3 (Linux portability) is open — see its §10 Q1. Handoffs: [`handoffs/045-release-artifact-portability-and-completeness/`](handoffs/045-release-artifact-portability-and-completeness/) |
 | RFC-032 | Performance optimization and incremental parsing | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | Plugin system evaluation | Future evaluation only |

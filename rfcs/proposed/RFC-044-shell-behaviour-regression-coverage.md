@@ -1,7 +1,11 @@
 # RFC-044: Shell Behaviour Regression Coverage
 
 **Project:** bekoedit
-**Status:** Proposed
+**Status:** Proposed — accepted by the project owner 2026-08-24, with all three
+§14 questions resolved the same day. Remains in `proposed/` until implemented.
+**The RFC's own slices are blocked on RFC-043 shipping** — a required dependency
+(§6), approved 2026-08-04 and not yet built. The §7 JavaScript relocation is a
+**prerequisite task outside this RFC** (§14 Q2) and is not blocked by RFC-043.
 **Track:** Verification infrastructure
 **Priority:** High
 **Date:** 2026-08-12
@@ -159,10 +163,30 @@ by reading code, whose fix has never been observed running.
 restores to the app-menu trigger; a seeded recovery snapshot renders the
 Recovery screen with focus on its heading.
 
-**F. Conflict banner** — the harness modifies the open file from Rust mid-run;
-the banner appears and focus **does not move**. Automatable because the harness
-owns the filesystem, and worth automating because the wrong behaviour here
-destroys user data.
+**F. Conflict banner** — the harness dirties the document, then modifies the
+open file from Rust mid-run; the banner appears and focus **does not move**.
+
+Worth automating because the wrong behaviour here destroys user work. RFC-042
+§7.6 originally required the banner to focus its first action; that was amended
+once it became clear action 1 overwrites the disk file and action 2 discards
+unsaved edits. Every other item in this list protects convenience. This one
+protects the user's data, and it has never been observed running.
+
+**More automatable than the first draft of this RFC implied.** `app.rs:134`
+calls `check_external_change()` every `TICK_MS` (500 ms) whenever a document is
+open, independently of the file watcher, so the banner is driven by a
+deterministic poll rather than an inotify event. F is therefore an ordinary
+wait-for-condition with a timeout, like A–E — not the race the original §14 Q3
+described. (Code references verified against `main` on 2026-08-24.)
+
+Two things the implementation must get right:
+
+- **Dirty the document first.** A clean document yields
+  `DiskChangedCleanMemory`, a different and harmless banner. The dangerous
+  state is `DiskChangedDirtyMemory`; assert on that one specifically.
+- F does **not** cover the watcher path at `app.rs:120`. That is already true
+  today and is not what F is for, but it is recorded here so no later reader
+  assumes conflict detection is fully covered.
 
 A and B are the bulk of the untested surface and should land first. C–F are
 follow-on slices under this RFC.
@@ -235,15 +259,28 @@ would verify what assistive technology actually receives. Rejected for now: it
 needs platform AT APIs, which is a much larger surface than this RFC, and DOM
 focus is where every RFC-042 defect actually lived.
 
-## 14. Open questions
+## 14. Open questions — all resolved 2026-08-24
 
 1. **How many consecutive green runs before promoting to blocking?** (§10.)
-   Proposed: ten on `main`. Arbitrary but written down, which is the point.
-2. **Does §7's JavaScript relocation happen inside this RFC or before it?** It
-   is a prerequisite for responsible implementation and also independently
-   useful. I lean toward before, as its own small task, so this RFC's slices
-   start with a working local loop.
-3. **Should F (conflict) be in scope at all**, given it is the only item
-   requiring the harness to mutate the filesystem under a running app? It is
-   also the item with the worst failure consequence. Recorded rather than
-   resolved.
+   **Ten on `main`.** Arbitrary but written down, which was the point. The
+   promotion must be scheduled when the non-blocking period begins, not left as
+   an intention — §10.
+2. **Does §7's JavaScript relocation happen inside this RFC or before it?**
+   **Before it, as its own task.** So the RFC's slices start with a working
+   local loop rather than acquiring one midway.
+
+   Consequence worth noting: that task depends on nothing in RFC-043, so it is
+   dispatchable now and can run in parallel with RFC-043's implementation.
+3. **Should F (conflict) be in scope?** **Yes, in the same C–F slice.**
+
+   The question as originally posed rested on a false premise — that F uniquely
+   required racing the file watcher. It does not (§8 F): conflict detection is
+   on a 500 ms poll, so F is no more timing-sensitive than C–E. With that
+   objection gone, the remaining consideration was one-sided: F is the only
+   assertion in this RFC protecting against data loss.
+
+   The hedge that was available — giving F its own promotion clock so an
+   unstable check could not hold A–E's promotion hostage — was considered and
+   declined as unnecessary complexity on this evidence. If F does prove
+   unstable during the non-blocking period, revisit then; §10's window exists
+   precisely to surface that.
