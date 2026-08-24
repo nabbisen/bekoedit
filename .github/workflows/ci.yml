@@ -21,6 +21,9 @@ jobs:
       - name: Release artifact verifier self-test
         shell: bash
         run: bash scripts/test-release-artifacts.sh "$RUNNER_TEMP"
+      - name: RFC lifecycle invariants
+        shell: bash
+        run: bash scripts/check-rfcs.sh
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable action snapshot
         with:
           toolchain: 1.88.0
