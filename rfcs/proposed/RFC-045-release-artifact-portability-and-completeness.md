@@ -123,7 +123,7 @@ cannot turn this off from its own manifest** — adding a direct `muda` dependen
 with `default-features = false` subtracts nothing from what another crate
 enables.
 
-**Measured, not assumed (2026-08-17).** A local trial patched `dioxus-desktop`
+**Measured, not assumed (2026-08-24).** A local trial patched `dioxus-desktop`
 0.7.9 through `[patch.crates-io]` with three manifest lines —
 `default-features = false` on `tray-icon`, and `default-features = false` plus
 `features = ["gtk"]` on `muda` — and rebuilt bekoedit 0.15.0 unchanged:
@@ -325,7 +325,7 @@ pattern one dependency away, for `rfd`:
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
 ```
 
-**Draft:** `.git-exclude/governance/2026-08-17-dioxus-libxdo-upstream-request.md`
+**Draft:** `.git-exclude/governance/2026-08-24-dioxus-libxdo-upstream-request.md`
 
 Shape it to be mergeable rather than merely correct: add a **default-on**
 `libxdo` feature to `dioxus-desktop` forwarding to `muda/libxdo` and
