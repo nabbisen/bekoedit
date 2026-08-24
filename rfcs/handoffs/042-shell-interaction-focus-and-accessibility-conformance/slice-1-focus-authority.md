@@ -2,7 +2,7 @@
 
 **Governing RFC:** [RFC-042](../../done/RFC-042-shell-interaction-focus-and-accessibility-conformance.md) §6
 **Slice:** 1 of 7 (see RFC-042 §13)
-**Status:** inherited from RFC-042 (Proposed — do not start until the RFC is approved)
+**Status:** inherited from RFC-042 (Implemented). Historical execution guide — see RFC-042 §13.1 for this slice's disposition.
 **Date:** 2026-07-31
 
 ---

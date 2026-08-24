@@ -3,7 +3,7 @@
 **Governing RFC:** [RFC-042](../../done/RFC-042-shell-interaction-focus-and-accessibility-conformance.md) §8, and §13.1 which records this slice as scheduled
 **Slice:** 5 of 7 — **the last one. RFC-042 closes when this lands.**
 **Baseline:** `main` at `25143bb`
-**Status:** inherited from RFC-042 (Proposed). Ready to start; **merge is gated — see §1.**
+**Status:** inherited from RFC-042 (Implemented). Historical execution guide — see RFC-042 §13.1 for this slice's disposition.
 **Date:** 2026-08-10
 
 ---

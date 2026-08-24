@@ -1,13 +1,16 @@
 # RFC-043: Reopen Last Workspace on Launch
 
 **Project:** bekoedit
-**Status:** Proposed — approved for implementation by the project owner
-2026-08-04. Remains in `proposed/` until implemented, per the 4-folder
-lifecycle policy; approval and implementation are separate events.
+**Status:** Accepted — approved for implementation by the project owner
+2026-08-04. Not yet built. Moved from `proposed/` to `accepted/` on 2026-08-24
+when this project adopted the 5-folder variant, which gives "the owner approved
+this design" a folder of its own; the qualifier this line used to carry is now
+the folder's job.
+**Handoff:** [`handoffs/043-reopen-last-workspace-on-launch/`](../handoffs/043-reopen-last-workspace-on-launch/implementation-handoff.md)
 **Track:** Workspace lifecycle
 **Priority:** Medium
 **Date:** 2026-08-04
-**Related RFCs:** [RFC-003](../done/RFC-003-workspace-model-and-recent-workspaces.md), [RFC-007](../done/RFC-007-save-autosave-atomic-write-and-recovery.md), [RFC-022](../done/RFC-022-settings-preferences-and-local-configuration.md), [RFC-042](./RFC-042-shell-interaction-focus-and-accessibility-conformance.md)
+**Related RFCs:** [RFC-003](../done/RFC-003-workspace-model-and-recent-workspaces.md), [RFC-007](../done/RFC-007-save-autosave-atomic-write-and-recovery.md), [RFC-022](../done/RFC-022-settings-preferences-and-local-configuration.md), [RFC-042](../done/RFC-042-shell-interaction-focus-and-accessibility-conformance.md)
 
 ---
 

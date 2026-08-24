@@ -1,10 +1,10 @@
 # RFC-044: Shell Behaviour Regression Coverage
 
 **Project:** bekoedit
-**Status:** Proposed — accepted by the project owner 2026-08-24, with all three
-§14 questions resolved the same day. Remains in `proposed/` until implemented.
+**Status:** Accepted — by the project owner 2026-08-24, with all three §14
+questions resolved the same day. Not yet built.
 **The RFC's own slices are blocked on RFC-043 shipping** — a required dependency
-(§6), approved 2026-08-04 and not yet built. The §7 JavaScript relocation is a
+(§6), accepted 2026-08-04 and not yet built. The §7 JavaScript relocation is a
 **prerequisite task outside this RFC** (§14 Q2) and is not blocked by RFC-043.
 **Track:** Verification infrastructure
 **Priority:** High

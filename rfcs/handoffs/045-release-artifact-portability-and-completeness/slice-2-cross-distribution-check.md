@@ -1,11 +1,11 @@
 # RFC-045 handoff — slice 2: the cross-distribution check
 
-**Governing RFC:** [RFC-045](../../proposed/RFC-045-release-artifact-portability-and-completeness.md) §7
+**Governing RFC:** [RFC-045](../../accepted/RFC-045-release-artifact-portability-and-completeness.md) §7
 **Slice:** 2 of 3 — independent of slice 3; it is what makes slice 3 measurable
 **Baseline:** `main` after slice 1 merges (`a9eb427`). Slice 1 touches
 `release.yml` and `ci.yml`; if it has not merged, **stop and report** rather
 than branching from an earlier commit.
-**Status:** inherited from RFC-045 (Proposed — approved for implementation 2026-08-17)
+**Status:** inherited from RFC-045 (Accepted — approved for implementation 2026-08-17)
 **Date:** 2026-08-17
 
 ---

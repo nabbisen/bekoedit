@@ -1,11 +1,12 @@
 # RFC-045: Release Artifact Portability and Completeness
 
 **Project:** bekoedit
-**Status:** Proposed — approved for implementation by the project owner
+**Status:** Accepted — approved for implementation by the project owner
 2026-08-17. Slice 1 (ship the platform scripts) merged as `a9eb427`; slice 2
-(the cross-distribution check) merged as `f977fc7`. Remains in `proposed/`
-until slice 3 lands. §10 Q1 and Q2 are now answered — on slice 2's evidence
-plus a verified local trial (§5.1) — and Q3 remains an owner action.
+(the cross-distribution check) merged as `f977fc7`. Moves to `done/` when slice
+3 lands. §10 Q1 and Q2 are now answered — on slice 2's evidence plus a verified
+local trial (§5.1) — and Q3 remains an owner action.
+**Handoffs:** [`handoffs/045-release-artifact-portability-and-completeness/`](../handoffs/045-release-artifact-portability-and-completeness/)
 **Track:** Distribution
 **Priority:** High — the Linux artifact cannot start on a whole family of distributions
 **Date:** 2026-08-17

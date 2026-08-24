@@ -5,7 +5,8 @@
 **Depends on:** slice 1 (focus authority) — specifically the `shell_focus`
 module, to which this slice adds `focus_tree_row` (§7.5). Slice 2 does not call
 `focus_element` and must not modify it.
-**Status:** inherited from RFC-042 (Proposed). **Ready to start** — RFC-042 was
+**Status:** inherited from RFC-042 (Implemented). Historical execution guide —
+see RFC-042 §13.1 for this slice's disposition. Written when RFC-042 was
 approved for implementation on 2026-07-31 and slice 1 merged to `main` as
 `96f2287` on 2026-08-03.
 **Date:** 2026-07-31 (document identifier; revised 2026-08-04)

@@ -4,7 +4,7 @@
 **Slice:** 3 of 7 (see RFC-042 §13)
 **Depends on:** slice 1 (focus authority), slice 2 (`shell_focus` conventions)
 **Baseline:** `main` at `60f9ad8`
-**Status:** inherited from RFC-042 (Proposed). **Ready to start.**
+**Status:** inherited from RFC-042 (Implemented). Historical execution guide — see RFC-042 §13.1 for this slice's disposition.
 **Date:** 2026-08-04
 
 ---

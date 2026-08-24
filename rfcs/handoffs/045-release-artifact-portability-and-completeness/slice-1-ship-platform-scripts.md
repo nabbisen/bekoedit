@@ -1,9 +1,9 @@
 # RFC-045 handoff — slice 1: ship the platform scripts
 
-**Governing RFC:** [RFC-045](../../proposed/RFC-045-release-artifact-portability-and-completeness.md) §6
+**Governing RFC:** [RFC-045](../../accepted/RFC-045-release-artifact-portability-and-completeness.md) §6
 **Slice:** 1 of 3 — self-contained; does not depend on §10 Q1
 **Baseline:** `main` at `8d3634b`
-**Status:** inherited from RFC-045 (Proposed — approved for implementation 2026-08-17)
+**Status:** inherited from RFC-045 (Accepted — approved for implementation 2026-08-17)
 **Date:** 2026-08-17
 
 ---
