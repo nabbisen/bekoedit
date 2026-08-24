@@ -153,11 +153,22 @@ would be needed to avoid changing behaviour for other users. Their choice is
 better for us: the fix arrives by simply not enabling the feature, so the
 facade-plumbing concern above does not arise at all.
 
-**What still blocks it is a release, not a decision.** No published version
-carries #5749 — 0.7.9 (ours, 2026-05-08), 0.7.10 and 0.8.0-alpha.1 (both
-2026-07-30) all predate the merge, verified against the crates.io sparse index.
-The next release carries it. That is someone else's release cycle, so this RFC
-does not block on it (§4).
+**What still blocks it is a release — and #5749 is not on the 0.7 line.** No
+published version carries it: 0.7.9 (ours, 2026-05-08), 0.7.10 and
+0.8.0-alpha.1 (both 2026-07-30) all predate the merge, verified against each
+version's feature table in the crates.io sparse index. Dioxus keeps per-minor
+release branches, and #5749 went to `main`, which is `0.8.0-alpha.1`. The `v0.7`
+branch is at 0.7.10 and has no `linux-libxdo` at all.
+
+Two routes, and the choice is the owner's:
+
+1. **Backport #5749 to `v0.7`** — a small PR reaching us in the next 0.7.x
+   patch. Diff in the status record below.
+2. **Wait for 0.8 stable** — currently alpha, unknown timing, and a
+   framework-line upgrade rather than a patch bump.
+
+Either way it is someone else's release cycle, so this RFC does not block on it
+(§4).
 
 ### 5.2 Bundle `libxdo` beside the binary · the fallback, and worse than it looked
 
