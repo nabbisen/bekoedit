@@ -142,11 +142,22 @@ emits are `#[cfg(all(feature = "devtools", debug_assertions))]`-gated dead code
 in any release build — pre-existing upstream, surfaced only because `[patch]`
 turns a registry crate into a path crate.
 
-**What still blocks it:** the change must land in `dioxus-desktop`, and the
-opt-out must be reachable from the `dioxus` facade, since bekoedit depends on
-`dioxus` with the `desktop` feature rather than on `dioxus-desktop` directly.
-That is one pull request in one repository (§10 Q2) — but it is still someone
-else's release cycle, so this RFC does not block on it (§4).
+**It is already merged upstream.** [DioxusLabs/dioxus#5749](https://github.com/DioxusLabs/dioxus/pull/5749),
+`feat(desktop): make libxdo opt-in on Linux via linux-libxdo`, merged 2026-08-10
+(`b6c258b`). It declares `muda` and `tray-icon` with `default-features = false`,
+keeps `gtk` on both, and adds an opt-in `linux-libxdo` feature restoring the old
+behaviour — mirroring Tauri, which has done this since v2.0.0-alpha.11.
+
+Upstream chose **opt-in** where this RFC had assumed a default-on pass-through
+would be needed to avoid changing behaviour for other users. Their choice is
+better for us: the fix arrives by simply not enabling the feature, so the
+facade-plumbing concern above does not arise at all.
+
+**What still blocks it is a release, not a decision.** No published version
+carries #5749 — 0.7.9 (ours, 2026-05-08), 0.7.10 and 0.8.0-alpha.1 (both
+2026-07-30) all predate the merge, verified against the crates.io sparse index.
+The next release carries it. That is someone else's release cycle, so this RFC
+does not block on it (§4).
 
 ### 5.2 Bundle `libxdo` beside the binary · the fallback, and worse than it looked
 
@@ -267,7 +278,7 @@ macOS and Windows have no equivalent cheap check and are out of scope here.
 |---|---|---|
 | 1 | Part 2 — ship the platform scripts | **Implemented** — merged `a9eb427` |
 | 2 | Part 3 — the cross-distribution check | **Implemented** — merged `f977fc7` |
-| 3 | Part 1 — Linux portability | Open — reshaped by §10 Q1 |
+| 3 | Part 1 — Linux portability | Open — now a dependency bump; waiting on an upstream release (§5.1) |
 
 Deliberately in that order, and it worked as intended: the two cheap slices made
 the expensive one measurable.
@@ -314,26 +325,21 @@ Three consequences:
 **Slice 3 is reshaped accordingly:** pursue §5.1 upstream (Q2) and hold §5.2 in
 reserve. Either way, slice 2's Arch container is the acceptance test.
 
-### Q2 — should §5.1 be raised with Dioxus? · **answered: yes, as a tested pull request**
+### Q2 — should §5.1 be raised with Dioxus? · **moot: it was already merged, 2026-08-10**
 
-Not an issue carrying a hypothesis. The change is three manifest lines, the
-result is measured (§5.1), and both direct dependencies already expose the
-switch deliberately — `muda` and `tray-icon` each ship a `libxdo` feature so
-that downstreams can decline it. `dioxus-desktop` also already uses this exact
-pattern one dependency away, for `rfd`:
+The question is answered by the fact that the work was already done. The owner
+authored [DioxusLabs/dioxus#5749](https://github.com/DioxusLabs/dioxus/pull/5749)
+and it merged on 2026-08-10, a week before the CachyOS walkthrough that opened
+this RFC.
 
-```toml
-rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
-```
+This RFC proposed filing something that already existed. A search of the
+official repository before drafting would have found it; that step is now part
+of the record rather than glossed over.
 
-**Draft:** `.git-exclude/governance/2026-08-24-dioxus-libxdo-upstream-request.md`
+**Status record:** `.git-exclude/governance/2026-08-24-dioxus-libxdo-upstream-status.md`
 
-Shape it to be mergeable rather than merely correct: add a **default-on**
-`libxdo` feature to `dioxus-desktop` forwarding to `muda/libxdo` and
-`tray-icon/libxdo`, take both dependencies with `default-features = false`, and
-plumb a matching pass-through through the `dioxus` facade. Default-on means no
-existing user sees a behaviour change; downstreams that do not want an X11
-input-simulation library linked into their binary can opt out.
+Nothing to file. What remains is a published release containing the merge —
+see §5.1.
 
 ### Q3 — does the release page need a Linux caveat? · **open, owner's call**
 
