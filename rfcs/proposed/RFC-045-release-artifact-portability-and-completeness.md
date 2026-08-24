@@ -2,10 +2,10 @@
 
 **Project:** bekoedit
 **Status:** Proposed — approved for implementation by the project owner
-2026-08-17. Remains in `proposed/` until implemented. §10's open questions are
-carried, not resolved: Q1 (bundle `libxdo` versus AppImage) is deliberately
-deferred to after slice 2 widens the evidence, and Q2/Q3 are owner actions
-outside the implementation path. Slices 1 and 2 are unblocked by all three.
+2026-08-17. Slice 1 (ship the platform scripts) merged as `a9eb427`; slice 2
+(the cross-distribution check) merged as `f977fc7`. Remains in `proposed/`
+until slice 3 lands. §10 Q1 and Q2 are now answered — on slice 2's evidence
+plus a verified local trial (§5.1) — and Q3 remains an owner action.
 **Track:** Distribution
 **Priority:** High — the Linux artifact cannot start on a whole family of distributions
 **Date:** 2026-08-17
@@ -55,7 +55,12 @@ systems provide `libxdo.so.4` only. On the owner's machine, `ldd` resolves 144 o
 **`libxdo` is the single point of failure.**
 
 The 0.13.1 artifact was downloaded and inspected: identical requirement. Every
-Linux artifact this project has shipped has the defect.
+Linux artifact this project has shipped carries it.
+
+*Refined by slice 2 (§10 Q1):* the `libxdo.so.3` requirement is as old as the
+first prebuilt binary, but the **breakage** is younger — Arch moved to
+`libxdo.so.4` on 2026-03-18, so v0.9.0 (2026-06-07) onward was already
+unlaunchable there. Distributions still on `xdotool` 3.x are unaffected so far.
 
 Launched from a desktop environment the failure is silent — the loader gives up
 before `main()`, so no bekoedit code runs and nothing can report it. That cannot
@@ -102,39 +107,74 @@ not the right long-term answer for three.
 
 Four approaches, in the order I would try them.
 
-### 5.1 Remove the dependency (upstream)
+### 5.1 Remove the dependency (upstream) · the verified fix
 
-bekoedit uses neither native menus nor a tray icon. If `dioxus-desktop`
-feature-gated `muda` and `tray-icon`, `libxdo` would disappear from `NEEDED`
-entirely — no bundling, no size cost, less linked code.
+bekoedit uses neither native menus nor a tray icon, and the switch to drop the
+dependency **already exists upstream**:
 
-Its current features (`tokio_runtime`, `transparent`, `devtools`,
-`dioxus-signals`, `fullscreen`, `gnu`) offer no such gate. This is worth raising
-with Dioxus regardless of what else we do, because it is the only option that
-makes the problem cease to exist rather than be worked around.
+- `muda` gates it: `libxdo = ["dep:libxdo"]`, on by default.
+- `tray-icon` exposes the same gate (`default = ["libxdo"]`,
+  `libxdo = ["muda/libxdo"]`) and already takes `muda` itself with
+  `default-features = false`.
 
-**Not a plan on its own** — it depends on an upstream decision and release we do
-not control.
+Only `dioxus-desktop` takes both dependencies with their defaults, and its own
+feature set offers no way to opt out. Cargo features are additive, so **bekoedit
+cannot turn this off from its own manifest** — adding a direct `muda` dependency
+with `default-features = false` subtracts nothing from what another crate
+enables.
 
-### 5.2 Bundle `libxdo` beside the binary · likely the pragmatic answer
+**Measured, not assumed (2026-08-17).** A local trial patched `dioxus-desktop`
+0.7.9 through `[patch.crates-io]` with three manifest lines —
+`default-features = false` on `tray-icon`, and `default-features = false` plus
+`features = ["gtk"]` on `muda` — and rebuilt bekoedit 0.15.0 unchanged:
+
+| | shipped 0.15.0 artifact | patched build |
+|---|---|---|
+| `libxdo-sys` in the graph | present | **absent** — `cargo tree -i` matches no package |
+| `DT_NEEDED` entries | 19 | 18 |
+| set difference | — | `libxdo.so.3` removed, **nothing added** |
+| `check-linux-portability.sh`, Arch-family host | exit 1, `UNRESOLVED: libxdo.so.3` | **exit 0** |
+| `--headless-smoke`, same host | exit 127, loader failure before `main()` | **PASSED**, exit 0 |
+
+No bekoedit source changed. The two `dioxus-desktop` warnings the patched build
+emits are `#[cfg(all(feature = "devtools", debug_assertions))]`-gated dead code
+in any release build — pre-existing upstream, surfaced only because `[patch]`
+turns a registry crate into a path crate.
+
+**What still blocks it:** the change must land in `dioxus-desktop`, and the
+opt-out must be reachable from the `dioxus` facade, since bekoedit depends on
+`dioxus` with the `desktop` feature rather than on `dioxus-desktop` directly.
+That is one pull request in one repository (§10 Q2) — but it is still someone
+else's release cycle, so this RFC does not block on it (§4).
+
+### 5.2 Bundle `libxdo` beside the binary · the fallback, and worse than it looked
 
 Ship `libxdo.so.3` in the archive and set an `$ORIGIN`-relative `RPATH` so the
 loader finds it.
 
-Cheap: the library is ~68 KB against a 4 MB artifact. And on the evidence we
-have, it is *sufficient* — `libxdo` was the only unresolved library on a system
-two distribution families away from the builder.
+Still cheap in bytes: ~68 KB against a 4 MB artifact. And slice 2 confirmed it
+would be *sufficient* — with the documented dependencies installed,
+`libxdo.so.3` is the only unresolved library on Arch, and nothing is unresolved
+on Fedora.
 
-Caveats to establish before committing:
+**The cost side is what moved.** Slice 2 also established what the split
+actually is (§10 Q1): `xdotool` has a 4.x series, Arch adopted it on
+2026-03-18, and Fedora and Ubuntu have not. Bundling therefore means shipping —
+and owning the security updates for — a **superseded** build of a library
+bekoedit never calls, indefinitely, so that a dead code path can satisfy the
+loader.
 
-- `libxdo.so.3` has its own dependencies (`libX11`, `libXtst` and similar). They
-  are near-universal on X11 systems, but "near-universal" needs checking rather
-  than assuming.
-- Wayland-only systems without XWayland may lack them entirely. The owner's
-  machine runs Wayland *with* XWayland, so this is untested territory.
-- Bundling a system library means owning its security updates. For a 68 KB
-  input-simulation library that bekoedit never calls, that is a small but real
-  obligation.
+Two of the three caveats are now checked rather than assumed:
+
+- `libxdo`'s own closure (`libX11`, `libXtst`, `libXinerama`, `libxkbcommon`,
+  `libxcb`, `libXext`, `libXau`) resolves on **both** distributions slice 2
+  tests. Retired.
+- Bundling means owning security updates — still true, and heavier now that the
+  bundled SONAME is the superseded one.
+- Wayland-only systems without XWayland remain **untested**. Neither container
+  image has a display server, so slice 2 cannot speak to them.
+
+Keep this as the fallback if §5.1 stalls upstream. Do not start here.
 
 ### 5.3 AppImage
 
@@ -149,6 +189,12 @@ to build one and report the size.
 
 It also adds a second Linux artifact type, which touches the release matrix, the
 layout checkers, and the evidence process.
+
+**Now disproportionate.** §5.1 removes the single offending library with three
+lines of someone else's manifest. Reaching for a whole-closure bundle to solve
+the same problem would be a large permanent cost against a small temporary one.
+This stays on the list only for a future portability break that §5.1 cannot
+address.
 
 ### 5.4 Rejected
 
@@ -216,24 +262,82 @@ macOS and Windows have no equivalent cheap check and are out of scope here.
 
 ## 9. Slices
 
-1. **Part 2** — ship the scripts. Self-contained, unblocks three platforms'
-   documentation, no dependency on Part 1's outcome.
-2. **Part 3** — the cross-distribution check. Independent, and it gives Part 1
-   its acceptance test.
-3. **Part 1** — portability, once §5.2's caveats are established. Slice 2 makes
-   this verifiable rather than hopeful.
+| # | Part | Status |
+|---|---|---|
+| 1 | Part 2 — ship the platform scripts | **Implemented** — merged `a9eb427` |
+| 2 | Part 3 — the cross-distribution check | **Implemented** — merged `f977fc7` |
+| 3 | Part 1 — Linux portability | Open — reshaped by §10 Q1 |
 
-Deliberately in that order: the two cheap slices make the expensive one
-measurable.
+Deliberately in that order, and it worked as intended: the two cheap slices made
+the expensive one measurable.
+
+**Slice 2's gate is slice 3's acceptance test.** The Arch container carries
+`--expect-missing libxdo.so.3`, which both permits and *requires* that library
+to be absent. Whatever fix lands must make it resolve there and delete the
+exemption in the same change, or the check fails. That coupling is deliberate:
+the fix cannot land without retiring its own exemption.
 
 ## 10. Open questions
 
-1. **§5.2 or §5.3 — bundle `libxdo`, or ship an AppImage?** I lean 5.2 on
-   evidence and cost, but the evidence is one machine. Slice 2 would widen it
-   before committing.
-2. **Should §5.1 be raised with Dioxus now?** It costs an issue and might remove
-   the problem at the root for everyone. I would file it regardless of which
-   option we implement.
-3. **Does 0.15.0's release page need a Linux caveat in the meantime?** Users on
-   affected distributions currently download a binary that cannot start. The
-   documentation now says so; the release page does not. Owner's call.
+### Q1 — how do we fix Linux portability? · **answered: §5.1, with §5.2 as fallback**
+
+The question as originally posed was "§5.2 or §5.3 — bundle `libxdo`, or ship an
+AppImage?", with the honest caveat that the evidence was one machine. Slice 2
+widened it, and the answer changed because *what the problem is* changed.
+
+**This is not a distribution quirk. It is a migration in progress.**
+
+| Distribution | `xdotool` | Provides | Observed |
+|---|---|---|---|
+| Arch (`extra/x86_64`) | 4.20260303.1, updated 2026-03-18 | `libxdo.so.4` | `/usr/lib/libxdo.so.4`; `libxdo.so.3` not found |
+| Fedora 44 (current stable) | 3.20211022.1 | `libxdo.so.3` | `/lib64/libxdo.so.3`; zero unresolved |
+| Fedora rawhide (`.fc45`) | 3.20211022.1-11 | `libxdo.so.3` | not yet migrated |
+| Ubuntu (`ubuntu-latest`, the builder) | — | `libxdo.so.3` | the artifact's own `NEEDED` entry is the evidence |
+
+Arch is not peculiar. Arch is **first**. The affected set is "distributions that
+have adopted xdotool 4.x" — currently Arch-family, and it only grows.
+
+Three consequences:
+
+1. **§5.1 is the fix**, and it is verified rather than hoped for. It removes the
+   dependency instead of picking a side of the split.
+2. **§5.2 is the fallback**, not "the pragmatic answer". Bundling pins the side
+   upstream has already left.
+3. **Both distributions stay in slice 2's matrix**, even though Fedora passes
+   today. When Ubuntu adopts xdotool 4.x the builder begins emitting binaries
+   that need `libxdo.so.4` and the breakage inverts — Arch goes green, Fedora
+   goes red. A single-distribution matrix would sail straight through that. Two
+   distributions on opposite sides of a live SONAME migration is the
+   instrument, not redundancy.
+
+**Slice 3 is reshaped accordingly:** pursue §5.1 upstream (Q2) and hold §5.2 in
+reserve. Either way, slice 2's Arch container is the acceptance test.
+
+### Q2 — should §5.1 be raised with Dioxus? · **answered: yes, as a tested pull request**
+
+Not an issue carrying a hypothesis. The change is three manifest lines, the
+result is measured (§5.1), and both direct dependencies already expose the
+switch deliberately — `muda` and `tray-icon` each ship a `libxdo` feature so
+that downstreams can decline it. `dioxus-desktop` also already uses this exact
+pattern one dependency away, for `rfd`:
+
+```toml
+rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
+```
+
+**Draft:** `.git-exclude/governance/2026-08-17-dioxus-libxdo-upstream-request.md`
+
+Shape it to be mergeable rather than merely correct: add a **default-on**
+`libxdo` feature to `dioxus-desktop` forwarding to `muda/libxdo` and
+`tray-icon/libxdo`, take both dependencies with `default-features = false`, and
+plumb a matching pass-through through the `dioxus` facade. Default-on means no
+existing user sees a behaviour change; downstreams that do not want an X11
+input-simulation library linked into their binary can opt out.
+
+### Q3 — does the release page need a Linux caveat? · **open, owner's call**
+
+Unchanged, and now time-boxed by Q1. Users on Arch-family distributions still
+download a binary that cannot start, and will until slice 3 lands.
+`docs/src/distribution.md` and `README.md` say so; the release page does not.
+`cargo install bekoedit` is the working route there and is unaffected by any of
+this.
