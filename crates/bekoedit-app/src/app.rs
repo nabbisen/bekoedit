@@ -57,7 +57,16 @@ pub fn App() -> Element {
     let webview_smoke = launch.webview_smoke;
 
     use_context_provider(|| persistence.clone());
-    let state = use_context_provider(|| Signal::new(create_app_state(&persistence)));
+    // RFC-043: the workspace may already be open in `initial_state` when
+    // this closure runs (once, on mount) -- computed and reopen_failure
+    // captured together so `create_app_state`'s attempt-and-decide (§3.5:
+    // no parallel usability check) runs exactly once, not once per
+    // render.
+    let (state, reopen_failure) = use_hook(|| {
+        let (initial_state, notice) = create_app_state(&persistence, &settings);
+        (Signal::new(initial_state), notice)
+    });
+    use_context_provider(|| state);
     use_context_provider(|| Signal::new(settings.lang));
     use_context_provider(|| Signal::new(settings.default_mode));
     use_context_provider(|| ExplorerCollapsed(Signal::new(false_val())));
@@ -88,6 +97,24 @@ pub fn App() -> Element {
                 &mut toasts,
                 ToastKind::Warning,
                 tr(startup_lang, "settings.temp_fallback_warning"),
+            );
+        }
+    });
+
+    // RFC-043: the most recent workspace was attempted at launch and
+    // failed (unusable path). Non-blocking notice naming it, not a
+    // panic or a silent Start Screen. `reopen_failure` is a plain value
+    // already computed once above, so this also fires once on mount.
+    use_effect(move || {
+        if let Some(notice) = &reopen_failure {
+            push_toast(
+                &mut toasts,
+                ToastKind::Warning,
+                format!(
+                    "{}: {}",
+                    tr(startup_lang, "workspace.reopen_failed"),
+                    notice.display_name
+                ),
             );
         }
     });

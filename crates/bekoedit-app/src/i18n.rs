@@ -144,6 +144,7 @@ fn tr_en(key: &str) -> &'static str {
         "settings.temp_fallback_warning" => {
             "Settings cannot be stored persistently in this environment"
         }
+        "workspace.reopen_failed" => "Couldn't reopen the last workspace",
         "recovery.title" => "Recover unsaved changes",
         "recovery.description" => {
             "bekoedit found unsaved recovery snapshots from a previous session."
@@ -277,6 +278,7 @@ fn tr_ja(key: &str) -> &'static str {
         "settings.prefer_trash" => "削除したファイルをゴミ箱に移動",
         "settings.save_failed" => "設定の保存に失敗しました",
         "settings.temp_fallback_warning" => "この環境では設定を永続的に保存できません",
+        "workspace.reopen_failed" => "前回のワークスペースを開けませんでした",
         "recovery.title" => "未保存の変更を復元",
         "recovery.description" => {
             "前回のセッションで保存されなかった復元スナップショットが見つかりました。"

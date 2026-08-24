@@ -83,6 +83,18 @@ impl AppPersistence {
             Self::Isolated(paths) => Some(paths),
         }
     }
+
+    /// Where the recent-workspaces list lives for this persistence
+    /// variant. Mirrors `create_app_state`'s own per-variant routing
+    /// (RFC-043): the launch-time reopen decision needs this file
+    /// independently of `AppState`, since `AppState::new`/`new_with_history`
+    /// already prunes missing entries from its own copy at construction.
+    pub fn recents_file(&self) -> PathBuf {
+        match self {
+            Self::PlatformDefault => RecentWorkspaces::default_file(),
+            Self::Isolated(paths) => paths.recents_file.clone(),
+        }
+    }
 }
 
 impl IsolatedPersistencePaths {
