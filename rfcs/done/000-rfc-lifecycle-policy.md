@@ -609,32 +609,6 @@ release. This is the recommended adoption pattern for
 existing directories: combine the policy's introduction with
 the migration into a single, atomic change.
 
-### Project adoption note — bekoedit, 2026-08-24
-
-bekoedit uses the **5-folder variant**
-([§ Folder layout: 5-folder variant](#folder-layout-5-folder-variant)):
-`proposed/`, `accepted/`, `done/`, `archive/`, and no `draft/`.
-
-The variant applies here because the condition it names is met:
-design and implementation roles are genuinely separate. The
-architect writes and revises RFCs and issues handoffs; a
-separate dev team implements them; and "the owner approved this
-design" is a distinct, dated event from "the implementer
-finished." Under the 4-folder layout that distinction had no
-home, so approved-but-unbuilt RFCs sat in `proposed/` carrying
-an in-file qualifier that contradicted the folder — the exact
-Status-field-versus-folder disagreement this policy warns
-about, with the folder winning and therefore lying.
-
-`accepted/` is not expected to sit empty here, which is the
-anti-pattern's test
-([§ Formalising `accepted/` in small projects](#formalising-accepted-in-small-projects)).
-It held three RFCs on the day the variant was adopted.
-
-Deferred and future-evaluation RFCs stay in `proposed/`: they
-are open questions nobody has approved for implementation, not
-approved work awaiting an implementer.
-
 ## Open questions
 
 None at time of acceptance. Future refinements (review SLAs,

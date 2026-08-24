@@ -1,6 +1,9 @@
 # bekoedit RFC Index
 
-Governance: [`done/000-rfc-lifecycle-policy.md`](done/000-rfc-lifecycle-policy.md).
+Governance: [`done/000-rfc-lifecycle-policy.md`](done/000-rfc-lifecycle-policy.md)
+— a **verbatim mirror** of a policy shared across projects. Do not edit it here;
+anything project-specific belongs on this page instead.
+
 **Folder = state**, and the folder wins if a Status field disagrees with it.
 
 This project uses the policy's **5-folder variant**, adopted 2026-08-24:
@@ -12,9 +15,16 @@ This project uses the policy's **5-folder variant**, adopted 2026-08-24:
 | [`done/`](done/) | Implemented |
 | [`archive/`](archive/) | Withdrawn or superseded (currently empty) |
 
-`accepted/` exists here because design and implementation are separate roles:
-"the owner approved this design" is a distinct, dated event from "the
-implementer finished." See the policy's project adoption note.
+`accepted/` exists here because the condition the policy names is met: design
+and implementation are genuinely separate roles. The architect writes and
+revises RFCs and issues handoffs; a separate dev team implements them; and "the
+owner approved this design" is a distinct, dated event from "the implementer
+finished." Under the 4-folder layout that distinction had no home, so
+approved-but-unbuilt RFCs sat in `proposed/` carrying an in-file qualifier that
+contradicted their folder.
+
+The policy warns that `accepted/` is only worth having if it does not sit empty.
+It held three RFCs on the day the variant was adopted.
 
 `handoffs/` holds companion execution documents and is deliberately **not**
 split by state — a handoff inherits its status from its RFC's folder.
