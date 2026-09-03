@@ -132,6 +132,17 @@ Assert **`document.activeElement`**, not merely that a class or attribute
 changed. RFC-042's defects lived in focus, and a test that checks the styling
 that usually accompanies focus will pass when focus is wrong.
 
+**Corrected 2026-09-03 — contract 1 is the exception, and this rule as written
+sent it down a dead end.** A synthetic `Tab` cannot drive focus at all:
+script-dispatched events do not get browser default actions, and Tab
+advancement is one. Contract 1's mechanism is the **roving-tabindex invariant,
+asserted live after each of contracts 2–5's key presses** — exactly one
+`[data-tree-row]` at `tabindex="0"`, every other at `"-1"`, that row being the
+active row and moving with it, and that row `.focus()`-able. See RFC-044 §8 A.1.
+
+For contract 1 the attribute *is* the contract; the rule above stands unchanged
+for the other six. My error, found by the dev team while designing contract 1.
+
 ## 6. Landing it — non-blocking, with a dated promotion · **[Binding]**
 
 Per RFC-044 §10: land the new step **non-blocking** (`continue-on-error: true`),
