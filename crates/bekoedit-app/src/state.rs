@@ -117,11 +117,34 @@ pub fn create_app_state(
     settings: &AppSettings,
 ) -> (AppState, Option<ReopenFailureNotice>) {
     let mut state = persistence.create_app_state(AUTOSAVE_DEBOUNCE_MS);
-    let recents = RecentWorkspaces::load(&persistence.recents_file());
+    let mut recents = RecentWorkspaces::load(&persistence.recents_file());
     let now = now_secs();
     let decision = decide_launch_workspace(settings.reopen_last_workspace, &recents, |path| {
         state.open_workspace(path, now).is_ok()
     });
+    // A successful open_workspace() call already saved *its own*
+    // self.recents to disk -- which AppState::new_with_history pruned of
+    // missing entries at construction (RFC-003, unconditional, untouched
+    // by this feature). Before this feature existed, that pruned copy
+    // never reached disk unless a user opened a workspace themselves;
+    // now it happens on every launch, silently destroying any other
+    // temporarily-unavailable entry's persisted record (review finding).
+    // Repair it: re-apply the same record() this open just made, but to
+    // `recents` as loaded before construction's pruning, and overwrite
+    // the file with that -- leaving it as it would be had this feature
+    // not run, apart from the reopened entry's own updated timestamp.
+    // `state.recents` (in-memory, pruned) is deliberately left alone --
+    // touching it is RFC-003 territory this feature does not own.
+    if let (LaunchWorkspaceDecision::Opened, Some(workspace)) =
+        (&decision, state.workspace.as_ref())
+    {
+        recents.record(
+            workspace.root_path.clone(),
+            workspace.display_name.clone(),
+            now,
+        );
+        let _ = recents.save(&persistence.recents_file());
+    }
     let notice = match decision {
         LaunchWorkspaceDecision::Failed { display_name } => {
             Some(ReopenFailureNotice { display_name })

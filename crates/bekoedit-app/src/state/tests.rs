@@ -173,6 +173,86 @@ fn isolated_persistence_unusable_recent_falls_through_to_start_screen_with_a_not
     assert_eq!(recents_after.entries[0].root_path, missing_workspace);
 }
 
+// ─── Review finding: a successful reopen must not persist AppState's ──────
+// already-pruned in-memory recents list, which would silently destroy any
+// OTHER temporarily-unavailable entry (e.g. an unmounted volume) on every
+// launch -- a regression this feature introduced, not pre-existing
+// behaviour it surfaced.
+
+fn seed_two_isolated_recents(
+    root: &std::path::Path,
+    usable: &std::path::Path,
+    missing: &std::path::Path,
+) -> AppPersistence {
+    let persistence = AppPersistence::isolated(root.to_path_buf());
+    let mut seeded = RecentWorkspaces::default();
+    // record() inserts at front, so seed missing first: usable ends up
+    // as entries[0], the one this feature will attempt.
+    seeded.record(missing.to_path_buf(), "missing".to_string(), 1);
+    seeded.record(usable.to_path_buf(), "usable-workspace".to_string(), 2);
+    seeded.save(&persistence.recents_file()).unwrap();
+    persistence
+}
+
+#[test]
+fn a_temporarily_missing_recent_survives_a_successful_auto_reopen() {
+    let parent = tempfile::tempdir().unwrap();
+    let root = parent.path().join("isolated");
+    std::fs::create_dir(&root).unwrap();
+    let usable = parent.path().join("usable-workspace");
+    std::fs::create_dir(&usable).unwrap();
+    // Never created on disk -- stands in for an unmounted volume.
+    let missing = parent.path().join("does-not-exist");
+    let persistence = seed_two_isolated_recents(&root, &usable, &missing);
+
+    let settings = AppSettings {
+        reopen_last_workspace: true,
+        ..Default::default()
+    };
+
+    let (state, notice) = create_app_state(&persistence, &settings);
+    assert!(notice.is_none());
+    assert!(
+        state.workspace.is_some(),
+        "the usable head must have opened for this test to mean anything"
+    );
+
+    let recents_after = RecentWorkspaces::load(&persistence.recents_file());
+    assert!(
+        recents_after.entries.iter().any(|e| e.root_path == missing),
+        "a temporarily-missing recent must survive a *successful* \
+         auto-reopen, not only a failed one: {:?}",
+        recents_after.entries
+    );
+}
+
+#[test]
+fn control_disabled_setting_never_touches_the_missing_entry() {
+    // Same fixture as above, but the setting is off -- the pre-RFC-043
+    // baseline. Without this control the test above proves nothing: it
+    // would pass just as well if this crate never touched recents at
+    // all, not because the fix actually repairs what open_workspace's
+    // own save does.
+    let parent = tempfile::tempdir().unwrap();
+    let root = parent.path().join("isolated");
+    std::fs::create_dir(&root).unwrap();
+    let usable = parent.path().join("usable-workspace");
+    std::fs::create_dir(&usable).unwrap();
+    let missing = parent.path().join("does-not-exist");
+    let persistence = seed_two_isolated_recents(&root, &usable, &missing);
+
+    let settings = AppSettings {
+        reopen_last_workspace: false,
+        ..Default::default()
+    };
+
+    let (state, _notice) = create_app_state(&persistence, &settings);
+    assert!(state.workspace.is_none());
+
+    let recents_after = RecentWorkspaces::load(&persistence.recents_file());
+    assert!(recents_after.entries.iter().any(|e| e.root_path == missing));
+}
+
 #[test]
 fn pending_recovery_still_wins_over_an_auto_opened_workspace() {
     let parent = tempfile::tempdir().unwrap();
