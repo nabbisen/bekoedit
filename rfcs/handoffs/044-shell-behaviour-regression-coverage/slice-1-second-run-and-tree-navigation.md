@@ -236,8 +236,20 @@ tests cannot.
 ## 13. CI and merge
 
 Branch, commit, push, draft PR — pre-authorized. Report the run URL. Merging,
-tags and releases require explicit instruction. If `main` has moved, report the
-topology and stop.
+tags and releases require explicit instruction.
+
+**If `main` moves, report the topology — and whether to stop depends on what
+moved · [Binding], refined 2026-09-04.**
+
+- **It touches a file this slice touches** → stop and report, as before.
+- **It does not** (a docs, RFC or governance commit) → merge `origin/main` into
+  your branch, say so in the final package, and keep going. Do not stall a slice
+  on a commit that cannot conflict with it.
+
+**Merge, never rebase.** This project integrates by fast-forward so the
+CI-verified SHA is the SHA that lands on `main`. Merging `origin/main` in keeps
+it an ancestor, so the final fast-forward still works; rebasing would rewrite
+pushed, CI-verified commits and break that chain.
 
 Commit scopes: `refactor:` for §3's extraction, `test:` for the run and its
 coverage, `ci:` for the workflow step. Split as they split cleanly — the
