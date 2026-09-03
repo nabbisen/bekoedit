@@ -60,7 +60,17 @@ fn run_mode_requires_exact_webview_profile_argument() {
             path.clone().into_os_string()
         ])
         .unwrap(),
-        RunMode::WebViewSmoke(path)
+        RunMode::WebViewSmoke(path.clone())
+    );
+
+    assert!(RunMode::parse([OsString::from("--webview-key-spike")]).is_err());
+    assert_eq!(
+        RunMode::parse([
+            OsString::from("--webview-key-spike"),
+            path.clone().into_os_string()
+        ])
+        .unwrap(),
+        RunMode::WebViewKeySpike(path)
     );
 }
 
@@ -118,7 +128,7 @@ fn smoke_run_maps_no_result_and_exact_success_to_process_codes() {
     std::fs::create_dir(&failed_root).unwrap();
     let failed = SmokeRun {
         profile_root: Some(failed_root.clone()),
-        terminal: Arc::new(SmokeTerminal::default()),
+        kind: SmokeRunKind::Smoke(Arc::new(SmokeTerminal::default())),
     };
     assert_eq!(failed.finalize_exit_code(), 1);
     assert!(!failed_root.exists());
@@ -129,7 +139,7 @@ fn smoke_run_maps_no_result_and_exact_success_to_process_codes() {
     terminal.accept(&successful_result()).unwrap();
     let passed = SmokeRun {
         profile_root: Some(passed_root.clone()),
-        terminal,
+        kind: SmokeRunKind::Smoke(terminal),
     };
     assert_eq!(passed.finalize_exit_code(), 0);
     assert!(!passed_root.exists());
@@ -142,7 +152,7 @@ fn smoke_run_drop_cleans_profile_before_event_loop_initialization() {
     std::fs::create_dir(&profile_root).unwrap();
     let run = SmokeRun {
         profile_root: Some(profile_root.clone()),
-        terminal: Arc::new(SmokeTerminal::default()),
+        kind: SmokeRunKind::Smoke(Arc::new(SmokeTerminal::default())),
     };
     drop(run);
     assert!(!profile_root.exists());
