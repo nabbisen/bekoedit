@@ -205,7 +205,14 @@ return (async () => {
       // outer deadline (the Rust-side evaluator timeout) shorter than the
       // scan can be relied on to finish within.
       state.stage = "expand_enter";
-      if (timedOut()) throw new Error("timed out at expand_enter");
+      if (timedOut()) {
+        throw new Error(
+          `timed out at expand_enter: row count is ${rows().length} (expected ${
+            (state.expandBeforeCount ?? "?") + 1
+          }), row 0 aria-expanded=${rows()[0]?.getAttribute("aria-expanded")}, ` +
+            `activeElement is row ${rows().findIndex((row) => row === document.activeElement)}`,
+        );
+      }
       if (!state.expandDispatched) {
         state.expandBeforeCount = rows().length;
         dispatchKey(rows()[0], "ArrowRight");
