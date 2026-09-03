@@ -1,11 +1,12 @@
 # RFC-043: Reopen Last Workspace on Launch
 
 **Project:** bekoedit
-**Status:** Accepted — approved for implementation by the project owner
-2026-08-04. Not yet built. Moved from `proposed/` to `accepted/` on 2026-08-24
-when this project adopted the 5-folder variant, which gives "the owner approved
-this design" a folder of its own; the qualifier this line used to carry is now
-the folder's job.
+**Status:** Implemented — merged to `main` 2026-09-03 as `2afe1df`
+(fast-forward, PR #19). Not yet in a tagged release; it ships with the next one.
+Accepted 2026-08-04, implemented in two commits: `c9af754` and `2afe1df`, the
+latter repairing a review finding — a successful auto-reopen was persisting
+`AppState`'s construction-pruned recents list, silently destroying entries for
+temporarily-unavailable volumes.
 **Handoff:** [`handoffs/043-reopen-last-workspace-on-launch/`](../handoffs/043-reopen-last-workspace-on-launch/implementation-handoff.md)
 **Track:** Workspace lifecycle
 **Priority:** Medium

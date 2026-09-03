@@ -91,9 +91,17 @@ to `done/` when the work ships.
 
 | RFC | Title | Notes |
 |-----|-------|-------|
-| RFC-043 | [Reopen last workspace on launch](accepted/RFC-043-reopen-last-workspace-on-launch.md) | Accepted 2026-08-04; not yet built. Handoff ready: [`handoffs/043-reopen-last-workspace-on-launch/`](handoffs/043-reopen-last-workspace-on-launch/implementation-handoff.md) |
-| RFC-044 | [Shell behaviour regression coverage](accepted/RFC-044-shell-behaviour-regression-coverage.md) | Accepted 2026-08-24, all §14 questions resolved — reproducible coverage for RFC-042's keyboard contracts. Its slices are blocked on RFC-043 shipping (required dependency); the §7 JavaScript relocation is a prerequisite task outside the RFC and is dispatchable now |
+| RFC-044 | [Shell behaviour regression coverage](accepted/RFC-044-shell-behaviour-regression-coverage.md) | Accepted 2026-08-24, all §14 questions resolved — reproducible coverage for RFC-042's keyboard contracts. **Unblocked** 2026-09-03 — RFC-043 merged. Its slices are startable; the §7 JavaScript relocation is a prerequisite task outside the RFC and was never blocked |
 | RFC-045 | [Release artifact portability and completeness](accepted/RFC-045-release-artifact-portability-and-completeness.md) | Accepted 2026-08-17. Slices 1–2 shipped to `main`: the platform scripts now ship in every archive, and a cross-distribution `ldd` check gates both pull requests and the publish job. Slice 3 (Linux portability) is open — see its §10 Q1. Handoffs: [`handoffs/045-release-artifact-portability-and-completeness/`](handoffs/045-release-artifact-portability-and-completeness/) |
+
+## Implemented — merged to `main`, not yet released (`done/`)
+
+Shipped to `main` and awaiting the next tag. They move into a version section
+above when that release goes out.
+
+| RFC | Title | Notes |
+|-----|-------|-------|
+| RFC-043 | [Reopen last workspace on launch](done/RFC-043-reopen-last-workspace-on-launch.md) | Merged 2026-09-03 (`2afe1df`, PR #19). The setting existed since v0.2.0 and controlled nothing; it now opens the most recent workspace before first render, never a document, never falling through to an older entry. Unblocks RFC-044. Handoff: [`handoffs/043-reopen-last-workspace-on-launch/`](handoffs/043-reopen-last-workspace-on-launch/implementation-handoff.md) |
 
 ## Open — under review or deferred (`proposed/`)
 

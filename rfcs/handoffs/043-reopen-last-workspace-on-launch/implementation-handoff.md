@@ -1,7 +1,8 @@
 # RFC-043 implementation handoff — reopen last workspace on launch
 
-**Governing RFC:** [RFC-043](../../accepted/RFC-043-reopen-last-workspace-on-launch.md)
-**Status:** inherited from RFC-043 (Accepted — approved for implementation by the project owner 2026-08-04)
+**Governing RFC:** [RFC-043](../../done/RFC-043-reopen-last-workspace-on-launch.md)
+**Status:** inherited from RFC-043 (Implemented — merged 2026-09-03, `2afe1df`).
+Historical execution guide.
 **Baseline:** `main` at `3b4aa40` (refreshed 2026-08-24; originally written
 against `91760c7`). The four code references in §1 were re-verified against this
 baseline on 2026-08-24 and all still hold exactly — `settings.rs:23`, `:39`,

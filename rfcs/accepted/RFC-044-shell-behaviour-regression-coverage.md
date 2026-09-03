@@ -3,13 +3,15 @@
 **Project:** bekoedit
 **Status:** Accepted — by the project owner 2026-08-24, with all three §14
 questions resolved the same day. Not yet built.
-**The RFC's own slices are blocked on RFC-043 shipping** — a required dependency
-(§6), accepted 2026-08-04 and not yet built. The §7 JavaScript relocation is a
-**prerequisite task outside this RFC** (§14 Q2) and is not blocked by RFC-043.
+**Unblocked 2026-09-03**: RFC-043, the required dependency (§6), merged to
+`main` as `2afe1df`. A seeded `Isolated` profile now lands in the shell rather
+than the Start Screen, which is the seam this RFC's driver needs. The §7
+JavaScript relocation remains a **prerequisite task outside this RFC**
+(§14 Q2) and was never blocked by RFC-043.
 **Track:** Verification infrastructure
 **Priority:** High
 **Date:** 2026-08-12
-**Depends on:** [RFC-043](./RFC-043-reopen-last-workspace-on-launch.md) — required, see §6
+**Depends on:** [RFC-043](../done/RFC-043-reopen-last-workspace-on-launch.md) — required, see §6. **Satisfied** 2026-09-03.
 **Related RFCs:** [RFC-041](../done/RFC-041-source-editor-lifecycle-and-synchronization-controller.md), [RFC-042](../done/RFC-042-shell-interaction-focus-and-accessibility-conformance.md), [RFC-025](../done/RFC-025-release-ci-smoke-tests-and-build-verification.md)
 
 ---
