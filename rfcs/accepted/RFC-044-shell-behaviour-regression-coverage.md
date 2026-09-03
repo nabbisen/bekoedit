@@ -207,6 +207,24 @@ Two things the implementation must get right:
 A and B are the bulk of the untested surface and should land first. C–F are
 follow-on slices under this RFC.
 
+**Amended 2026-09-03 — A and B are split into separate slices.** Most of slice 1
+is not coverage at all: it is a second run, an extraction of the RFC-041
+evaluator-pin transport so both runs share one audited copy, and a CI gate with
+a promotion schedule. Carrying two contract families through the first exercise
+of all that machinery makes a failure harder to localise in proportion. A alone
+proves the vehicle — seven sub-contracts, roving tabindex, a real focus
+assertion — and B follows immediately against a vehicle that has already run
+green.
+
+Slices are therefore: **1 = the second run + A**, **2 = B**, **3 = C–F** (F in
+scope per §14 Q3). Handoff for slice 1:
+[`handoffs/044-shell-behaviour-regression-coverage/slice-1-second-run-and-tree-navigation.md`](../handoffs/044-shell-behaviour-regression-coverage/slice-1-second-run-and-tree-navigation.md).
+
+**One assumption gates all of it**, and slice 1 must prove it before anything
+else: that a synthetic `KeyboardEvent` dispatched by the driver reaches a Dioxus
+`onkeydown` handler in a real WebView. The existing driver only ever dispatches
+`MouseEvent`. If that does not hold, §8 A–F all change shape.
+
 ## 9. Cross-OS
 
 The regression runs on Linux only. WebView2 and WKWebView are unverified, and
