@@ -231,6 +231,14 @@ jobs:
             env NO_AT_BRIDGE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
             ./target/release/bekoedit \
             --webview-smoke "$SMOKE_PARENT/bekoedit-webview-smoke-profile"
+      - name: RFC-044 §2 spike -- synthetic keydown reaches a Dioxus handler
+        run: |
+          SPIKE_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-key-spike.XXXXXX")"
+          trap 'rm -rf "$SPIKE_PARENT"' EXIT
+          timeout 60 xvfb-run -a -s "-screen 0 1280x1024x24" \
+            env NO_AT_BRIDGE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
+            ./target/release/bekoedit \
+            --webview-key-spike "$SPIKE_PARENT/bekoedit-webview-smoke-profile"
       - name: Check binary links and size
         run: |
           file target/release/bekoedit
