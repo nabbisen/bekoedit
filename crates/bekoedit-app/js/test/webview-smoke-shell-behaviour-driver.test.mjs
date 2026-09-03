@@ -49,6 +49,30 @@ function installEditorHost(tree) {
   tree.setElement('[data-source-focus-launch-region="text"]', new FakeElement());
 }
 
+/** expand_enter is multi-call and pollable (dispatch, confirm expand +
+ * dispatch enter, confirm enter) because expanding an unscanned directory
+ * is real async work (RFC-044 slice-1, expand-timeout fix). Against the
+ * fake tree, whose mutations are synchronous, that still takes exactly
+ * three calls -- each `document::eval` round-trip only checks and acts
+ * once. Returns the final report plus the `{exchangeId, phase}` to release
+ * from the next phase. */
+async function driveExpandEnter(startExchangeId, release) {
+  await exchange("expand_enter", startExchangeId, release);
+  await exchange("expand_enter", startExchangeId + 1, {
+    exchangeId: startExchangeId,
+    phase: "expand_enter",
+  });
+  const report = await exchange("expand_enter", startExchangeId + 2, {
+    exchangeId: startExchangeId + 1,
+    phase: "expand_enter",
+  });
+  return {
+    report,
+    nextExchangeId: startExchangeId + 3,
+    release: { exchangeId: startExchangeId + 2, phase: "expand_enter" },
+  };
+}
+
 test(
   "down_up: focuses the first row directly, then Down/Down/Up/Up moves and the tab-stop invariant holds throughout",
   { concurrency: false },
@@ -99,28 +123,38 @@ test(
 );
 
 test(
-  "expand_enter: Right expands (row count grows, focus stays), Right again enters the child",
+  "expand_enter: dispatch is pending, expand confirmation is pending, entering the child is progress",
   { concurrency: false },
   async () => {
     const tree = new FakeTree();
     tree.install();
     await exchange("down_up", 1);
 
-    const report = await exchange("expand_enter", 2, { exchangeId: 1, phase: "down_up" });
+    const dispatched = await exchange("expand_enter", 2, { exchangeId: 1, phase: "down_up" });
+    assert.equal(dispatched.kind, "pending");
+
+    const expandConfirmed = await exchange("expand_enter", 3, {
+      exchangeId: 2,
+      phase: "expand_enter",
+    });
+    assert.equal(expandConfirmed.kind, "pending");
+    assert.equal(tree.nodes[0].isExpanded, true, "expand must already be confirmed by the second call");
+
+    const report = await exchange("expand_enter", 4, { exchangeId: 3, phase: "expand_enter" });
 
     assert.equal(report.kind, "progress");
     assert.equal(report.milestone, "expand_entered");
-    assert.equal(tree.nodes[0].isExpanded, true);
     assert.equal(tree.activeIndex, 1, "the second Right must move focus into the child row");
   },
 );
 
 test(
-  "expand_enter: a directory that never expands times out naming the condition",
+  "expand_enter: a directory that never expands times out naming the phase",
   { concurrency: false },
   async () => {
     const tree = new FakeTree();
     tree.install();
+    tree.setTime(0);
     // Sabotage: ArrowRight on a directory normally sets isExpanded; freeze it.
     const realHandleKey = tree.handleKey.bind(tree);
     tree.handleKey = (index, key) => {
@@ -129,11 +163,17 @@ test(
     };
     await exchange("down_up", 1);
 
-    const report = await exchange("expand_enter", 2, { exchangeId: 1, phase: "down_up" });
+    // First call: dispatches ArrowRight (a no-op here), sets the deadline, pending.
+    const dispatched = await exchange("expand_enter", 2, { exchangeId: 1, phase: "down_up" });
+    assert.equal(dispatched.kind, "pending");
+    const { deadline } = window.__bkWebViewShellBehaviourState;
+
+    tree.setTime(deadline); // timedOut() uses >=, so exactly the deadline counts
+    const report = await exchange("expand_enter", 3, { exchangeId: 2, phase: "expand_enter" });
 
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, false);
-    assert.match(report.result.error, /timed out waiting for: ArrowRight to expand the directory/);
+    assert.match(report.result.error, /timed out at expand_enter/);
   },
 );
 
@@ -144,9 +184,12 @@ test(
     const tree = new FakeTree();
     tree.install();
     await exchange("down_up", 1);
-    await exchange("expand_enter", 2, { exchangeId: 1, phase: "down_up" });
+    const { nextExchangeId, release } = await driveExpandEnter(2, {
+      exchangeId: 1,
+      phase: "down_up",
+    });
 
-    const report = await exchange("collapse_ascend", 3, { exchangeId: 2, phase: "expand_enter" });
+    const report = await exchange("collapse_ascend", nextExchangeId, release);
 
     assert.equal(report.kind, "progress");
     assert.equal(report.milestone, "collapse_ascended");
@@ -162,10 +205,13 @@ test(
     const tree = new FakeTree();
     tree.install();
     await exchange("down_up", 1);
-    await exchange("expand_enter", 2, { exchangeId: 1, phase: "down_up" });
-    await exchange("collapse_ascend", 3, { exchangeId: 2, phase: "expand_enter" });
+    const expandEnter = await driveExpandEnter(2, { exchangeId: 1, phase: "down_up" });
+    await exchange("collapse_ascend", expandEnter.nextExchangeId, expandEnter.release);
 
-    const report = await exchange("home_end", 4, { exchangeId: 3, phase: "collapse_ascend" });
+    const report = await exchange("home_end", expandEnter.nextExchangeId + 1, {
+      exchangeId: expandEnter.nextExchangeId,
+      phase: "collapse_ascend",
+    });
 
     assert.equal(report.kind, "progress");
     assert.equal(report.milestone, "home_end_reached");
@@ -180,11 +226,17 @@ test(
     const tree = new FakeTree();
     tree.install();
     await exchange("down_up", 1);
-    await exchange("expand_enter", 2, { exchangeId: 1, phase: "down_up" });
-    await exchange("collapse_ascend", 3, { exchangeId: 2, phase: "expand_enter" });
-    await exchange("home_end", 4, { exchangeId: 3, phase: "collapse_ascend" });
+    const expandEnter = await driveExpandEnter(2, { exchangeId: 1, phase: "down_up" });
+    await exchange("collapse_ascend", expandEnter.nextExchangeId, expandEnter.release);
+    await exchange("home_end", expandEnter.nextExchangeId + 1, {
+      exchangeId: expandEnter.nextExchangeId,
+      phase: "collapse_ascend",
+    });
 
-    const report = await exchange("non_openable", 5, { exchangeId: 4, phase: "home_end" });
+    const report = await exchange("non_openable", expandEnter.nextExchangeId + 2, {
+      exchangeId: expandEnter.nextExchangeId + 1,
+      phase: "home_end",
+    });
 
     assert.equal(report.kind, "progress");
     assert.equal(report.milestone, "non_openable_reachable");
@@ -202,14 +254,20 @@ test(
     // Sabotage: make the non-openable row activate like an openable file.
     tree.nodes[2].isOpenable = true;
     await exchange("down_up", 1);
-    await exchange("expand_enter", 2, { exchangeId: 1, phase: "down_up" });
-    await exchange("collapse_ascend", 3, { exchangeId: 2, phase: "expand_enter" });
-    await exchange("home_end", 4, { exchangeId: 3, phase: "collapse_ascend" });
+    const expandEnter = await driveExpandEnter(2, { exchangeId: 1, phase: "down_up" });
+    await exchange("collapse_ascend", expandEnter.nextExchangeId, expandEnter.release);
+    await exchange("home_end", expandEnter.nextExchangeId + 1, {
+      exchangeId: expandEnter.nextExchangeId,
+      phase: "collapse_ascend",
+    });
 
     // aria-disabled is driven by isDir||isOpenable, so making it openable
     // also makes it report non-disabled -- the driver must catch *that*,
     // not silently proceed to open it.
-    const report = await exchange("non_openable", 5, { exchangeId: 4, phase: "home_end" });
+    const report = await exchange("non_openable", expandEnter.nextExchangeId + 2, {
+      exchangeId: expandEnter.nextExchangeId + 1,
+      phase: "home_end",
+    });
 
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, false);
@@ -226,25 +284,41 @@ test(
     tree.setTime(0);
     installEditorHost(tree);
     await exchange("down_up", 1);
-    await exchange("expand_enter", 2, { exchangeId: 1, phase: "down_up" });
-    await exchange("collapse_ascend", 3, { exchangeId: 2, phase: "expand_enter" });
-    await exchange("home_end", 4, { exchangeId: 3, phase: "collapse_ascend" });
-    await exchange("non_openable", 5, { exchangeId: 4, phase: "home_end" });
+    const expandEnter = await driveExpandEnter(2, { exchangeId: 1, phase: "down_up" });
+    await exchange("collapse_ascend", expandEnter.nextExchangeId, expandEnter.release);
+    await exchange("home_end", expandEnter.nextExchangeId + 1, {
+      exchangeId: expandEnter.nextExchangeId,
+      phase: "collapse_ascend",
+    });
+    await exchange("non_openable", expandEnter.nextExchangeId + 2, {
+      exchangeId: expandEnter.nextExchangeId + 1,
+      phase: "home_end",
+    });
+    const enterOpensId = expandEnter.nextExchangeId + 3;
 
     // First call: dispatches ArrowUp + Enter, view not mounted yet -> pending.
-    const pendingReport = await exchange("enter_opens", 6, { exchangeId: 5, phase: "non_openable" });
+    const pendingReport = await exchange("enter_opens", enterOpensId, {
+      exchangeId: expandEnter.nextExchangeId + 2,
+      phase: "non_openable",
+    });
     assert.equal(pendingReport.kind, "pending");
     assert.equal(tree.activeIndex, 1, "must have moved back onto the markdown row");
     assert.equal(tree.openedPath, "a.md");
 
     // Second call: still not ready (view exists but unfocused).
     tree.setEditorView(new FakeEditorView({ connected: true, hasFocus: false }));
-    const stillPending = await exchange("enter_opens", 7, { exchangeId: 6, phase: "enter_opens" });
+    const stillPending = await exchange("enter_opens", enterOpensId + 1, {
+      exchangeId: enterOpensId,
+      phase: "enter_opens",
+    });
     assert.equal(stillPending.kind, "pending");
 
     // Third call: ready.
     tree.setEditorView(new FakeEditorView({ connected: true, hasFocus: true }));
-    const finalReport = await exchange("enter_opens", 8, { exchangeId: 7, phase: "enter_opens" });
+    const finalReport = await exchange("enter_opens", enterOpensId + 2, {
+      exchangeId: enterOpensId + 1,
+      phase: "enter_opens",
+    });
 
     assert.equal(finalReport.kind, "terminal");
     assert.equal(finalReport.result.ok, true);
@@ -269,18 +343,31 @@ test(
     tree.setTime(0);
     installEditorHost(tree);
     await exchange("down_up", 1);
-    await exchange("expand_enter", 2, { exchangeId: 1, phase: "down_up" });
-    await exchange("collapse_ascend", 3, { exchangeId: 2, phase: "expand_enter" });
-    await exchange("home_end", 4, { exchangeId: 3, phase: "collapse_ascend" });
-    await exchange("non_openable", 5, { exchangeId: 4, phase: "home_end" });
-    await exchange("enter_opens", 6, { exchangeId: 5, phase: "non_openable" });
+    const expandEnter = await driveExpandEnter(2, { exchangeId: 1, phase: "down_up" });
+    await exchange("collapse_ascend", expandEnter.nextExchangeId, expandEnter.release);
+    await exchange("home_end", expandEnter.nextExchangeId + 1, {
+      exchangeId: expandEnter.nextExchangeId,
+      phase: "collapse_ascend",
+    });
+    await exchange("non_openable", expandEnter.nextExchangeId + 2, {
+      exchangeId: expandEnter.nextExchangeId + 1,
+      phase: "home_end",
+    });
+    const enterOpensId = expandEnter.nextExchangeId + 3;
+    await exchange("enter_opens", enterOpensId, {
+      exchangeId: expandEnter.nextExchangeId + 2,
+      phase: "non_openable",
+    });
     // The fake clock also advances on every requestAnimationFrame tick
     // (real frames take real time), so the deadline set by this call is
     // not exactly "0 + 15000" -- read what the driver actually recorded.
     const { deadline } = window.__bkWebViewShellBehaviourState;
 
     tree.setTime(deadline); // timedOut() uses >=, so exactly the deadline counts
-    const report = await exchange("enter_opens", 7, { exchangeId: 6, phase: "enter_opens" });
+    const report = await exchange("enter_opens", enterOpensId + 1, {
+      exchangeId: enterOpensId,
+      phase: "enter_opens",
+    });
 
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, false);

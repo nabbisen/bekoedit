@@ -197,36 +197,44 @@ return (async () => {
       state.phase = "expand_enter";
       outgoing = { kind: "progress", milestone: "down_up_moved" };
     } else if (requestedPhase === "expand_enter") {
-      state.stage = "expand_enter";
-      const before = rows().length;
-      dispatchKey(rows()[0], "ArrowRight");
       // Expanding an unscanned directory triggers a real, async filesystem
       // scan through the tree's own coroutine (on_toggled -> ScanRequest ->
-      // background thread -> on_loaded merge), not just a synchronous
-      // state flip -- give it real time, the same order of magnitude as
-      // RFC-041's own async-completion waits (driver.js's 15s edit-to-
-      // preview deadline).
-      await waitFor(
-        () => rows().length === before + 1,
-        "ArrowRight to expand the directory (one more row)",
-        10000,
-      );
-      if (rows()[0].getAttribute("aria-expanded") !== "true") {
-        throw new Error("expanded row did not report aria-expanded=true");
+      // background thread -> on_loaded merge) -- not a synchronous state
+      // flip, so this phase is multi-call and pollable (like enter_opens),
+      // not a single blocking wait: a document::eval call has its own
+      // outer deadline (the Rust-side evaluator timeout) shorter than the
+      // scan can be relied on to finish within.
+      state.stage = "expand_enter";
+      if (timedOut()) throw new Error("timed out at expand_enter");
+      if (!state.expandDispatched) {
+        state.expandBeforeCount = rows().length;
+        dispatchKey(rows()[0], "ArrowRight");
+        state.expandDispatched = true;
+        state.deadline = performance.now() + 10000;
+        outgoing = { kind: "pending" };
+      } else if (!state.expandConfirmed) {
+        if (rows().length !== state.expandBeforeCount + 1) {
+          outgoing = { kind: "pending" };
+        } else {
+          if (rows()[0].getAttribute("aria-expanded") !== "true") {
+            throw new Error("expanded row did not report aria-expanded=true");
+          }
+          if (document.activeElement !== rows()[0]) {
+            throw new Error("expanding must not move focus off the directory row");
+          }
+          checkTabStopInvariant(0);
+          state.expandConfirmed = true;
+          dispatchKey(rows()[0], "ArrowRight");
+          outgoing = { kind: "pending" };
+        }
+      } else if (document.activeElement !== rows()[1]) {
+        outgoing = { kind: "pending" };
+      } else {
+        checkTabStopInvariant(1);
+        state.milestones.push("expand_entered");
+        state.phase = "collapse_ascend";
+        outgoing = { kind: "progress", milestone: "expand_entered" };
       }
-      if (document.activeElement !== rows()[0]) {
-        throw new Error("expanding must not move focus off the directory row");
-      }
-      checkTabStopInvariant(0);
-      dispatchKey(rows()[0], "ArrowRight");
-      await waitFor(
-        () => document.activeElement === rows()[1],
-        "ArrowRight to enter the expanded directory",
-      );
-      checkTabStopInvariant(1);
-      state.milestones.push("expand_entered");
-      state.phase = "collapse_ascend";
-      outgoing = { kind: "progress", milestone: "expand_entered" };
     } else if (requestedPhase === "collapse_ascend") {
       state.stage = "collapse_ascend";
       dispatchKey(rows()[1], "ArrowLeft");
