@@ -14,11 +14,11 @@ use self::protocol::*;
 use self::transport::{MessageKind, PhaseCompletion, PhaseMessage, SMOKE_PROTOCOL_VERSION};
 use self::transport::{PinnedExchange, run_driver_phase as run_transport_phase};
 
-mod key_spike;
 mod protocol;
+mod shell_behaviour;
 mod transport;
 
-pub use key_spike::WebViewKeySpikeDriver;
+pub use shell_behaviour::WebViewShellBehaviourDriver;
 
 const PROFILE_PREFIX: &str = "bekoedit-webview-smoke-";
 const MARKER: &str = "RFC041_WEBVIEW_SMOKE_MARKER";
@@ -42,11 +42,10 @@ pub enum RunMode {
     Normal,
     HeadlessSmoke,
     WebViewSmoke(PathBuf),
-    /// RFC-044 §2's gating spike: does a synthetic `KeyboardEvent` reach a
-    /// Dioxus `onkeydown` handler in a real WebView? Deliberately separate
-    /// from `WebViewSmoke` -- this proves one fact and is not the second
-    /// run's architecture (handoff §2).
-    WebViewKeySpike(PathBuf),
+    /// RFC-044 slice-1 §4: the second run, covering §8 A's tree-navigation
+    /// contracts (and, in later slices, B-F) -- a separate profile, driver
+    /// and phase set from `WebViewSmoke`'s RFC-041 lifecycle regression.
+    WebViewShellBehaviour(PathBuf),
 }
 
 impl RunMode {
@@ -55,13 +54,16 @@ impl RunMode {
         if args.iter().any(|arg| arg == "--headless-smoke") {
             return Ok(Self::HeadlessSmoke);
         }
-        if let Some(index) = args.iter().position(|arg| arg == "--webview-key-spike") {
+        if let Some(index) = args
+            .iter()
+            .position(|arg| arg == "--webview-shell-behaviour")
+        {
             if index != 0 || args.len() != 2 {
                 return Err(
-                    "--webview-key-spike requires exactly one profile-root argument".into(),
+                    "--webview-shell-behaviour requires exactly one profile-root argument".into(),
                 );
             }
-            return Ok(Self::WebViewKeySpike(PathBuf::from(&args[1])));
+            return Ok(Self::WebViewShellBehaviour(PathBuf::from(&args[1])));
         }
         let Some(index) = args.iter().position(|arg| arg == "--webview-smoke") else {
             return Ok(Self::Normal);
@@ -78,12 +80,12 @@ pub struct LaunchConfig {
     pub persistence: AppPersistence,
     pub webview_smoke: bool,
     terminal: Option<Arc<SmokeTerminal>>,
-    pub key_spike: Option<Arc<key_spike::KeySpikeTerminal>>,
+    pub shell_behaviour: Option<Arc<shell_behaviour::ShellBehaviourTerminal>>,
 }
 
 enum SmokeRunKind {
     Smoke(Arc<SmokeTerminal>),
-    KeySpike(Arc<key_spike::KeySpikeTerminal>),
+    ShellBehaviour(Arc<shell_behaviour::ShellBehaviourTerminal>),
 }
 
 pub struct SmokeRun {
@@ -95,7 +97,7 @@ impl SmokeRun {
     pub fn finalize_exit_code(mut self) -> i32 {
         let succeeded = match &self.kind {
             SmokeRunKind::Smoke(terminal) => terminal.succeeded(),
-            SmokeRunKind::KeySpike(terminal) => terminal.passed(),
+            SmokeRunKind::ShellBehaviour(terminal) => terminal.succeeded(),
         };
         self.cleanup();
         if succeeded {
@@ -135,7 +137,7 @@ pub fn prepare_launch(run_mode: RunMode) -> Result<Option<SmokeRun>, String> {
                 persistence: AppPersistence::platform_default(),
                 webview_smoke: false,
                 terminal: None,
-                key_spike: None,
+                shell_behaviour: None,
             },
             None,
         ),
@@ -146,7 +148,7 @@ pub fn prepare_launch(run_mode: RunMode) -> Result<Option<SmokeRun>, String> {
                 persistence: profile.persistence.clone(),
                 webview_smoke: true,
                 terminal: Some(terminal.clone()),
-                key_spike: None,
+                shell_behaviour: None,
             };
             let run = SmokeRun {
                 profile_root: Some(profile.root),
@@ -154,18 +156,18 @@ pub fn prepare_launch(run_mode: RunMode) -> Result<Option<SmokeRun>, String> {
             };
             (config, Some(run))
         }
-        RunMode::WebViewKeySpike(requested_root) => {
-            let profile = key_spike::prepare(&requested_root)?;
-            let terminal = Arc::new(key_spike::KeySpikeTerminal::default());
+        RunMode::WebViewShellBehaviour(requested_root) => {
+            let profile = shell_behaviour::prepare(&requested_root)?;
+            let terminal = Arc::new(shell_behaviour::ShellBehaviourTerminal::default());
             let config = LaunchConfig {
                 persistence: profile.persistence.clone(),
                 webview_smoke: false,
                 terminal: None,
-                key_spike: Some(terminal.clone()),
+                shell_behaviour: Some(terminal.clone()),
             };
             let run = SmokeRun {
                 profile_root: Some(profile.root),
-                kind: SmokeRunKind::KeySpike(terminal),
+                kind: SmokeRunKind::ShellBehaviour(terminal),
             };
             (config, Some(run))
         }

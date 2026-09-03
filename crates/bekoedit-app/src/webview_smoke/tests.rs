@@ -63,14 +63,14 @@ fn run_mode_requires_exact_webview_profile_argument() {
         RunMode::WebViewSmoke(path.clone())
     );
 
-    assert!(RunMode::parse([OsString::from("--webview-key-spike")]).is_err());
+    assert!(RunMode::parse([OsString::from("--webview-shell-behaviour")]).is_err());
     assert_eq!(
         RunMode::parse([
-            OsString::from("--webview-key-spike"),
+            OsString::from("--webview-shell-behaviour"),
             path.clone().into_os_string()
         ])
         .unwrap(),
-        RunMode::WebViewKeySpike(path)
+        RunMode::WebViewShellBehaviour(path)
     );
 }
 

@@ -37,7 +37,7 @@ use crate::state::{
     BacklinksOpen, ExplorerCollapsed, HistoryOpen, NewFileOpen, OpenMenu, OpenMenuState,
     OutlineOpen, SearchOpen, SettingsOpen, create_app_state, now_ms,
 };
-use crate::webview_smoke::{WebViewKeySpikeDriver, WebViewSmokeDriver, launch_config};
+use crate::webview_smoke::{WebViewShellBehaviourDriver, WebViewSmokeDriver, launch_config};
 
 pub(crate) const STYLE_SOURCE: &str = include_str!("../assets/style.css");
 pub(crate) const SHORTCUTS_SOURCE: &str = include_str!("../assets/shortcuts.js");
@@ -55,7 +55,7 @@ pub fn App() -> Element {
     let persistence = launch.persistence.clone();
     let settings = persistence.load_settings();
     let webview_smoke = launch.webview_smoke;
-    let webview_key_spike = launch.key_spike.is_some();
+    let webview_shell_behaviour = launch.shell_behaviour.is_some();
 
     use_context_provider(|| persistence.clone());
     // RFC-043: the workspace may already be open in `initial_state` when
@@ -252,8 +252,8 @@ pub fn App() -> Element {
         if webview_smoke {
             WebViewSmokeDriver {}
         }
-        if webview_key_spike {
-            WebViewKeySpikeDriver {}
+        if webview_shell_behaviour {
+            WebViewShellBehaviourDriver {}
         }
         ToastLayer {}
         div {
