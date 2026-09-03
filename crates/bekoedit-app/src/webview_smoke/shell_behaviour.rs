@@ -174,9 +174,10 @@ impl ShellBehaviourMachine {
                 }
             }
             MessageKind::Terminal => {
-                if self.current != ShellBehaviourPhase::EnterOpens {
-                    return Err("only enter_opens can return a terminal result".into());
-                }
+                // A terminal report can come from any phase, not only
+                // enter_opens -- the driver's try/catch turns a thrown
+                // error into a terminal failure at whichever phase raised
+                // it, exactly as driver.js's own three phases each can.
                 if message.milestone.is_some() || message.result.is_none() {
                     return Err("terminal driver message was malformed".into());
                 }
@@ -373,3 +374,6 @@ pub fn WebViewShellBehaviourDriver() -> Element {
     });
     rsx! {}
 }
+
+#[cfg(test)]
+mod tests;
