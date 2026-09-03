@@ -1,70 +1,9 @@
-use serde::{Deserialize, Serialize};
-
+use super::transport::{
+    MessageKind, PhaseKind, PhaseMessage, PinnedExchange, SMOKE_PROTOCOL_VERSION,
+};
 use super::{EXPECTED_MILESTONES, MARKER};
 
-pub(super) const SMOKE_PROTOCOL_VERSION: u32 = 2;
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct DriverResult {
-    pub(super) ok: bool,
-    pub(super) stage: String,
-    pub(super) marker: String,
-    pub(super) milestones: Vec<String>,
-    pub(super) error_toast_seen: bool,
-    pub(super) error: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) enum MessageKind {
-    Pending,
-    Progress,
-    Terminal,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct PhaseMessage {
-    pub(super) protocol_version: u32,
-    pub(super) exchange_id: u64,
-    pub(super) kind: MessageKind,
-    pub(super) phase: String,
-    pub(super) released_exchange_id: Option<u64>,
-    pub(super) released_phase: Option<String>,
-    pub(super) milestone: Option<String>,
-    pub(super) result: Option<DriverResult>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct PhaseRequest<'a> {
-    pub(super) protocol_version: u32,
-    pub(super) exchange_id: u64,
-    pub(super) phase: &'a str,
-    pub(super) release_exchange_id: Option<u64>,
-    pub(super) release_phase: Option<&'a str>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct PhaseAcknowledgement<'a> {
-    pub(super) protocol_version: u32,
-    pub(super) exchange_id: u64,
-    pub(super) phase: &'a str,
-    pub(super) kind: MessageKind,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct PhaseCompletion {
-    pub(super) protocol_version: u32,
-    pub(super) exchange_id: u64,
-    pub(super) phase: String,
-    pub(super) kind: MessageKind,
-    pub(super) acknowledgement_processed: bool,
-    pub(super) evaluator_pinned: bool,
-}
+pub(super) use super::transport::{DriverResult, validate_completion};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum SmokePhase {
@@ -83,18 +22,13 @@ impl SmokePhase {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct PinnedExchange {
-    pub(super) exchange_id: u64,
-    pub(super) phase: SmokePhase,
+impl PhaseKind for SmokePhase {
+    fn as_str(self) -> &'static str {
+        Self::as_str(self)
+    }
 }
 
-#[derive(Debug)]
-pub(super) struct CompletedProbe {
-    pub(super) message: PhaseMessage,
-    pub(super) completion: PhaseCompletion,
-    pub(super) pin: PinnedExchange,
-}
+pub(super) type CompletedProbe = super::transport::CompletedProbe<SmokePhase>;
 
 #[derive(Debug)]
 pub(super) struct PhaseMachine {
@@ -125,7 +59,7 @@ impl PhaseMachine {
         &self,
         message: &PhaseMessage,
         exchange_id: u64,
-        release: Option<PinnedExchange>,
+        release: Option<PinnedExchange<SmokePhase>>,
     ) -> Result<(), String> {
         if message.protocol_version != SMOKE_PROTOCOL_VERSION {
             return Err("driver returned an unsupported smoke protocol version".into());
@@ -219,26 +153,6 @@ pub(super) fn validate_driver_result(result: &DriverResult) -> Result<(), String
         .ne(EXPECTED_MILESTONES)
     {
         return Err("driver returned an incomplete or out-of-order milestone list".into());
-    }
-    Ok(())
-}
-
-pub(super) fn validate_completion(
-    completion: &PhaseCompletion,
-    exchange_id: u64,
-    phase: &str,
-    kind: MessageKind,
-) -> Result<(), String> {
-    if completion.protocol_version != SMOKE_PROTOCOL_VERSION
-        || completion.exchange_id != exchange_id
-        || completion.phase != phase
-        || completion.kind != kind
-        || !completion.acknowledgement_processed
-        || !completion.evaluator_pinned
-    {
-        return Err(format!(
-            "{phase} phase evaluator returned invalid pinned completion"
-        ));
     }
     Ok(())
 }

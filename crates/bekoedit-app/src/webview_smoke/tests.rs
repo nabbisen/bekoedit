@@ -214,10 +214,13 @@ fn driver_contract_is_bounded_observable_and_uses_rendered_controls() {
         .expect("typed completion must exist");
     assert!(pin < completion, "channel must be pinned before return");
 
-    let rust = include_str!("../webview_smoke.rs");
+    // The join-based deadline pattern lives in the shared transport
+    // (RFC-044 slice-1 §3 extraction) now, not here -- same guard, new
+    // location.
+    let rust = include_str!("transport.rs");
     assert!(rust.contains("tokio::time::timeout_at(deadline"));
     assert!(rust.contains("eval.join::<PhaseCompletion>()"));
-    assert!(!rust.contains("let mut eval = document::eval(WEBVIEW_SMOKE_JS);\n            loop"));
+    assert!(!rust.contains("let mut eval = document::eval(driver_js);\n            loop"));
 }
 
 #[test]
