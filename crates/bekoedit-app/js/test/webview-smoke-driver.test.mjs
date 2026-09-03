@@ -1,47 +1,17 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import {
+  FakeDioxus,
+  acknowledgement,
+  request as requestPhase,
+  runDriver as runDriverWith,
+} from "./webview-smoke-driver-harness.mjs";
 
 const driverSource = readFileSync(
   new URL("../../src/webview_smoke/driver.js", import.meta.url),
   "utf8",
 );
-const AsyncFunction = async function () {}.constructor;
-
-class FakeDioxus {
-  constructor() {
-    this.incoming = [];
-    this.receivers = [];
-    this.sent = [];
-    this.sentWaiters = [];
-    this.closed = false;
-  }
-
-  recv() {
-    if (this.incoming.length > 0) return Promise.resolve(this.incoming.shift());
-    return new Promise((resolve) => this.receivers.push(resolve));
-  }
-
-  send(value) {
-    this.sent.push(value);
-    this.sentWaiters.shift()?.(value);
-  }
-
-  push(value) {
-    const receiver = this.receivers.shift();
-    if (receiver) receiver(value);
-    else this.incoming.push(value);
-  }
-
-  nextSent() {
-    if (this.sent.length > 0) return Promise.resolve(this.sent.at(-1));
-    return new Promise((resolve) => this.sentWaiters.push(resolve));
-  }
-
-  close() {
-    this.closed = true;
-  }
-}
 
 function installBrowser({ beforeDomRead = () => {} } = {}) {
   globalThis.window = {};
@@ -60,27 +30,17 @@ function installBrowser({ beforeDomRead = () => {} } = {}) {
   };
 }
 
+// This file only ever exercises the launch phase (querySelector stubbed to
+// null, so every run takes the "element not found -> pending" branch); the
+// phases test file drives editor/preview. `request` still takes a phase
+// argument -- shared with that file per RFC-044 slice-1 handoff §8 -- so
+// this local wrapper just pins it to "launch".
 function request(exchangeId, release = null) {
-  return {
-    protocolVersion: 2,
-    exchangeId,
-    phase: "launch",
-    releaseExchangeId: release?.exchangeId ?? null,
-    releasePhase: release?.phase ?? null,
-  };
-}
-
-function acknowledgement(report) {
-  return {
-    protocolVersion: report.protocolVersion,
-    exchangeId: report.exchangeId,
-    phase: report.phase,
-    kind: report.kind,
-  };
+  return requestPhase(exchangeId, "launch", release);
 }
 
 function runDriver(dioxus) {
-  return new AsyncFunction("dioxus", driverSource)(dioxus);
+  return runDriverWith(driverSource, dioxus);
 }
 
 test("channel is pinned before typed return and survives close", { concurrency: false }, async () => {

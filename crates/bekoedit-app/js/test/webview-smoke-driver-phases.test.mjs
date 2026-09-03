@@ -23,65 +23,21 @@ import {
   FakeEditorView,
   errorToastElement,
 } from "./webview-smoke-dom-fake.mjs";
+import {
+  FakeDioxus,
+  acknowledgement,
+  request,
+  runDriver as runDriverWith,
+} from "./webview-smoke-driver-harness.mjs";
 
 const driverSource = readFileSync(
   new URL("../../src/webview_smoke/driver.js", import.meta.url),
   "utf8",
 );
-const AsyncFunction = async function () {}.constructor;
 const MARKER = "RFC041_WEBVIEW_SMOKE_MARKER";
 
-class FakeDioxus {
-  constructor() {
-    this.incoming = [];
-    this.receivers = [];
-    this.sent = [];
-    this.sentWaiters = [];
-  }
-
-  recv() {
-    if (this.incoming.length > 0) return Promise.resolve(this.incoming.shift());
-    return new Promise((resolve) => this.receivers.push(resolve));
-  }
-
-  send(value) {
-    this.sent.push(value);
-    this.sentWaiters.shift()?.(value);
-  }
-
-  push(value) {
-    const receiver = this.receivers.shift();
-    if (receiver) receiver(value);
-    else this.incoming.push(value);
-  }
-
-  nextSent() {
-    if (this.sent.length > 0) return Promise.resolve(this.sent.at(-1));
-    return new Promise((resolve) => this.sentWaiters.push(resolve));
-  }
-}
-
-function request(exchangeId, phase, release = null) {
-  return {
-    protocolVersion: 2,
-    exchangeId,
-    phase,
-    releaseExchangeId: release?.exchangeId ?? null,
-    releasePhase: release?.phase ?? null,
-  };
-}
-
-function acknowledgement(report) {
-  return {
-    protocolVersion: report.protocolVersion,
-    exchangeId: report.exchangeId,
-    phase: report.phase,
-    kind: report.kind,
-  };
-}
-
 function runDriver(dioxus) {
-  return new AsyncFunction("dioxus", driverSource)(dioxus);
+  return runDriverWith(driverSource, dioxus);
 }
 
 /** Runs one full request -> report -> acknowledgement -> completion
