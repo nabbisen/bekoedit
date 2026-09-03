@@ -162,6 +162,25 @@ Right expands and enters; Left collapses and ascends; Home/End; a non-openable
 row is reachable and not skipped; Enter opens a document and the editor takes
 focus.
 
+**A.1's mechanism, corrected 2026-09-03.** The single-tab-stop contract cannot
+be driven by a synthetic `Tab`. Script-dispatched events carry
+`isTrusted: false`, and engines withhold **default actions** from them
+deliberately — a security boundary, cross-engine, not a WebKitGTK quirk. Tab
+focus advancement *is* a default action: bekoedit does not intercept Tab, the
+browser walks `tabindex` itself.
+
+Assert the **roving-tabindex invariant after each app-intercepted key** instead:
+exactly one `[data-tree-row]` carries `tabindex="0"` and every other row
+`"-1"`; that row is the active row and **moves** as Down/Up/Home/End move it;
+and it is `.focus()`-able. Checked after each of A's own key presses, this is a
+live behavioural assertion on the code that could regress, not a snapshot of
+initial render.
+
+That the browser then walks the `tabindex` order is platform surface, and out of
+scope for the same reason §13 rejected asserting on the accessibility tree: DOM
+focus is where every RFC-042 defect actually lived. Testing that WebKitGTK
+implements `tabindex` is not this RFC's job.
+
 **B. Menus** — trigger Down focuses the first item and Up the last; in-menu
 Up/Down wrap; Home/End; Escape closes and **restores** focus to the trigger; Tab
 closes and does **not** restore.
@@ -261,6 +280,18 @@ a timeout reports which condition never became true.
   check fail naming what broke, restore. This is standing practice and applies
   with extra force to a test whose whole purpose is catching what other tests
   cannot.
+
+**The recipe has a boundary, established 2026-09-03.** "Dispatch a key, assert
+`document.activeElement`" works for **app-intercepted** keys — those where a
+Rust `onkeydown` handler sees the event, calls `prevent_default()`, and moves
+focus itself. It does **not** work for keys whose effect is a browser default
+action, because synthetic events do not get default actions (§8 A.1).
+
+Every nav key, Enter and Space in the workspace tree, the menu keys and the
+mode-tab keys are app-intercepted, so items B through F inherit no part of this
+problem. Tab is the single exception in the whole coverage set, and A.1 says what
+to do instead. Recorded here so a later slice does not rediscover it by spending
+a CI run on a synthetic `Tab`.
 
 ## 12. Acceptance criteria
 
