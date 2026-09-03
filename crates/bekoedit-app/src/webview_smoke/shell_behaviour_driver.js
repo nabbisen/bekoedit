@@ -200,9 +200,16 @@ return (async () => {
       state.stage = "expand_enter";
       const before = rows().length;
       dispatchKey(rows()[0], "ArrowRight");
+      // Expanding an unscanned directory triggers a real, async filesystem
+      // scan through the tree's own coroutine (on_toggled -> ScanRequest ->
+      // background thread -> on_loaded merge), not just a synchronous
+      // state flip -- give it real time, the same order of magnitude as
+      // RFC-041's own async-completion waits (driver.js's 15s edit-to-
+      // preview deadline).
       await waitFor(
         () => rows().length === before + 1,
         "ArrowRight to expand the directory (one more row)",
+        10000,
       );
       if (rows()[0].getAttribute("aria-expanded") !== "true") {
         throw new Error("expanded row did not report aria-expanded=true");
