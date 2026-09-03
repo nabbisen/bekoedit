@@ -156,16 +156,20 @@ async fn run_spike() -> Result<(), String> {
         );
     }
 
-    let dispatched: bool = document::eval(
+    // dispatchEvent's return value is not the signal to check here: it is
+    // `false` whenever the event was cancelable AND some listener called
+    // preventDefault() -- which is exactly what TreeRowItem's own
+    // onkeydown handler does for every nav key, ArrowDown included
+    // (components/explorer/tree_row.rs). A `false` return is expected,
+    // successful-dispatch behaviour, not a failure; only a thrown error
+    // (a real dispatch problem) is fatal here.
+    document::eval(
         r#"return document.querySelectorAll('[data-tree-row]')[0].dispatchEvent(
             new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));"#,
     )
-    .join()
+    .join::<bool>()
     .await
     .map_err(|error| format!("could not dispatch the synthetic ArrowDown keydown: {error}"))?;
-    if !dispatched {
-        return Err("dispatchEvent for the synthetic ArrowDown keydown returned false".into());
-    }
 
     poll_until(
         "document.activeElement moves to the second tree row after the synthetic ArrowDown \
