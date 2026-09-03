@@ -35,6 +35,20 @@ use super::SmokeProfile;
 const POLL_TIMEOUT: Duration = Duration::from_secs(10);
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
+/// Overrides the dispatched key, `ArrowDown` by default. Exists only for
+/// the negative control required by review: `F13` falls through
+/// `TreeRowItem`'s `onkeydown` match arm (`_ => return`, no
+/// `prevent_default`, no navigation) with no effect at all, so dispatching
+/// it must make the spike fail by timeout rather than pass -- proof that
+/// the surviving assertion (`document.activeElement` moving to the second
+/// row) is actually sensitive to the synthetic key reaching the handler,
+/// not satisfiable some other way.
+const KEY_ENV_VAR: &str = "BEKOEDIT_KEY_SPIKE_KEY";
+
+fn dispatched_key() -> String {
+    std::env::var(KEY_ENV_VAR).unwrap_or_else(|_| "ArrowDown".to_string())
+}
+
 const PASSED: u8 = 1;
 const FAILED: u8 = 2;
 
@@ -110,13 +124,14 @@ pub fn WebViewKeySpikeDriver() -> Element {
         let terminal = terminal.clone();
         let desktop = desktop.clone();
         async move {
+            let key = dispatched_key();
             println!(
-                "bekoedit RFC-044 §2 spike: does a synthetic KeyboardEvent reach a Dioxus onkeydown handler?"
+                "bekoedit RFC-044 §2 spike: does a synthetic KeyboardEvent ({key}) reach a Dioxus onkeydown handler?"
             );
-            match run_spike().await {
+            match run_spike(&key).await {
                 Ok(()) => {
                     println!(
-                        "bekoedit RFC-044 §2 spike PASSED: a synthetic ArrowDown moved document.activeElement to the next tree row"
+                        "bekoedit RFC-044 §2 spike PASSED: a synthetic {key} moved document.activeElement to the next tree row"
                     );
                     terminal.mark(true);
                 }
@@ -131,7 +146,7 @@ pub fn WebViewKeySpikeDriver() -> Element {
     rsx! {}
 }
 
-async fn run_spike() -> Result<(), String> {
+async fn run_spike(key: &str) -> Result<(), String> {
     poll_until(
         "the workspace tree renders at least two rows",
         "document.querySelectorAll('[data-tree-row]').length >= 2",
@@ -163,18 +178,20 @@ async fn run_spike() -> Result<(), String> {
     // (components/explorer/tree_row.rs). A `false` return is expected,
     // successful-dispatch behaviour, not a failure; only a thrown error
     // (a real dispatch problem) is fatal here.
-    document::eval(
+    document::eval(&format!(
         r#"return document.querySelectorAll('[data-tree-row]')[0].dispatchEvent(
-            new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));"#,
-    )
+            new KeyboardEvent('keydown', {{ key: {key:?}, bubbles: true, cancelable: true }}));"#,
+    ))
     .join::<bool>()
     .await
-    .map_err(|error| format!("could not dispatch the synthetic ArrowDown keydown: {error}"))?;
+    .map_err(|error| format!("could not dispatch the synthetic {key} keydown: {error}"))?;
 
     poll_until(
-        "document.activeElement moves to the second tree row after the synthetic ArrowDown \
-         (this only happens if TreeRowItem's onkeydown handler ran and called \
-         shell_focus::focus_tree_row)",
+        &format!(
+            "document.activeElement moves to the second tree row after the synthetic {key} \
+             (this only happens if TreeRowItem's onkeydown handler ran and called \
+             shell_focus::focus_tree_row)"
+        ),
         "document.querySelectorAll('[data-tree-row]')[1] === document.activeElement",
     )
     .await

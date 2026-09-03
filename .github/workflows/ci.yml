@@ -239,6 +239,25 @@ jobs:
             env NO_AT_BRIDGE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
             ./target/release/bekoedit \
             --webview-key-spike "$SPIKE_PARENT/bekoedit-webview-smoke-profile"
+      - name: RFC-044 §2 spike negative control -- an ignored key must fail by timeout
+        run: |
+          # Review requirement: the surviving assertion (activeElement
+          # moving to the second row) must be shown able to fail for the
+          # right reason, not merely observed passing once. F13 falls
+          # through TreeRowItem's onkeydown match with no effect at all,
+          # so this run must fail -- a pass here would mean the assertion
+          # is satisfiable without the key ever reaching the handler, and
+          # §2 would not actually be proven.
+          CONTROL_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-key-spike-control.XXXXXX")"
+          trap 'rm -rf "$CONTROL_PARENT"' EXIT
+          if timeout 60 xvfb-run -a -s "-screen 0 1280x1024x24" \
+            env NO_AT_BRIDGE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 BEKOEDIT_KEY_SPIKE_KEY=F13 \
+            ./target/release/bekoedit \
+            --webview-key-spike "$CONTROL_PARENT/bekoedit-webview-smoke-profile"; then
+            echo "negative control unexpectedly PASSED with an ignored key (F13) -- the spike's assertion is not sensitive to the synthetic key reaching the handler" >&2
+            exit 1
+          fi
+          echo "negative control correctly failed: an ignored key (F13) does not move document.activeElement"
       - name: Check binary links and size
         run: |
           file target/release/bekoedit
