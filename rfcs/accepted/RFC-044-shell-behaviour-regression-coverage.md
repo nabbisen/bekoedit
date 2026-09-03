@@ -127,12 +127,26 @@ Three ways, not mutually exclusive:
 
 - **Install `xvfb-run` in the dev environment.** One package. Gives a real local
   loop for everything except the portal dialog, which this design avoids anyway.
-- **Move driver logic into the bundled JavaScript**, where the existing
-  `js/test/*.test.mjs` suite already runs in CI and locally with no display. The
-  driver is currently `include_str!`'d rather than bundled; relocating the
-  *decision* logic — which selector, which key, which assertion, what counts as
-  done — leaves only a thin DOM-driving shell that must run in a real WebView.
-  This is the structural fix and it shrinks the blind surface to near nothing.
+- **Make the driver's decision logic testable in the existing
+  `js/test/*.test.mjs` suite**, which runs in CI (`ci.yml:197`) and locally with
+  no display. This is the structural fix and it shrinks the blind surface to
+  near nothing.
+
+  *Corrected 2026-09-03, on reading the code:* this bullet originally proposed
+  **relocating** the driver into the bundled JavaScript, on the premise that it
+  was not in that suite. It already is —
+  `js/test/webview-smoke-driver.test.mjs` evaluates `driver.js` against a fake
+  channel. What is missing is narrower and sharper: the test's browser stub
+  returns `null` for every selector, so only the driver's *protocol* half is
+  exercised. Mutation testing confirms the split — inverting the editor
+  readiness check, deleting the preview assertion, removing the deadline, or
+  dropping the error-toast failure all leave the suite green, while protocol
+  mutations fail it loudly.
+
+  So the prerequisite is a controllable DOM fake, not a relocation, and
+  `driver.js` should stay as it is — its protocol half implements RFC-041's
+  evaluator-pin handshake, is delicate, and is the part that works. See
+  `.git-exclude/tasks/dev-team/012-webview-driver-decision-coverage.md`.
 - **Land it non-blocking first** (§10).
 
 **Recommendation: the second, plus the first.** The second is worth doing on its
