@@ -334,11 +334,16 @@ return (async () => {
       if (timedOut()) {
         const view = window.__bk?._view;
         const host = document.querySelector('[data-source-focus-launch-region="text"]');
+        const activeRowIndex = rows().findIndex((row) => row === document.activeElement);
+        const activeRow = rows()[activeRowIndex];
         throw new Error(
           `timed out at enter_opens: view=${Boolean(view)} dom.isConnected=${view?.dom?.isConnected} ` +
             `hasFocus=${view?.hasFocus} host=${Boolean(host)} statusMarker=${Boolean(
               host?.querySelector(".source-editor-status"),
-            )} activeElement is row ${rows().findIndex((row) => row === document.activeElement)}`,
+            )} activeElement is row ${activeRowIndex} (title=${activeRow?.getAttribute?.(
+              "title",
+            )}, ariaExpanded=${activeRow?.getAttribute?.("aria-expanded")}, ` +
+            `ariaDisabled=${activeRow?.getAttribute?.("aria-disabled")}) toastSeen=${state.errorToastSeen}`,
         );
       }
       if (!state.enterDispatched) {
