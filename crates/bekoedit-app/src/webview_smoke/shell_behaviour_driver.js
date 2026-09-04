@@ -331,7 +331,16 @@ return (async () => {
       outgoing = { kind: "progress", milestone: "non_openable_reachable" };
     } else if (requestedPhase === "enter_opens") {
       state.stage = "enter_opens";
-      if (timedOut()) throw new Error("timed out at enter_opens");
+      if (timedOut()) {
+        const view = window.__bk?._view;
+        const host = document.querySelector('[data-source-focus-launch-region="text"]');
+        throw new Error(
+          `timed out at enter_opens: view=${Boolean(view)} dom.isConnected=${view?.dom?.isConnected} ` +
+            `hasFocus=${view?.hasFocus} host=${Boolean(host)} statusMarker=${Boolean(
+              host?.querySelector(".source-editor-status"),
+            )} activeElement is row ${rows().findIndex((row) => row === document.activeElement)}`,
+        );
+      }
       if (!state.enterDispatched) {
         dispatchKey(rows()[3], "ArrowUp");
         await waitFor(
