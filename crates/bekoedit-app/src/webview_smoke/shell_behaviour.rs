@@ -286,6 +286,16 @@ pub(super) fn prepare(requested_root: &Path) -> Result<PreparedShellBehaviour, S
 
     let settings = AppSettings {
         reopen_last_workspace: true,
+        // AppSettings::default() carries default_mode: EditorMode::Form
+        // (settings.rs), and mode_sig's own initial value is
+        // settings.default_mode (app.rs). OpenDocument never forces a mode
+        // switch -- only NewUntitled does (source_sync/commands.rs) -- so
+        // without this, contract 7's Enter never renders TextMode at all:
+        // no editor host, no view, nothing to become ready. Not an app
+        // defect -- opening a document into whatever mode you last used is
+        // the intended behaviour -- just something this fixture must set
+        // explicitly since RFC-044 slice-1 §5's contract needs Text mode.
+        default_mode: bekoedit_ui_contract::EditorMode::Text,
         ..Default::default()
     };
     profile
