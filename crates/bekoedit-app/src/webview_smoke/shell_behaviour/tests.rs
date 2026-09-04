@@ -17,7 +17,7 @@ fn phase_message(kind: MessageKind, phase: &str, exchange_id: u64) -> PhaseMessa
 fn successful_result() -> DriverResult {
     DriverResult {
         ok: true,
-        stage: "enter_opens".into(),
+        stage: "non_openable".into(),
         marker: MARKER.into(),
         milestones: EXPECTED_MILESTONES
             .iter()
@@ -29,7 +29,7 @@ fn successful_result() -> DriverResult {
 }
 
 #[test]
-fn machine_advances_through_all_six_phases_on_valid_progress() {
+fn machine_advances_through_all_four_transitions_ending_at_non_openable() {
     let mut machine = ShellBehaviourMachine::new();
     let progression = [
         (
@@ -52,11 +52,6 @@ fn machine_advances_through_all_six_phases_on_valid_progress() {
             "home_end_reached",
             ShellBehaviourPhase::NonOpenable,
         ),
-        (
-            ShellBehaviourPhase::NonOpenable,
-            "non_openable_reachable",
-            ShellBehaviourPhase::EnterOpens,
-        ),
     ];
     for (index, (phase, milestone, next)) in progression.into_iter().enumerate() {
         let exchange_id = (index + 1) as u64;
@@ -67,6 +62,11 @@ fn machine_advances_through_all_six_phases_on_valid_progress() {
         machine.apply_completed(exchange_id, &message).unwrap();
         assert_eq!(machine.current(), next);
     }
+    assert_eq!(
+        ShellBehaviourPhase::NonOpenable.next(),
+        None,
+        "non_openable is terminal for this slice -- contract 7 is deferred to task 014"
+    );
 }
 
 #[test]
@@ -120,14 +120,14 @@ fn malformed_progress_and_terminal_messages_are_rejected() {
     assert!(machine.validate(&out_of_order, 1, None).is_err());
 
     let last_phase_terminal_progress =
-        ShellBehaviourMachine::for_phase(ShellBehaviourPhase::EnterOpens);
-    let mut malformed = phase_message(MessageKind::Progress, "enter_opens", 1);
-    malformed.milestone = Some("enter_opened_editor_focused".into());
+        ShellBehaviourMachine::for_phase(ShellBehaviourPhase::NonOpenable);
+    let mut malformed = phase_message(MessageKind::Progress, "non_openable", 1);
+    malformed.milestone = Some("non_openable_reachable".into());
     assert!(
         last_phase_terminal_progress
             .validate(&malformed, 1, None)
             .is_err(),
-        "enter_opens cannot return nonterminal progress"
+        "non_openable cannot return nonterminal progress -- it is this slice's terminal phase"
     );
 }
 

@@ -241,10 +241,12 @@ jobs:
         #
         # Promotion criterion, recorded per handoff §6: promote to blocking
         # after 10 consecutive green runs of this step on `main`. Clock
-        # starts 2026-09-04 (this change's merge to `main`). Track the count
-        # via `gh run list --branch main --workflow=ci.yml`, reading this
-        # step's own conclusion in each run (a job can be green with this
-        # step failed, since continue-on-error masks it at the job level).
+        # starts the day this slice merges to `main` -- record that date in
+        # the merge commit or PR description, since it is not this commit's
+        # own date. Track the count via
+        # `gh run list --branch main --workflow=ci.yml`, reading this step's
+        # own conclusion in each run (a job can be green with this step
+        # failed, since continue-on-error masks it at the job level).
         continue-on-error: true
         run: |
           BEHAVIOUR_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-shell-behaviour.XXXXXX")"

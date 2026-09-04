@@ -1,5 +1,5 @@
 //! RFC-044 slice-1 §4/§5: the second WebView run -- shell behaviour
-//! coverage, starting with §8 A's seven tree-navigation contracts.
+//! coverage, starting with §8 A's tree-navigation contracts 1-6.
 //!
 //! A separate run from the RFC-041 lifecycle regression, per RFC-044 §5:
 //! its own launch flag, its own driver JS (`shell_behaviour_driver.js`),
@@ -11,10 +11,10 @@
 //! Reuses RFC-043's launch-time reopen exactly as the §2 spike did: seeds
 //! a workspace, a recents entry, and `reopen_last_workspace`, so the run
 //! lands in the shell with a populated tree, no dialog, no Start Screen.
-//! The workspace fixture is shaped for §8 A's seven contracts specifically:
-//! `sub/child.md` (an expandable directory with one child, for contracts 3
-//! and 4), `a.md` and `z.md` (openable, for Home/End and Enter), and
-//! `notes.txt` (not markdown, so not openable -- contract 6).
+//! The workspace fixture is shaped for §8 A's contracts: `sub/child.md` (an
+//! expandable directory with one child, for contracts 3 and 4), `a.md` and
+//! `z.md` (openable, for Home/End), and `notes.txt` (not markdown, so not
+//! openable -- contract 6).
 //!
 //! Contract 1 (Tab reaches the tree at exactly one stop) is not its own
 //! phase: per the governance review that corrected RFC-044 §8 A.1
@@ -23,6 +23,13 @@
 //! Mechanism C instead asserts the roving-tabindex invariant live inside
 //! `shell_behaviour_driver.js`, after each of contracts 2-5's own
 //! app-intercepted nav keys.
+//!
+//! Contract 7 ("Enter opens a document and the editor takes focus") is
+//! deferred to `.git-exclude/tasks/dev-team/014-open-document-focus-claim.md`:
+//! `OpenDocument` does not claim editor focus today
+//! (`source_sync::focus::focus_target`), and a coverage slice must not land
+//! a known-red case against its own promotion clock (review, 2026-09-04).
+//! This run's terminal phase is therefore `NonOpenable` (contract 6).
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -43,13 +50,12 @@ use super::transport::{
 };
 
 const MARKER: &str = "RFC044_SHELL_BEHAVIOUR_MARKER";
-const EXPECTED_MILESTONES: [&str; 6] = [
+const EXPECTED_MILESTONES: [&str; 5] = [
     "down_up_moved",
     "expand_entered",
     "collapse_ascended",
     "home_end_reached",
     "non_openable_reachable",
-    "enter_opened_editor_focused",
 ];
 const PHASE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -61,8 +67,9 @@ pub(super) enum ShellBehaviourPhase {
     ExpandEnter,
     CollapseAscend,
     HomeEnd,
+    /// Terminal for this slice: contract 7 is deferred to task 014 (module
+    /// doc). Task 014 adds an `EnterOpens` phase after this one.
     NonOpenable,
-    EnterOpens,
 }
 
 impl ShellBehaviourPhase {
@@ -73,7 +80,6 @@ impl ShellBehaviourPhase {
             Self::CollapseAscend => "collapse_ascend",
             Self::HomeEnd => "home_end",
             Self::NonOpenable => "non_openable",
-            Self::EnterOpens => "enter_opens",
         }
     }
 
@@ -83,13 +89,13 @@ impl ShellBehaviourPhase {
             Self::ExpandEnter => Some(Self::CollapseAscend),
             Self::CollapseAscend => Some(Self::HomeEnd),
             Self::HomeEnd => Some(Self::NonOpenable),
-            Self::NonOpenable => Some(Self::EnterOpens),
-            Self::EnterOpens => None,
+            Self::NonOpenable => None,
         }
     }
 
     /// The `milestone` a `Progress` report from this phase must carry --
-    /// one-to-one with `EXPECTED_MILESTONES`.
+    /// one-to-one with `EXPECTED_MILESTONES`. `NonOpenable` is terminal, so
+    /// it reports its milestone via `DriverResult.milestones`, not this.
     const fn expected_milestone(self) -> &'static str {
         match self {
             Self::DownUp => "down_up_moved",
@@ -97,7 +103,6 @@ impl ShellBehaviourPhase {
             Self::CollapseAscend => "collapse_ascended",
             Self::HomeEnd => "home_end_reached",
             Self::NonOpenable => "non_openable_reachable",
-            Self::EnterOpens => "enter_opened_editor_focused",
         }
     }
 }
@@ -165,8 +170,8 @@ impl ShellBehaviourMachine {
                 }
             }
             MessageKind::Progress => {
-                if self.current == ShellBehaviourPhase::EnterOpens {
-                    return Err("enter_opens phase cannot return nonterminal progress".into());
+                if self.current == ShellBehaviourPhase::NonOpenable {
+                    return Err("non_openable phase cannot return nonterminal progress".into());
                 }
                 let expected = self.current.expected_milestone();
                 if message.milestone.as_deref() != Some(expected) || message.result.is_some() {
@@ -174,10 +179,10 @@ impl ShellBehaviourMachine {
                 }
             }
             MessageKind::Terminal => {
-                // A terminal report can come from any phase, not only
-                // enter_opens -- the driver's try/catch turns a thrown
-                // error into a terminal failure at whichever phase raised
-                // it, exactly as driver.js's own three phases each can.
+                // A terminal report can come from any phase, not only the
+                // last one -- the driver's try/catch turns a thrown error
+                // into a terminal failure at whichever phase raised it,
+                // exactly as driver.js's own three phases each can.
                 if message.milestone.is_some() || message.result.is_none() {
                     return Err("terminal driver message was malformed".into());
                 }
@@ -211,7 +216,7 @@ fn validate_shell_behaviour_result(result: &DriverResult) -> Result<(), String> 
             result.error.as_deref().unwrap_or("unknown error")
         ));
     }
-    if result.stage != "enter_opens" || result.marker != MARKER {
+    if result.stage != "non_openable" || result.marker != MARKER {
         return Err("driver returned the wrong terminal stage or marker".into());
     }
     if result.error_toast_seen {

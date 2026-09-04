@@ -20,7 +20,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { FakeElement, FakeEditorView } from "./webview-smoke-dom-fake.mjs";
 import { FakeTree } from "./webview-smoke-tree-fake.mjs";
 import {
   FakeDioxus,
@@ -50,10 +49,6 @@ async function exchange(phase, exchangeId, release = null) {
   dioxus.push(acknowledgement(report));
   await completion;
   return report;
-}
-
-function installEditorHost(tree) {
-  tree.setElement('[data-source-focus-launch-region="text"]', new FakeElement());
 }
 
 /** expand_enter is multi-call and pollable (move onto sub, dispatch
@@ -241,7 +236,7 @@ test(
 );
 
 test(
-  "non_openable: Down reaches the disabled row without skipping it; Enter on it is a no-op",
+  "non_openable: Down reaches the disabled row without skipping it; Enter on it is a no-op, and this is the slice's terminal contract",
   { concurrency: false },
   async () => {
     const tree = new FakeTree();
@@ -259,10 +254,20 @@ test(
       phase: "home_end",
     });
 
-    assert.equal(report.kind, "progress");
-    assert.equal(report.milestone, "non_openable_reachable");
+    // Contract 7 (Enter opens a document and the editor takes focus) is
+    // deferred to task 014 -- OpenDocument does not claim editor focus
+    // today -- so this slice's run terminates here, at contract 6.
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, true);
     assert.equal(tree.activeIndex, 3, "must land on notes.txt, the fourth row");
     assert.equal(tree.openedPath, null, "Enter on a non-openable row must not open anything");
+    assert.deepEqual(report.result.milestones, [
+      "down_up_moved",
+      "expand_entered",
+      "collapse_ascended",
+      "home_end_reached",
+      "non_openable_reachable",
+    ]);
   },
 );
 
@@ -293,105 +298,5 @@ test(
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, false);
     assert.match(report.result.error, /not actually non-openable/);
-  },
-);
-
-test(
-  "enter_opens: not-ready is pending; ready is terminal success with the editor focused",
-  { concurrency: false },
-  async () => {
-    const tree = new FakeTree();
-    tree.install();
-    tree.setTime(0);
-    installEditorHost(tree);
-    await exchange("down_up", 1);
-    const expandEnter = await driveExpandEnter(2, { exchangeId: 1, phase: "down_up" });
-    await exchange("collapse_ascend", expandEnter.nextExchangeId, expandEnter.release);
-    await exchange("home_end", expandEnter.nextExchangeId + 1, {
-      exchangeId: expandEnter.nextExchangeId,
-      phase: "collapse_ascend",
-    });
-    await exchange("non_openable", expandEnter.nextExchangeId + 2, {
-      exchangeId: expandEnter.nextExchangeId + 1,
-      phase: "home_end",
-    });
-    const enterOpensId = expandEnter.nextExchangeId + 3;
-
-    // First call: dispatches ArrowUp + Enter, view not mounted yet -> pending.
-    const pendingReport = await exchange("enter_opens", enterOpensId, {
-      exchangeId: expandEnter.nextExchangeId + 2,
-      phase: "non_openable",
-    });
-    assert.equal(pendingReport.kind, "pending");
-    assert.equal(tree.activeIndex, 2, "must have moved back onto the markdown row");
-    assert.equal(tree.openedPath, "a.md");
-
-    // Second call: still not ready (view exists but unfocused).
-    tree.setEditorView(new FakeEditorView({ connected: true, hasFocus: false }));
-    const stillPending = await exchange("enter_opens", enterOpensId + 1, {
-      exchangeId: enterOpensId,
-      phase: "enter_opens",
-    });
-    assert.equal(stillPending.kind, "pending");
-
-    // Third call: ready.
-    tree.setEditorView(new FakeEditorView({ connected: true, hasFocus: true }));
-    const finalReport = await exchange("enter_opens", enterOpensId + 2, {
-      exchangeId: enterOpensId + 1,
-      phase: "enter_opens",
-    });
-
-    assert.equal(finalReport.kind, "terminal");
-    assert.equal(finalReport.result.ok, true);
-    assert.equal(finalReport.result.stage, "enter_opens");
-    assert.deepEqual(finalReport.result.milestones, [
-      "down_up_moved",
-      "expand_entered",
-      "collapse_ascended",
-      "home_end_reached",
-      "non_openable_reachable",
-      "enter_opened_editor_focused",
-    ]);
-  },
-);
-
-test(
-  "enter_opens: an elapsed deadline fails, naming the stage it timed out at",
-  { concurrency: false },
-  async () => {
-    const tree = new FakeTree();
-    tree.install();
-    tree.setTime(0);
-    installEditorHost(tree);
-    await exchange("down_up", 1);
-    const expandEnter = await driveExpandEnter(2, { exchangeId: 1, phase: "down_up" });
-    await exchange("collapse_ascend", expandEnter.nextExchangeId, expandEnter.release);
-    await exchange("home_end", expandEnter.nextExchangeId + 1, {
-      exchangeId: expandEnter.nextExchangeId,
-      phase: "collapse_ascend",
-    });
-    await exchange("non_openable", expandEnter.nextExchangeId + 2, {
-      exchangeId: expandEnter.nextExchangeId + 1,
-      phase: "home_end",
-    });
-    const enterOpensId = expandEnter.nextExchangeId + 3;
-    await exchange("enter_opens", enterOpensId, {
-      exchangeId: expandEnter.nextExchangeId + 2,
-      phase: "non_openable",
-    });
-    // The fake clock also advances on every requestAnimationFrame tick
-    // (real frames take real time), so the deadline set by this call is
-    // not exactly "0 + 15000" -- read what the driver actually recorded.
-    const { deadline } = window.__bkWebViewShellBehaviourState;
-
-    tree.setTime(deadline); // timedOut() uses >=, so exactly the deadline counts
-    const report = await exchange("enter_opens", enterOpensId + 1, {
-      exchangeId: enterOpensId,
-      phase: "enter_opens",
-    });
-
-    assert.equal(report.kind, "terminal");
-    assert.equal(report.result.ok, false);
-    assert.match(report.result.error, /timed out at enter_opens/);
   },
 );
