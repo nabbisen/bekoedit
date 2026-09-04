@@ -121,6 +121,15 @@ From RFC-044 §8 A, each an assertion about real focus after a real key:
 5. Home / End reach first and last.
 6. A non-openable row is reachable and not skipped.
 7. Enter opens a document **and the editor takes focus**.
+   — **Deferred to task 014, 2026-09-04.** Slice 1 ships contracts 1–6. This
+   contract's premise is correct but the app does not satisfy it:
+   `focus_target` claims editor focus for `NewUntitled` and `SwitchMode` only,
+   so opening an existing document never focuses the editor, from the tree,
+   search or backlinks alike. The fix touches RFC-042's focus-authority
+   mechanism, and a coverage slice must not change the thing it measures — nor
+   land a red case that would stall §6's promotion clock. Contract 7 lands with
+   the fix in `.git-exclude/tasks/dev-team/014-open-document-focus-claim.md`,
+   red before and green after.
 
 `[data-tree-row]` already exists as a stable selector and rows carry
 `role="treeitem"` with roving `tabindex` — **no new production markup is needed
