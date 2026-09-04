@@ -162,6 +162,20 @@ Right expands and enters; Left collapses and ascends; Home/End; a non-openable
 row is reachable and not skipped; Enter opens a document and the editor takes
 focus.
 
+**A's seventh item is deferred, 2026-09-04.** "Enter opens a document and the
+editor takes focus" is the correct expectation — both manual walkthrough
+supplements assert it — but the application does not satisfy it:
+`source_sync/focus.rs`'s `focus_target` claims editor focus for `NewUntitled`
+and `SwitchMode` only, so opening an existing document focuses nothing, whether
+from the tree, search, or a backlink. Found by this RFC's own first slice, in a
+behaviour recorded twice in verification documents and never once executed —
+neither supplement has a ticked box.
+
+The fix and the contract land together in
+`.git-exclude/tasks/dev-team/014-open-document-focus-claim.md`, red before and
+green after, so the assertion is proven able to fail by construction. Slice 1
+ships A's first six items.
+
 **A.1's mechanism, corrected 2026-09-03.** The single-tab-stop contract cannot
 be driven by a synthetic `Tab`. Script-dispatched events carry
 `isTrusted: false`, and engines withhold **default actions** from them
