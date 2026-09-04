@@ -170,12 +170,21 @@ return (async () => {
       );
     }
 
+    // Row 0 is always the workspace root itself, already expanded --
+    // explorer.rs auto-expands it on mount (collect_rows in
+    // dioxus-swdir-tree-core pushes the root as a row before recursing
+    // into its children). So the four seeded files are rows 1-4: at
+    // least 5 rows total once the root's own scan has merged.
     await waitFor(
-      () => rows().length >= 4,
-      "the workspace tree to render its rows",
+      () => rows().length >= 5,
+      "the workspace tree to render its rows (root + four seeded entries)",
     );
 
     if (requestedPhase === "down_up") {
+      // Root(0) -> sub(1) -> a.md(2) -> sub(1) -> root(0): still a full
+      // exercise of contract 2 (Down/Up move the active row) and contract
+      // 1's invariant at each step: it does not matter that row 0 happens
+      // to be the root rather than a seeded file.
       state.stage = "down_up";
       rows()[0].focus();
       if (document.activeElement !== rows()[0]) {
@@ -197,79 +206,92 @@ return (async () => {
       state.phase = "expand_enter";
       outgoing = { kind: "progress", milestone: "down_up_moved" };
     } else if (requestedPhase === "expand_enter") {
-      // Expanding an unscanned directory triggers a real, async filesystem
-      // scan through the tree's own coroutine (on_toggled -> ScanRequest ->
-      // background thread -> on_loaded merge) -- not a synchronous state
-      // flip, so this phase is multi-call and pollable (like enter_opens),
-      // not a single blocking wait: a document::eval call has its own
-      // outer deadline (the Rust-side evaluator timeout) shorter than the
-      // scan can be relied on to finish within.
+      // sub (row 1, the first seeded entry) is genuinely unloaded, so
+      // expanding it triggers a real, async filesystem scan through the
+      // tree's own coroutine (on_toggled -> ScanRequest -> background
+      // thread -> on_loaded merge) -- not a synchronous state flip, so
+      // this phase is multi-call and pollable (like enter_opens), not a
+      // single blocking wait: a document::eval call has its own outer
+      // deadline (the Rust-side evaluator timeout) shorter than the scan
+      // can be relied on to finish within.
       state.stage = "expand_enter";
       if (timedOut()) {
         throw new Error(
           `timed out at expand_enter: row count is ${rows().length} (expected ${
             (state.expandBeforeCount ?? "?") + 1
-          }), row 0 aria-expanded=${rows()[0]?.getAttribute("aria-expanded")}, ` +
+          }), row 1 aria-expanded=${rows()[1]?.getAttribute("aria-expanded")}, ` +
             `activeElement is row ${rows().findIndex((row) => row === document.activeElement)}`,
         );
       }
-      if (!state.expandDispatched) {
-        state.expandBeforeCount = rows().length;
-        dispatchKey(rows()[0], "ArrowRight");
-        state.expandDispatched = true;
+      if (!state.expandMoved) {
+        dispatchKey(rows()[0], "ArrowDown");
+        state.expandMoved = true;
         state.deadline = performance.now() + 10000;
         outgoing = { kind: "pending" };
+      } else if (!state.expandDispatched) {
+        if (document.activeElement !== rows()[1]) {
+          outgoing = { kind: "pending" };
+        } else {
+          checkTabStopInvariant(1);
+          state.expandBeforeCount = rows().length;
+          dispatchKey(rows()[1], "ArrowRight");
+          state.expandDispatched = true;
+          outgoing = { kind: "pending" };
+        }
       } else if (!state.expandConfirmed) {
         if (rows().length !== state.expandBeforeCount + 1) {
           outgoing = { kind: "pending" };
         } else {
-          if (rows()[0].getAttribute("aria-expanded") !== "true") {
+          if (rows()[1].getAttribute("aria-expanded") !== "true") {
             throw new Error("expanded row did not report aria-expanded=true");
           }
-          if (document.activeElement !== rows()[0]) {
+          if (document.activeElement !== rows()[1]) {
             throw new Error("expanding must not move focus off the directory row");
           }
-          checkTabStopInvariant(0);
+          checkTabStopInvariant(1);
           state.expandConfirmed = true;
-          dispatchKey(rows()[0], "ArrowRight");
+          dispatchKey(rows()[1], "ArrowRight");
           outgoing = { kind: "pending" };
         }
-      } else if (document.activeElement !== rows()[1]) {
+      } else if (document.activeElement !== rows()[2]) {
         outgoing = { kind: "pending" };
       } else {
-        checkTabStopInvariant(1);
+        checkTabStopInvariant(2);
         state.milestones.push("expand_entered");
         state.phase = "collapse_ascend";
         outgoing = { kind: "progress", milestone: "expand_entered" };
       }
     } else if (requestedPhase === "collapse_ascend") {
+      // Collapse is always synchronous (on_toggled's Case B: the
+      // generation is not bumped, no scan involved) -- a single blocking
+      // wait is fine here, unlike the first expand.
       state.stage = "collapse_ascend";
-      dispatchKey(rows()[1], "ArrowLeft");
+      dispatchKey(rows()[2], "ArrowLeft");
       await waitFor(
-        () => document.activeElement === rows()[0],
+        () => document.activeElement === rows()[1],
         "ArrowLeft to ascend from the child row to its parent directory",
       );
-      checkTabStopInvariant(0);
+      checkTabStopInvariant(1);
       const before = rows().length;
-      dispatchKey(rows()[0], "ArrowLeft");
+      dispatchKey(rows()[1], "ArrowLeft");
       await waitFor(
         () => rows().length === before - 1,
         "ArrowLeft to collapse the expanded directory (one fewer row)",
       );
-      if (rows()[0].getAttribute("aria-expanded") !== "false") {
+      if (rows()[1].getAttribute("aria-expanded") !== "false") {
         throw new Error("collapsed row did not report aria-expanded=false");
       }
-      if (document.activeElement !== rows()[0]) {
+      if (document.activeElement !== rows()[1]) {
         throw new Error("collapsing must not move focus off the directory row");
       }
-      checkTabStopInvariant(0);
+      checkTabStopInvariant(1);
       state.milestones.push("collapse_ascended");
       state.phase = "home_end";
       outgoing = { kind: "progress", milestone: "collapse_ascended" };
     } else if (requestedPhase === "home_end") {
       state.stage = "home_end";
       const last = rows().length - 1;
-      dispatchKey(rows()[0], "End");
+      dispatchKey(rows()[1], "End");
       await waitFor(() => document.activeElement === rows()[last], "End to reach the last row");
       checkTabStopInvariant(last);
       dispatchKey(rows()[last], "Home");
@@ -283,12 +305,14 @@ return (async () => {
       dispatchKey(rows()[0], "ArrowDown");
       await waitFor(() => document.activeElement === rows()[1], "ArrowDown to reach the second row");
       dispatchKey(rows()[1], "ArrowDown");
+      await waitFor(() => document.activeElement === rows()[2], "ArrowDown to reach the third row");
+      dispatchKey(rows()[2], "ArrowDown");
       await waitFor(
-        () => document.activeElement === rows()[2],
+        () => document.activeElement === rows()[3],
         "ArrowDown to reach the non-openable row (it must not be skipped)",
       );
-      checkTabStopInvariant(2);
-      const target = rows()[2];
+      checkTabStopInvariant(3);
+      const target = rows()[3];
       if (target.getAttribute("aria-disabled") !== "true") {
         throw new Error("the reached row is not actually non-openable (aria-disabled != true)");
       }
@@ -309,13 +333,13 @@ return (async () => {
       state.stage = "enter_opens";
       if (timedOut()) throw new Error("timed out at enter_opens");
       if (!state.enterDispatched) {
-        dispatchKey(rows()[2], "ArrowUp");
+        dispatchKey(rows()[3], "ArrowUp");
         await waitFor(
-          () => document.activeElement === rows()[1],
+          () => document.activeElement === rows()[2],
           "ArrowUp to return to the markdown row",
         );
-        checkTabStopInvariant(1);
-        dispatchKey(rows()[1], "Enter");
+        checkTabStopInvariant(2);
+        dispatchKey(rows()[2], "Enter");
         state.enterDispatched = true;
         state.deadline = performance.now() + 15000;
         outgoing = { kind: "pending" };

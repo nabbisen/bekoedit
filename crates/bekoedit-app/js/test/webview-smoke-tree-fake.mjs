@@ -57,40 +57,52 @@ function rowKey(node, depth) {
 /** `workspace/` fixture matching the real second run's seeded profile:
  * `sub/child.md`, `a.md`, `notes.txt` (non-markdown, non-openable), `z.md`
  * -- sorted directories-first, name-ascending, as `dioxus-swdir-tree-core`
- * actually sorts (scan.rs). */
+ * actually sorts (scan.rs). Wrapped in an explicit root node: `collect_rows`
+ * (dioxus-swdir-tree-core's tree.rs) pushes the root itself as row 0 before
+ * recursing into its children, and explorer.rs auto-expands the root on
+ * mount -- so the workspace root is always a real, already-expanded
+ * `[data-tree-row]`, one ahead of every seeded file. Missing this here is
+ * exactly the row-index-off-by-one that made shell_behaviour_driver.js's
+ * expand_enter assumptions wrong the first time (RFC-044 slice-1, root-row
+ * finding, discovered via CI against a real WebView). */
 function defaultFixture() {
-  return [
-    {
-      name: "sub",
-      isDir: true,
-      isExpanded: false,
-      children: [{ name: "child.md", isDir: false, isOpenable: true }],
-    },
-    { name: "a.md", isDir: false, isOpenable: true },
-    { name: "notes.txt", isDir: false, isOpenable: false },
-    { name: "z.md", isDir: false, isOpenable: true },
-  ];
+  return {
+    name: "workspace",
+    isDir: true,
+    isExpanded: true,
+    children: [
+      {
+        name: "sub",
+        isDir: true,
+        isExpanded: false,
+        children: [{ name: "child.md", isDir: false, isOpenable: true }],
+      },
+      { name: "a.md", isDir: false, isOpenable: true },
+      { name: "notes.txt", isDir: false, isOpenable: false },
+      { name: "z.md", isDir: false, isOpenable: true },
+    ],
+  };
 }
 
 export class FakeTree {
-  constructor(nodes = defaultFixture()) {
-    this.nodes = nodes;
+  constructor(root = defaultFixture()) {
+    this.root = root;
     this.activeIndex = 0;
     this.openedPath = null;
   }
 
-  /** Flattened `(node, depth)` pairs in render order, expanding only
-   * directories with `isExpanded: true` -- the same shape
-   * `visible_rows()` produces. */
+  /** Flattened `(node, depth)` pairs in render order -- the root itself
+   * first (depth 0), then its children when expanded, exactly like
+   * `collect_rows` walking `&self.root`. */
   visibleRows() {
     const out = [];
-    const walk = (nodes, depth) => {
-      for (const node of nodes) {
-        out.push({ node, depth });
-        if (node.isDir && node.isExpanded) walk(node.children, depth + 1);
+    const walk = (node, depth) => {
+      out.push({ node, depth });
+      if (node.isDir && node.isExpanded) {
+        for (const child of node.children) walk(child, depth + 1);
       }
     };
-    walk(this.nodes, 0);
+    walk(this.root, 0);
     return out;
   }
 
