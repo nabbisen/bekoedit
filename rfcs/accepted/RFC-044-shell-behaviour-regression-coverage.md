@@ -250,7 +250,17 @@ assertion — and B follows immediately against a vehicle that has already run
 green.
 
 Slices are therefore: **1 = the second run + A**, **2 = B**, **3 = C–F** (F in
-scope per §14 Q3). Handoff for slice 1:
+scope per §14 Q3).
+
+**Slice 1 implemented 2026-09-05**, merged as `ab6acf9` (PR #21, fast-forward).
+Six of A's seven contracts now execute against a real WebView on every pull
+request; A.7 is deferred with its fix to
+`.git-exclude/tasks/dev-team/014-open-document-focus-claim.md`. The new step is
+non-blocking and its promotion clock started on the merge date — recorded beside
+`continue-on-error` in `.github/workflows/ci.yml`, which is where someone
+asking why it is non-blocking will look.
+
+Handoff for slice 1:
 [`handoffs/044-shell-behaviour-regression-coverage/slice-1-second-run-and-tree-navigation.md`](../handoffs/044-shell-behaviour-regression-coverage/slice-1-second-run-and-tree-navigation.md).
 
 **One assumption gates all of it**, and slice 1 must prove it before anything

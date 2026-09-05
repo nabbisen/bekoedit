@@ -240,10 +240,12 @@ jobs:
         # a synthetic Tab.
         #
         # Promotion criterion, recorded per handoff §6: promote to blocking
-        # after 10 consecutive green runs of this step on `main`. Clock
-        # starts the day this slice merges to `main` -- record that date in
-        # the merge commit or PR description, since it is not this commit's
-        # own date. Track the count via
+        # after 10 consecutive green runs of this step on `main`.
+        #
+        # CLOCK STARTED 2026-09-05 (PR #21 merged, fast-forward to ab6acf9).
+        # Run 1 of 10: 33943540388, this step green. Update this line as the
+        # count advances, and delete `continue-on-error` when it reaches 10.
+        # Track via
         # `gh run list --branch main --workflow=ci.yml`, reading this step's
         # own conclusion in each run (a job can be green with this step
         # failed, since continue-on-error masks it at the job level).
