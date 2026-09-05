@@ -49,6 +49,14 @@ function extractFooter(source, label) {
   return source.slice(source.indexOf(startAnchor));
 }
 
+/** The declared value of `const <name> = ...;` at the top of a driver
+ * (e.g. `const pinKey = "__bkWebViewSmokeEvalPin";` -> `"__bkWebViewSmokeEvalPin"`). */
+function declaredConstant(source, name, label) {
+  const match = source.match(new RegExp(`const ${name} = ([^;]+);`));
+  assert.ok(match, `${label}: no \`const ${name} = ...;\` declaration found`);
+  return match[1];
+}
+
 test("the pin-registry setup/release block is the same protocol in both drivers", () => {
   const fromDriver = extractPinRegistryProtocol(driverJs, "driver.js");
   const fromShellBehaviour = extractPinRegistryProtocol(shellBehaviourJs, "shell_behaviour_driver.js");
@@ -66,6 +74,35 @@ test("the report/acknowledgement/pin-set footer is the same protocol in both dri
     fromShellBehaviour,
     fromDriver,
     "shell_behaviour_driver.js's footer has drifted from driver.js's",
+  );
+});
+
+test("pinKey, protocolVersion and pinProtocolVersion are declared identically; marker and stateKey are allowed to differ", () => {
+  // extractPinRegistryProtocol's window starts at `let pinRegistry =
+  // window[pinKey];`, so these five constants -- declared above that line
+  // -- are read inside the extracted block but never themselves compared.
+  // pinKey/protocolVersion/pinProtocolVersion are wire-protocol values two
+  // separate WebView processes must still agree on; marker and stateKey
+  // are deliberately per-run (RFC041_... vs RFC044_..., separate state
+  // keys so the two runs never collide). A drift in the first three would
+  // be silent forever: each driver is internally self-consistent, and
+  // nothing else ever compares them against each other.
+  for (const name of ["pinKey", "protocolVersion", "pinProtocolVersion"]) {
+    assert.equal(
+      declaredConstant(shellBehaviourJs, name, "shell_behaviour_driver.js"),
+      declaredConstant(driverJs, name, "driver.js"),
+      `${name} has drifted between the two drivers`,
+    );
+  }
+  assert.notEqual(
+    declaredConstant(shellBehaviourJs, "marker", "shell_behaviour_driver.js"),
+    declaredConstant(driverJs, "marker", "driver.js"),
+    "marker is meant to differ per run -- if it doesn't, that's worth knowing too",
+  );
+  assert.notEqual(
+    declaredConstant(shellBehaviourJs, "stateKey", "shell_behaviour_driver.js"),
+    declaredConstant(driverJs, "stateKey", "driver.js"),
+    "stateKey is meant to differ per run -- if it doesn't, the two runs' state would collide",
   );
 });
 
