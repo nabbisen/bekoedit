@@ -4,6 +4,8 @@ use std::rc::Rc;
 
 use super::*;
 
+mod transport_guard;
+
 fn successful_result() -> DriverResult {
     DriverResult {
         ok: true,
@@ -220,7 +222,11 @@ fn driver_contract_is_bounded_observable_and_uses_rendered_controls() {
     let rust = include_str!("transport.rs");
     assert!(rust.contains("tokio::time::timeout_at(deadline"));
     assert!(rust.contains("eval.join::<PhaseCompletion>()"));
-    assert!(!rust.contains("let mut eval = document::eval(driver_js);\n            loop"));
+    assert!(
+        !transport_guard::eval_immediately_followed_by_a_loop(rust),
+        "a bare `loop` right after creating the eval means someone replaced \
+         the deadline/join pattern with a naive re-eval spin loop"
+    );
 }
 
 #[test]
