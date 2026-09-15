@@ -20,6 +20,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { FakeElement, FakeEditorView } from "./webview-smoke-dom-fake.mjs";
 import { FakeTree } from "./webview-smoke-tree-fake.mjs";
 import {
   FakeDioxus,
@@ -236,7 +237,7 @@ test(
 );
 
 test(
-  "non_openable: Down reaches the disabled row without skipping it; Enter on it is a no-op, and this is the slice's terminal contract",
+  "non_openable: Down reaches the disabled row without skipping it; Enter on it is a no-op",
   { concurrency: false },
   async () => {
     const tree = new FakeTree();
@@ -254,20 +255,10 @@ test(
       phase: "home_end",
     });
 
-    // Contract 7 (Enter opens a document and the editor takes focus) is
-    // deferred to task 014 -- OpenDocument does not claim editor focus
-    // today -- so this slice's run terminates here, at contract 6.
-    assert.equal(report.kind, "terminal");
-    assert.equal(report.result.ok, true);
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "non_openable_reachable");
     assert.equal(tree.activeIndex, 3, "must land on notes.txt, the fourth row");
     assert.equal(tree.openedPath, null, "Enter on a non-openable row must not open anything");
-    assert.deepEqual(report.result.milestones, [
-      "down_up_moved",
-      "expand_entered",
-      "collapse_ascended",
-      "home_end_reached",
-      "non_openable_reachable",
-    ]);
   },
 );
 
@@ -298,5 +289,94 @@ test(
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, false);
     assert.match(report.result.error, /not actually non-openable/);
+  },
+);
+
+/** Drives every phase up to and including non_openable, and returns the
+ * exchange id and release to open enter_opens with. */
+async function driveThroughNonOpenable() {
+  await exchange("down_up", 1);
+  const expandEnter = await driveExpandEnter(2, { exchangeId: 1, phase: "down_up" });
+  await exchange("collapse_ascend", expandEnter.nextExchangeId, expandEnter.release);
+  await exchange("home_end", expandEnter.nextExchangeId + 1, {
+    exchangeId: expandEnter.nextExchangeId,
+    phase: "collapse_ascend",
+  });
+  await exchange("non_openable", expandEnter.nextExchangeId + 2, {
+    exchangeId: expandEnter.nextExchangeId + 1,
+    phase: "home_end",
+  });
+  return {
+    exchangeId: expandEnter.nextExchangeId + 3,
+    release: { exchangeId: expandEnter.nextExchangeId + 2, phase: "non_openable" },
+  };
+}
+
+test(
+  "enter_opens: Enter opens the markdown row; pending until the editor is mounted and focused, then terminal success",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    tree.setElement('[data-source-focus-launch-region="text"]', new FakeElement());
+    const start = await driveThroughNonOpenable();
+
+    // First call: ArrowUp onto a.md, Enter -- nothing mounted yet.
+    const dispatched = await exchange("enter_opens", start.exchangeId, start.release);
+    assert.equal(dispatched.kind, "pending");
+    assert.equal(tree.activeIndex, 2, "must have moved back onto the markdown row");
+    assert.equal(tree.openedPath, "a.md");
+
+    // Mounted but unfocused -- the contract's whole point; still pending.
+    tree.setEditorView(new FakeEditorView({ connected: true, hasFocus: false }));
+    const unfocused = await exchange("enter_opens", start.exchangeId + 1, {
+      exchangeId: start.exchangeId,
+      phase: "enter_opens",
+    });
+    assert.equal(unfocused.kind, "pending");
+
+    tree.setEditorView(new FakeEditorView({ connected: true, hasFocus: true }));
+    const report = await exchange("enter_opens", start.exchangeId + 2, {
+      exchangeId: start.exchangeId + 1,
+      phase: "enter_opens",
+    });
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, true);
+    assert.equal(report.result.stage, "enter_opens");
+    assert.deepEqual(report.result.milestones, [
+      "down_up_moved",
+      "expand_entered",
+      "collapse_ascended",
+      "home_end_reached",
+      "non_openable_reachable",
+      "enter_opened_editor_focused",
+    ]);
+  },
+);
+
+test(
+  "enter_opens: an editor that never takes focus times out naming the observed state",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    tree.setElement('[data-source-focus-launch-region="text"]', new FakeElement());
+    const start = await driveThroughNonOpenable();
+    await exchange("enter_opens", start.exchangeId, start.release);
+    tree.setEditorView(new FakeEditorView({ connected: true, hasFocus: false }));
+    // The fake clock advances on requestAnimationFrame ticks, so read the
+    // deadline the driver actually recorded rather than assuming one.
+    const { deadline } = window.__bkWebViewShellBehaviourState;
+
+    tree.setTime(deadline); // timedOut() uses >=, so exactly the deadline counts
+    const report = await exchange("enter_opens", start.exchangeId + 1, {
+      exchangeId: start.exchangeId,
+      phase: "enter_opens",
+    });
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.match(report.result.error, /timed out at enter_opens: view=true .*hasFocus=false/);
   },
 );

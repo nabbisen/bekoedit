@@ -13,8 +13,8 @@
 //! lands in the shell with a populated tree, no dialog, no Start Screen.
 //! The workspace fixture is shaped for §8 A's contracts: `sub/child.md` (an
 //! expandable directory with one child, for contracts 3 and 4), `a.md` and
-//! `z.md` (openable, for Home/End), and `notes.txt` (not markdown, so not
-//! openable -- contract 6).
+//! `z.md` (openable, for Home/End and Enter), and `notes.txt` (not markdown,
+//! so not openable -- contract 6).
 //!
 //! Contract 1 (Tab reaches the tree at exactly one stop) is not its own
 //! phase: per the governance review that corrected RFC-044 §8 A.1
@@ -25,11 +25,11 @@
 //! app-intercepted nav keys.
 //!
 //! Contract 7 ("Enter opens a document and the editor takes focus") is
-//! deferred to `.git-exclude/tasks/dev-team/014-open-document-focus-claim.md`:
-//! `OpenDocument` does not claim editor focus today
-//! (`source_sync::focus::focus_target`), and a coverage slice must not land
-//! a known-red case against its own promotion clock (review, 2026-09-04).
-//! This run's terminal phase is therefore `NonOpenable` (contract 6).
+//! `EnterOpens`, the terminal phase. Slice 1 deferred it because
+//! `OpenDocument` did not claim editor focus
+//! (`source_sync::focus::focus_target`); task 014 lands it ahead of the fix,
+//! so it is proven able to fail by a red CI run rather than by a mutation
+//! afterwards.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -50,12 +50,13 @@ use super::transport::{
 };
 
 const MARKER: &str = "RFC044_SHELL_BEHAVIOUR_MARKER";
-const EXPECTED_MILESTONES: [&str; 5] = [
+const EXPECTED_MILESTONES: [&str; 6] = [
     "down_up_moved",
     "expand_entered",
     "collapse_ascended",
     "home_end_reached",
     "non_openable_reachable",
+    "enter_opened_editor_focused",
 ];
 const PHASE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -67,9 +68,9 @@ pub(super) enum ShellBehaviourPhase {
     ExpandEnter,
     CollapseAscend,
     HomeEnd,
-    /// Terminal for this slice: contract 7 is deferred to task 014 (module
-    /// doc). Task 014 adds an `EnterOpens` phase after this one.
     NonOpenable,
+    /// Contract 7, the terminal phase (task 014).
+    EnterOpens,
 }
 
 impl ShellBehaviourPhase {
@@ -80,6 +81,7 @@ impl ShellBehaviourPhase {
             Self::CollapseAscend => "collapse_ascend",
             Self::HomeEnd => "home_end",
             Self::NonOpenable => "non_openable",
+            Self::EnterOpens => "enter_opens",
         }
     }
 
@@ -89,12 +91,13 @@ impl ShellBehaviourPhase {
             Self::ExpandEnter => Some(Self::CollapseAscend),
             Self::CollapseAscend => Some(Self::HomeEnd),
             Self::HomeEnd => Some(Self::NonOpenable),
-            Self::NonOpenable => None,
+            Self::NonOpenable => Some(Self::EnterOpens),
+            Self::EnterOpens => None,
         }
     }
 
     /// The `milestone` a `Progress` report from this phase must carry --
-    /// one-to-one with `EXPECTED_MILESTONES`. `NonOpenable` is terminal, so
+    /// one-to-one with `EXPECTED_MILESTONES`. `EnterOpens` is terminal, so
     /// it reports its milestone via `DriverResult.milestones`, not this.
     const fn expected_milestone(self) -> &'static str {
         match self {
@@ -103,6 +106,7 @@ impl ShellBehaviourPhase {
             Self::CollapseAscend => "collapse_ascended",
             Self::HomeEnd => "home_end_reached",
             Self::NonOpenable => "non_openable_reachable",
+            Self::EnterOpens => "enter_opened_editor_focused",
         }
     }
 }
@@ -170,8 +174,8 @@ impl ShellBehaviourMachine {
                 }
             }
             MessageKind::Progress => {
-                if self.current == ShellBehaviourPhase::NonOpenable {
-                    return Err("non_openable phase cannot return nonterminal progress".into());
+                if self.current == ShellBehaviourPhase::EnterOpens {
+                    return Err("enter_opens phase cannot return nonterminal progress".into());
                 }
                 let expected = self.current.expected_milestone();
                 if message.milestone.as_deref() != Some(expected) || message.result.is_some() {
@@ -216,7 +220,7 @@ fn validate_shell_behaviour_result(result: &DriverResult) -> Result<(), String> 
             result.error.as_deref().unwrap_or("unknown error")
         ));
     }
-    if result.stage != "non_openable" || result.marker != MARKER {
+    if result.stage != "enter_opens" || result.marker != MARKER {
         return Err("driver returned the wrong terminal stage or marker".into());
     }
     if result.error_toast_seen {

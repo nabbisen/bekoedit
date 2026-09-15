@@ -17,7 +17,7 @@ fn phase_message(kind: MessageKind, phase: &str, exchange_id: u64) -> PhaseMessa
 fn successful_result() -> DriverResult {
     DriverResult {
         ok: true,
-        stage: "non_openable".into(),
+        stage: "enter_opens".into(),
         marker: MARKER.into(),
         milestones: EXPECTED_MILESTONES
             .iter()
@@ -29,7 +29,7 @@ fn successful_result() -> DriverResult {
 }
 
 #[test]
-fn machine_advances_through_all_four_transitions_ending_at_non_openable() {
+fn machine_advances_through_all_five_transitions_ending_at_enter_opens() {
     let mut machine = ShellBehaviourMachine::new();
     let progression = [
         (
@@ -52,6 +52,11 @@ fn machine_advances_through_all_four_transitions_ending_at_non_openable() {
             "home_end_reached",
             ShellBehaviourPhase::NonOpenable,
         ),
+        (
+            ShellBehaviourPhase::NonOpenable,
+            "non_openable_reachable",
+            ShellBehaviourPhase::EnterOpens,
+        ),
     ];
     for (index, (phase, milestone, next)) in progression.into_iter().enumerate() {
         let exchange_id = (index + 1) as u64;
@@ -63,9 +68,9 @@ fn machine_advances_through_all_four_transitions_ending_at_non_openable() {
         assert_eq!(machine.current(), next);
     }
     assert_eq!(
-        ShellBehaviourPhase::NonOpenable.next(),
+        ShellBehaviourPhase::EnterOpens.next(),
         None,
-        "non_openable is terminal for this slice -- contract 7 is deferred to task 014"
+        "enter_opens (contract 7) is the terminal phase"
     );
 }
 
@@ -120,14 +125,14 @@ fn malformed_progress_and_terminal_messages_are_rejected() {
     assert!(machine.validate(&out_of_order, 1, None).is_err());
 
     let last_phase_terminal_progress =
-        ShellBehaviourMachine::for_phase(ShellBehaviourPhase::NonOpenable);
-    let mut malformed = phase_message(MessageKind::Progress, "non_openable", 1);
-    malformed.milestone = Some("non_openable_reachable".into());
+        ShellBehaviourMachine::for_phase(ShellBehaviourPhase::EnterOpens);
+    let mut malformed = phase_message(MessageKind::Progress, "enter_opens", 1);
+    malformed.milestone = Some("enter_opened_editor_focused".into());
     assert!(
         last_phase_terminal_progress
             .validate(&malformed, 1, None)
             .is_err(),
-        "non_openable cannot return nonterminal progress -- it is this slice's terminal phase"
+        "enter_opens cannot return nonterminal progress -- it is the terminal phase"
     );
 }
 
@@ -136,7 +141,7 @@ fn validate_result_checks_stage_marker_toast_and_milestones() {
     assert!(validate_shell_behaviour_result(&successful_result()).is_ok());
 
     let mutations: [fn(&mut DriverResult); 5] = [
-        |result| result.stage = "down_up".into(),
+        |result| result.stage = "non_openable".into(),
         |result| result.marker = "wrong".into(),
         |result| result.error_toast_seen = true,
         |result| result.error = Some("contradictory success".into()),
