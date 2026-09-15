@@ -93,6 +93,7 @@ to `done/` when the work ships.
 |-----|-------|-------|
 | RFC-044 | [Shell behaviour regression coverage](accepted/RFC-044-shell-behaviour-regression-coverage.md) | Accepted 2026-08-24, all §14 questions resolved — reproducible coverage for RFC-042's keyboard contracts. **Unblocked** 2026-09-03 — RFC-043 merged. Its slices are startable; the §7 JavaScript relocation is a prerequisite task outside the RFC and was never blocked |
 | RFC-045 | [Release artifact portability and completeness](accepted/RFC-045-release-artifact-portability-and-completeness.md) | Accepted 2026-08-17. Slices 1–2 shipped to `main`: the platform scripts now ship in every archive, and a cross-distribution `ldd` check gates both pull requests and the publish job. Slice 3 (Linux portability) is open — see its §10 Q1. Handoffs: [`handoffs/045-release-artifact-portability-and-completeness/`](handoffs/045-release-artifact-portability-and-completeness/) |
+| RFC-046 | [Paste HTML as Markdown](accepted/RFC-046-paste-html-as-markdown.md) | Accepted 2026-09-16, the day it was drafted. Converts pasted HTML with `mdka`, falling back to plain text where conversion would lose content. Implementation is scheduled **after RFC-044's remaining slices** (2 and 3) — acceptance authorises the design, not an immediate start. §10 Q3 and Q6 are answered in-file; Q1, Q2, Q4 and Q5 remain the owner's |
 
 ## Implemented — merged to `main`, not yet released (`done/`)
 
@@ -117,7 +118,6 @@ superseded).
 | RFC-032 | [Performance optimization and incremental parsing](proposed/RFC-032-performance-optimization-and-incremental-parsing.md) | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | [Plugin system evaluation](proposed/RFC-039-plugin-system-evaluation.md) | Future evaluation only |
 | RFC-040 | [Sync and collaboration evaluation](proposed/RFC-040-sync-and-collaboration-evaluation.md) | Future evaluation only |
-| RFC-046 | [Paste HTML as Markdown](proposed/RFC-046-paste-html-as-markdown.md) | **Drafted** 2026-09-16 at the owner's request; not yet approved. Converts pasted HTML with `mdka`, falling back to plain text where conversion would lose content. Scheduled after RFC-044's remaining slices |
 
 ## Implemented — v0.3.0 (`done/`)
 

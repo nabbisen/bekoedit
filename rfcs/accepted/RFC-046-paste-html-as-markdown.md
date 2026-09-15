@@ -1,10 +1,11 @@
 # RFC-046: Paste HTML as Markdown
 
 **Project:** bekoedit
-**Status:** Proposed — drafted 2026-09-16 at the project owner's request. Not
-yet approved for implementation. Implementation is deliberately scheduled
+**Status:** Accepted — approved for implementation by the project owner on
+2026-09-16, the day it was drafted. Implementation is deliberately scheduled
 **after RFC-044's remaining slices** (slice 2 and slice 3), per the owner's
-decision of 2026-09-16.
+decision of the same date; acceptance authorises the design, not an immediate
+start.
 **Track:** Editing
 **Priority:** Medium — a common authoring path that currently loses all structure
 **Date:** 2026-09-16
@@ -224,12 +225,49 @@ Scheduled after RFC-044's slices 2 and 3.
    in the first release; revisit on feedback.
 2. **Size cap.** Proposed 1 MiB of HTML. Conversion is fast enough for more (5 MB in
    101 ms); the binding cost is moving the string across the WebView bridge.
-3. **Bridge schema version.** Do new message types require a version bump under
-   RFC-041's protocol, or are additive messages compatible?
+3. **Bridge schema version.** ~~Do new message types require a version bump under
+   RFC-041's protocol, or are additive messages compatible?~~ **Answered
+   2026-09-16 — no bump needed.** The JS side is not shipped separately: `source_sync/host.rs`
+   embeds `assets/editor-bundle.js` with `include_str!`, and the `tests.rs` bundle
+   check pins that artifact to `js/src/lifecycle.js` and `js/src/editor.js`. Both
+   halves of the protocol therefore leave the build in one binary, and the version
+   skew `requireVersion` guards against cannot arise in a released bekoedit — the
+   guard is a stale-bundle tripwire, not feature negotiation. RFC-046 adds its
+   messages at `BRIDGE_SCHEMA_VERSION = 2`.
+
+   **One constraint this imposes on the implementer.** `lifecycle.js`'s request
+   dispatch ends in `default: return false`, so an unrecognised `type` is dropped
+   in silence. The paste path must not rely on that: a conversion request that the
+   JS side does not handle has to surface as a visible failure, not a paste that
+   quietly does nothing. Give the new messages an explicit failure reply in the
+   same style as `emitFailure`'s existing cases.
 4. **`data:` images.** Replace with alt text (proposed), drop entirely, or keep a
    short placeholder image target in place of the URI?
 5. **Tables before `mdka` supports them.** Wait for the upstream fix (proposed), or
    convert simple tables in bekoedit as an interim step?
 6. **Pasted `javascript:` links.** `mdka` keeps `href` verbatim. Typed Markdown can
    already contain such links, so this is not new exposure, but a paste makes it
-   easier to acquire one unknowingly. Does Preview mode already neutralise them?
+   easier to acquire one unknowingly. ~~Does Preview mode already neutralise them?~~
+   **Answered 2026-09-16 — no, it does not.** Measured against
+   `render_preview_html`. A Markdown link whose destination is
+   `javascript:alert(1)` renders as `<a href="javascript:alert(1)">`, and the
+   case variant `JaVaScRiPt:` survives unchanged — so any filter has to compare
+   case-insensitively. What *is* neutralised is raw HTML: an `<a>` element
+   written literally in the document is escaped to text. The gap is therefore
+   specifically Markdown link and image syntax, whose destination
+   `pulldown-cmark` passes through untouched. `dioxus_config` sets no CSP and installs no navigation
+   handler, and Preview injects through `dangerous_inner_html`.
+
+   Architectural invariant 10's body ("converts every raw HTML event to escaped
+   text") is accurate; its headline ("Preview never executes document HTML") is
+   broader than what the code delivers.
+
+   **This is pre-existing and not caused by RFC-046** — it is reachable today by
+   typing the link by hand. RFC-046 changes only how easily one is acquired
+   without noticing, since the rendered anchor text can read as anything. Treating
+   it is therefore not a precondition for this RFC, and equally must not be
+   deferred *to* this RFC. Recorded separately as a finding in
+   `.git-exclude/governance/2026-09-16-preview-link-scheme-finding.md`, which is
+   where the scope and the fix belong. Whatever scheme filter lands there should
+   be in `render_preview_html`, so Preview, and any later export, inherit it
+   without RFC-046 carrying a rule of its own.
