@@ -264,6 +264,7 @@ jobs:
         id: shell_behaviour
         continue-on-error: true
         run: |
+          exit 1 # TEMP task 015 probe: force this non-blocking step to fail
           BEHAVIOUR_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-shell-behaviour.XXXXXX")"
           trap 'rm -rf "$BEHAVIOUR_PARENT"' EXIT
           timeout 60 xvfb-run -a -s "-screen 0 1280x1024x24" \
