@@ -11,6 +11,9 @@ return (async () => {
     "home_end",
     "non_openable",
     "enter_opens",
+    "search_result_opens",
+    "new_file_focuses",
+    "tree_enter_after_new_file",
   ];
   const request = await dioxus.recv();
   const requestedPhase = request?.phase;
@@ -121,6 +124,7 @@ return (async () => {
       phase: "down_up",
       stage: "down_up",
       deadline: null,
+      step: 0,
       milestones: [],
       errorToastSeen: Boolean(document.querySelector(".toast-error")),
       observer: null,
@@ -160,6 +164,55 @@ return (async () => {
     return { kind: "terminal", result };
   };
   const timedOut = () => state.deadline !== null && performance.now() >= state.deadline;
+
+  // ---- task 016: handoff-activation contracts (RFC-042 §6.2 rule 3) ------
+
+  /** Seeded content lengths (shell_behaviour.rs `prepare`), so a focused
+   * editor can be told apart from the one that was already open. */
+  const docLengths = { child: "# child\n".length, a: "# a\n".length, untitled: 0 };
+  const describeActiveElement = () => {
+    const active = document.activeElement;
+    if (!active) return "none";
+    if (active === document.body) return "body";
+    const rowIndex = rows().indexOf(active);
+    if (rowIndex >= 0) return `tree row ${rowIndex}`;
+    if (active.id) return `#${active.id}`;
+    const launch = active.getAttribute?.("data-source-focus-launch");
+    if (launch) return `[data-source-focus-launch=${launch}]`;
+    return String(active.tagName ?? "element").toLowerCase();
+  };
+  const editorSummary = () => {
+    const view = window.__bk?._view;
+    const host = document.querySelector('[data-source-focus-launch-region="text"]');
+    return (
+      `view=${Boolean(view)} dom.isConnected=${view?.dom?.isConnected} hasFocus=${view?.hasFocus} ` +
+      `docLength=${view?.state?.doc?.length} host=${Boolean(host)} ` +
+      `statusMarker=${Boolean(host?.querySelector(".source-editor-status"))} ` +
+      `activeElement=${describeActiveElement()} toastSeen=${state.errorToastSeen}`
+    );
+  };
+  const editorFocusedWithDoc = (docLength) => {
+    const view = window.__bk?._view;
+    const host = document.querySelector('[data-source-focus-launch-region="text"]');
+    return Boolean(
+      view &&
+        view.dom?.isConnected &&
+        view.hasFocus &&
+        host &&
+        !host.querySelector(".source-editor-status") &&
+        view.state?.doc?.length === docLength,
+    );
+  };
+  /** Leaves the current phase for `next` with a fresh step and deadline, so
+   * no phase ever reads the previous one's deadline. */
+  const advance = (milestone, next) => {
+    if (state.errorToastSeen) throw new Error("an error toast appeared");
+    state.milestones.push(milestone);
+    state.phase = next;
+    state.step = 0;
+    state.deadline = null;
+    return { kind: "progress", milestone };
+  };
 
   let outgoing;
   try {
@@ -372,10 +425,112 @@ return (async () => {
         if (!ready) {
           outgoing = { kind: "pending" };
         } else {
-          if (state.errorToastSeen) throw new Error("an error toast appeared");
-          state.milestones.push("enter_opened_editor_focused");
-          outgoing = finish(true);
+          outgoing = advance("enter_opened_editor_focused", "search_result_opens");
         }
+      }
+    } else if (requestedPhase === "search_result_opens") {
+      // Task 016 §5.2 (a): activating a search result opens its document and
+      // the editor takes focus -- not the search trigger. Multi-call: the
+      // search itself runs in a spawned task.
+      state.stage = "search_result_opens";
+      const trigger = document.querySelector("#workspace-search-trigger");
+      if (state.step > 0 && timedOut()) {
+        throw new Error(
+          `timed out at search_result_opens (step ${state.step}): ` +
+            `results=${document.querySelectorAll(".search-match-btn").length} ${editorSummary()}`,
+        );
+      }
+      if (state.step === 0) {
+        if (!trigger) throw new Error("search_result_opens: no #workspace-search-trigger");
+        trigger.click();
+        await waitFor(() => document.querySelector("#workspace-search-input"), "the search panel to open");
+        const input = document.querySelector("#workspace-search-input");
+        input.value = "child";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        state.step = 1;
+        state.deadline = performance.now() + 15000;
+        outgoing = { kind: "pending" };
+      } else if (state.step === 1) {
+        const input = document.querySelector("#workspace-search-input");
+        if (!input) throw new Error("search_result_opens: the search input disappeared");
+        dispatchKey(input, "Enter");
+        state.step = 2;
+        outgoing = { kind: "pending" };
+      } else if (state.step === 2) {
+        const result = [...document.querySelectorAll(".search-match-btn")].find((button) =>
+          button.textContent.includes("child.md"),
+        );
+        if (result) {
+          result.click();
+          state.step = 3;
+        }
+        outgoing = { kind: "pending" };
+      } else if (editorFocusedWithDoc(docLengths.child) && document.activeElement !== trigger) {
+        outgoing = advance("search_result_editor_focused", "new_file_focuses");
+      } else {
+        outgoing = { kind: "pending" };
+      }
+    } else if (requestedPhase === "new_file_focuses") {
+      // Task 016 §5.2 (b), first assertion: App menu "New File" focuses the
+      // editor.
+      state.stage = "new_file_focuses";
+      if (state.step > 0 && timedOut()) {
+        throw new Error(`timed out at new_file_focuses: ${editorSummary()}`);
+      }
+      if (state.step === 0) {
+        const trigger = document.querySelector("#app-menu-trigger");
+        if (!trigger) throw new Error("new_file_focuses: no #app-menu-trigger");
+        trigger.click();
+        await waitFor(() => document.querySelector("#app-overflow-menu"), "the app menu to open");
+        // §5.3: by launch id only, never by position. "Open Folder" sits
+        // beside it and opens a native dialog that escapes xvfb.
+        const launches = [...document.querySelectorAll('[data-source-focus-launch="appbar-new"]')];
+        if (launches.length !== 1) {
+          throw new Error(
+            `new_file_focuses: expected exactly one [data-source-focus-launch="appbar-new"], found ${launches.length}`,
+          );
+        }
+        const item = launches[0];
+        if (
+          item.getAttribute("data-source-focus-launch") !== "appbar-new" ||
+          item.getAttribute("role") !== "menuitem"
+        ) {
+          throw new Error("new_file_focuses: the appbar-new launch is not a menu item");
+        }
+        item.click();
+        state.step = 1;
+        state.deadline = performance.now() + 15000;
+        outgoing = { kind: "pending" };
+      } else if (editorFocusedWithDoc(docLengths.untitled)) {
+        outgoing = advance("new_file_editor_focused", "tree_enter_after_new_file");
+      } else {
+        outgoing = { kind: "pending" };
+      }
+    } else if (requestedPhase === "tree_enter_after_new_file") {
+      // Task 016 §5.2 (b), second assertion: a tree Enter after "New File"
+      // still focuses the editor. While the menu's shell authority stays
+      // held, task 014's claim is refused and focus stays on the row.
+      state.stage = "tree_enter_after_new_file";
+      if (state.step > 0 && timedOut()) {
+        throw new Error(`timed out at tree_enter_after_new_file: ${editorSummary()}`);
+      }
+      if (state.step === 0) {
+        const row = rows()[2];
+        if (row?.getAttribute("aria-disabled") !== "false") {
+          throw new Error("tree_enter_after_new_file: row 2 is not the openable a.md row");
+        }
+        row.focus();
+        await waitFor(() => document.activeElement === row, "focus onto the a.md row");
+        dispatchKey(row, "Enter");
+        state.step = 1;
+        state.deadline = performance.now() + 15000;
+        outgoing = { kind: "pending" };
+      } else if (editorFocusedWithDoc(docLengths.a)) {
+        if (state.errorToastSeen) throw new Error("an error toast appeared");
+        state.milestones.push("tree_enter_refocused_after_new_file");
+        outgoing = finish(true);
+      } else {
+        outgoing = { kind: "pending" };
       }
     } else {
       throw new Error(`unknown phase: ${requestedPhase}`);

@@ -25,11 +25,17 @@
 //! app-intercepted nav keys.
 //!
 //! Contract 7 ("Enter opens a document and the editor takes focus") is
-//! `EnterOpens`, the terminal phase. Slice 1 deferred it because
-//! `OpenDocument` did not claim editor focus
-//! (`source_sync::focus::focus_target`); task 014 lands it ahead of the fix,
-//! so it is proven able to fail by a red CI run rather than by a mutation
-//! afterwards.
+//! `EnterOpens`. Slice 1 deferred it because `OpenDocument` did not claim
+//! editor focus (`source_sync::focus::focus_target`); task 014 landed it
+//! ahead of the fix, so it was proven able to fail by a red CI run rather
+//! than by a mutation afterwards.
+//!
+//! Task 016's handoff-activation contracts follow it (RFC-042 §6.2 rule 3):
+//! `SearchResultOpens` (a search result opens its document and the editor
+//! takes focus, not the search trigger), then `NewFileFocuses` and the
+//! terminal `TreeEnterAfterNewFile` -- App menu "New File" focuses the
+//! editor, and a tree Enter afterwards still does, which only holds if the
+//! menu released shell authority. Committed before the fix, like contract 7.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -50,14 +56,19 @@ use super::transport::{
 };
 
 const MARKER: &str = "RFC044_SHELL_BEHAVIOUR_MARKER";
-const EXPECTED_MILESTONES: [&str; 6] = [
+const EXPECTED_MILESTONES: [&str; 9] = [
     "down_up_moved",
     "expand_entered",
     "collapse_ascended",
     "home_end_reached",
     "non_openable_reachable",
     "enter_opened_editor_focused",
+    "search_result_editor_focused",
+    "new_file_editor_focused",
+    "tree_enter_refocused_after_new_file",
 ];
+/// The phase whose success is the whole run's terminal result.
+const TERMINAL_STAGE: &str = "tree_enter_after_new_file";
 const PHASE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 const SHELL_BEHAVIOUR_JS: &str = include_str!("shell_behaviour_driver.js");
@@ -69,8 +80,14 @@ pub(super) enum ShellBehaviourPhase {
     CollapseAscend,
     HomeEnd,
     NonOpenable,
-    /// Contract 7, the terminal phase (task 014).
+    /// Contract 7 (task 014).
     EnterOpens,
+    /// Task 016 §5.2 (a).
+    SearchResultOpens,
+    /// Task 016 §5.2 (b), first assertion.
+    NewFileFocuses,
+    /// Task 016 §5.2 (b), second assertion; the terminal phase.
+    TreeEnterAfterNewFile,
 }
 
 impl ShellBehaviourPhase {
@@ -82,6 +99,9 @@ impl ShellBehaviourPhase {
             Self::HomeEnd => "home_end",
             Self::NonOpenable => "non_openable",
             Self::EnterOpens => "enter_opens",
+            Self::SearchResultOpens => "search_result_opens",
+            Self::NewFileFocuses => "new_file_focuses",
+            Self::TreeEnterAfterNewFile => TERMINAL_STAGE,
         }
     }
 
@@ -92,13 +112,16 @@ impl ShellBehaviourPhase {
             Self::CollapseAscend => Some(Self::HomeEnd),
             Self::HomeEnd => Some(Self::NonOpenable),
             Self::NonOpenable => Some(Self::EnterOpens),
-            Self::EnterOpens => None,
+            Self::EnterOpens => Some(Self::SearchResultOpens),
+            Self::SearchResultOpens => Some(Self::NewFileFocuses),
+            Self::NewFileFocuses => Some(Self::TreeEnterAfterNewFile),
+            Self::TreeEnterAfterNewFile => None,
         }
     }
 
     /// The `milestone` a `Progress` report from this phase must carry --
-    /// one-to-one with `EXPECTED_MILESTONES`. `EnterOpens` is terminal, so
-    /// it reports its milestone via `DriverResult.milestones`, not this.
+    /// one-to-one with `EXPECTED_MILESTONES`. `TreeEnterAfterNewFile` is
+    /// terminal, so it reports its milestone via `DriverResult.milestones`.
     const fn expected_milestone(self) -> &'static str {
         match self {
             Self::DownUp => "down_up_moved",
@@ -107,6 +130,9 @@ impl ShellBehaviourPhase {
             Self::HomeEnd => "home_end_reached",
             Self::NonOpenable => "non_openable_reachable",
             Self::EnterOpens => "enter_opened_editor_focused",
+            Self::SearchResultOpens => "search_result_editor_focused",
+            Self::NewFileFocuses => "new_file_editor_focused",
+            Self::TreeEnterAfterNewFile => "tree_enter_refocused_after_new_file",
         }
     }
 }
@@ -174,8 +200,11 @@ impl ShellBehaviourMachine {
                 }
             }
             MessageKind::Progress => {
-                if self.current == ShellBehaviourPhase::EnterOpens {
-                    return Err("enter_opens phase cannot return nonterminal progress".into());
+                if self.current.next().is_none() {
+                    return Err(format!(
+                        "{} phase cannot return nonterminal progress",
+                        self.current.as_str()
+                    ));
                 }
                 let expected = self.current.expected_milestone();
                 if message.milestone.as_deref() != Some(expected) || message.result.is_some() {
@@ -220,7 +249,7 @@ fn validate_shell_behaviour_result(result: &DriverResult) -> Result<(), String> 
             result.error.as_deref().unwrap_or("unknown error")
         ));
     }
-    if result.stage != "enter_opens" || result.marker != MARKER {
+    if result.stage != TERMINAL_STAGE || result.marker != MARKER {
         return Err("driver returned the wrong terminal stage or marker".into());
     }
     if result.error_toast_seen {

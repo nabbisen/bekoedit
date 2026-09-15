@@ -313,7 +313,7 @@ async function driveThroughNonOpenable() {
 }
 
 test(
-  "enter_opens: Enter opens the markdown row; pending until the editor is mounted and focused, then terminal success",
+  "enter_opens: Enter opens the markdown row; pending until the editor is mounted and focused, then progress",
   { concurrency: false },
   async () => {
     const tree = new FakeTree();
@@ -341,17 +341,11 @@ test(
       phase: "enter_opens",
     });
 
-    assert.equal(report.kind, "terminal");
-    assert.equal(report.result.ok, true);
-    assert.equal(report.result.stage, "enter_opens");
-    assert.deepEqual(report.result.milestones, [
-      "down_up_moved",
-      "expand_entered",
-      "collapse_ascended",
-      "home_end_reached",
-      "non_openable_reachable",
-      "enter_opened_editor_focused",
-    ]);
+    // No longer terminal: task 016's contracts follow it.
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "enter_opened_editor_focused");
+    assert.equal(window.__bkWebViewShellBehaviourState.phase, "search_result_opens");
+    assert.equal(window.__bkWebViewShellBehaviourState.deadline, null);
   },
 );
 
@@ -378,5 +372,256 @@ test(
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, false);
     assert.match(report.result.error, /timed out at enter_opens: view=true .*hasFocus=false/);
+  },
+);
+
+// ---- task 016: handoff-activation contracts ------------------------------
+
+/** One exchange of `phase` at `cursor`, then moves the cursor on. */
+async function step(phase, cursor) {
+  const report = await exchange(phase, cursor.exchangeId, cursor.release);
+  cursor.release = { exchangeId: cursor.exchangeId, phase };
+  cursor.exchangeId += 1;
+  return report;
+}
+
+/** Drives every phase through enter_opens's progress. */
+async function driveThroughEnterOpens(tree) {
+  tree.setElement('[data-source-focus-launch-region="text"]', new FakeElement());
+  const start = await driveThroughNonOpenable();
+  const cursor = { exchangeId: start.exchangeId, release: start.release };
+  await step("enter_opens", cursor);
+  tree.setEditorView(new FakeEditorView({ hasFocus: true, docLength: 4 }));
+  const report = await step("enter_opens", cursor);
+  assert.equal(report.kind, "progress");
+  return cursor;
+}
+
+/** The search trigger, input and one `child.md` result, wired so clicking the
+ * trigger opens the panel, as explorer.rs does. */
+function installSearch(tree) {
+  const trigger = new FakeElement();
+  const input = new FakeElement();
+  const result = new FakeElement({ textContent: "sub/child.md:1# child" });
+  trigger.onClick = () => tree.setElement("#workspace-search-input", input);
+  tree.setElement("#workspace-search-trigger", trigger);
+  return { trigger, input, result };
+}
+
+/** Drives search_result_opens to its final, readiness-polling step. */
+async function driveSearchToActivation(tree, cursor) {
+  const search = installSearch(tree);
+  tree.setEditorView(new FakeEditorView({ hasFocus: false, docLength: 4 }));
+  assert.equal((await step("search_result_opens", cursor)).kind, "pending");
+  assert.equal(search.trigger.clicks, 1);
+  assert.equal(search.input.value, "child");
+  assert.equal((await step("search_result_opens", cursor)).kind, "pending");
+  assert.deepEqual(
+    search.input.dispatchedEvents.map((event) => event.key ?? event.type),
+    ["input", "Enter"],
+  );
+  // No results yet: nothing to click, still pending.
+  assert.equal((await step("search_result_opens", cursor)).kind, "pending");
+  assert.equal(search.result.clicks, 0);
+  tree.setElements(".search-match-btn", [search.result]);
+  assert.equal((await step("search_result_opens", cursor)).kind, "pending");
+  assert.equal(search.result.clicks, 1);
+  return search;
+}
+
+/** The app menu trigger, the menu, and its New File item (by launch id). */
+function installAppMenu(tree, launches = null) {
+  const trigger = new FakeElement();
+  const newFile = new FakeElement()
+    .withAttribute("data-source-focus-launch", "appbar-new")
+    .withAttribute("role", "menuitem");
+  trigger.onClick = () => {
+    tree.setElement("#app-overflow-menu", new FakeElement());
+    tree.setElements('[data-source-focus-launch="appbar-new"]', launches ?? [newFile]);
+  };
+  tree.setElement("#app-menu-trigger", trigger);
+  return { trigger, newFile };
+}
+
+async function driveToNewFile(tree) {
+  const cursor = await driveThroughEnterOpens(tree);
+  await driveSearchToActivation(tree, cursor);
+  tree.setEditorView(new FakeEditorView({ hasFocus: true, docLength: 8 }));
+  const report = await step("search_result_opens", cursor);
+  assert.equal(report.kind, "progress");
+  return cursor;
+}
+
+async function driveToTreeEnter(tree) {
+  const cursor = await driveToNewFile(tree);
+  installAppMenu(tree);
+  assert.equal((await step("new_file_focuses", cursor)).kind, "pending");
+  tree.setEditorView(new FakeEditorView({ hasFocus: true, docLength: 0 }));
+  assert.equal((await step("new_file_focuses", cursor)).kind, "progress");
+  return cursor;
+}
+
+test(
+  "task 016: search result, New File, then tree Enter each end with the editor focused; terminal success with all nine milestones",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const cursor = await driveThroughEnterOpens(tree);
+
+    const search = await driveSearchToActivation(tree, cursor);
+    // The previous document's editor is not the one being waited for.
+    tree.setEditorView(new FakeEditorView({ hasFocus: true, docLength: 4 }));
+    assert.equal((await step("search_result_opens", cursor)).kind, "pending");
+    tree.setEditorView(new FakeEditorView({ hasFocus: true, docLength: 8 }));
+    const searched = await step("search_result_opens", cursor);
+    assert.equal(searched.kind, "progress");
+    assert.equal(searched.milestone, "search_result_editor_focused");
+    assert.equal(search.trigger.clicks, 1);
+
+    const menu = installAppMenu(tree);
+    assert.equal((await step("new_file_focuses", cursor)).kind, "pending");
+    assert.equal(menu.trigger.clicks, 1);
+    assert.equal(menu.newFile.clicks, 1);
+    // Still showing child.md: not yet the untitled document.
+    assert.equal((await step("new_file_focuses", cursor)).kind, "pending");
+    tree.setEditorView(new FakeEditorView({ hasFocus: true, docLength: 0 }));
+    const created = await step("new_file_focuses", cursor);
+    assert.equal(created.kind, "progress");
+    assert.equal(created.milestone, "new_file_editor_focused");
+
+    tree.openedPath = null;
+    tree.setEditorView(new FakeEditorView({ hasFocus: false, docLength: 0 }));
+    assert.equal((await step("tree_enter_after_new_file", cursor)).kind, "pending");
+    assert.equal(tree.activeIndex, 2);
+    assert.equal(tree.openedPath, "a.md");
+    assert.equal((await step("tree_enter_after_new_file", cursor)).kind, "pending");
+    tree.setEditorView(new FakeEditorView({ hasFocus: true, docLength: 4 }));
+    const report = await step("tree_enter_after_new_file", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, true);
+    assert.equal(report.result.stage, "tree_enter_after_new_file");
+    assert.deepEqual(report.result.milestones, [
+      "down_up_moved",
+      "expand_entered",
+      "collapse_ascended",
+      "home_end_reached",
+      "non_openable_reachable",
+      "enter_opened_editor_focused",
+      "search_result_editor_focused",
+      "new_file_editor_focused",
+      "tree_enter_refocused_after_new_file",
+    ]);
+  },
+);
+
+test(
+  "search_result_opens: focus restored to the search trigger is not success, even with the new document mounted",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const cursor = await driveThroughEnterOpens(tree);
+    const search = await driveSearchToActivation(tree, cursor);
+    tree.setEditorView(new FakeEditorView({ hasFocus: true, docLength: 8 }));
+    Object.defineProperty(document, "activeElement", {
+      configurable: true,
+      get: () => search.trigger,
+    });
+
+    const report = await step("search_result_opens", cursor);
+
+    assert.equal(report.kind, "pending");
+  },
+);
+
+test(
+  "search_result_opens: focus that never reaches the editor times out naming the phase and the result count",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const cursor = await driveThroughEnterOpens(tree);
+    await driveSearchToActivation(tree, cursor);
+    tree.setEditorView(new FakeEditorView({ hasFocus: false, docLength: 8 }));
+    tree.setTime(window.__bkWebViewShellBehaviourState.deadline);
+
+    const report = await step("search_result_opens", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.equal(report.result.stage, "search_result_opens");
+    assert.match(
+      report.result.error,
+      /timed out at search_result_opens \(step 3\): results=1 view=true .*hasFocus=false docLength=8/,
+    );
+  },
+);
+
+test(
+  "new_file_focuses: New File is activated only by a unique launch id -- two matches fail and nothing is clicked",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const cursor = await driveToNewFile(tree);
+    const duplicate = new FakeElement()
+      .withAttribute("data-source-focus-launch", "appbar-new")
+      .withAttribute("role", "menuitem");
+    const other = new FakeElement()
+      .withAttribute("data-source-focus-launch", "appbar-new")
+      .withAttribute("role", "menuitem");
+    installAppMenu(tree, [duplicate, other]);
+
+    const report = await step("new_file_focuses", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.match(report.result.error, /expected exactly one \[data-source-focus-launch="appbar-new"\], found 2/);
+    assert.equal(duplicate.clicks + other.clicks, 0);
+  },
+);
+
+test(
+  "new_file_focuses: an editor that never takes focus times out naming the phase",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const cursor = await driveToNewFile(tree);
+    installAppMenu(tree);
+    await step("new_file_focuses", cursor);
+    tree.setEditorView(new FakeEditorView({ hasFocus: false, docLength: 0 }));
+    tree.setTime(window.__bkWebViewShellBehaviourState.deadline);
+
+    const report = await step("new_file_focuses", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.match(report.result.error, /timed out at new_file_focuses: view=true .*hasFocus=false/);
+  },
+);
+
+test(
+  "tree_enter_after_new_file: focus left on the row times out naming the phase and the row",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const cursor = await driveToTreeEnter(tree);
+    tree.setEditorView(new FakeEditorView({ hasFocus: false, docLength: 4 }));
+    await step("tree_enter_after_new_file", cursor);
+    tree.setTime(window.__bkWebViewShellBehaviourState.deadline);
+
+    const report = await step("tree_enter_after_new_file", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.equal(report.result.stage, "tree_enter_after_new_file");
+    assert.match(
+      report.result.error,
+      /timed out at tree_enter_after_new_file: view=true .*hasFocus=false .*activeElement=tree row 2/,
+    );
   },
 );

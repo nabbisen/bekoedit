@@ -204,6 +204,12 @@ export class FakeTree {
         Object.assign(this, init);
       }
     };
+    globalThis.Event = class Event {
+      constructor(type, init) {
+        this.type = type;
+        Object.assign(this, init);
+      }
+    };
     globalThis.MutationObserver = class MutationObserver {
       observe() {}
       disconnect() {}
@@ -230,7 +236,8 @@ export class FakeTree {
         if (selector === ".toast-error") return this.errorToastElement ?? null;
         return this.elementsBySelector?.[selector] ?? null;
       },
-      querySelectorAll: (selector) => (selector === "[data-tree-row]" ? tree.elements() : []),
+      querySelectorAll: (selector) =>
+        selector === "[data-tree-row]" ? tree.elements() : (this.elementListsBySelector?.[selector] ?? []),
       get activeElement() {
         return tree.activeElement();
       },
@@ -248,5 +255,12 @@ export class FakeTree {
   setElement(selector, element) {
     this.elementsBySelector ??= {};
     this.elementsBySelector[selector] = element ?? null;
+  }
+
+  /** `document.querySelectorAll(selector)` returns `elements` for selectors
+   * other than `[data-tree-row]`. */
+  setElements(selector, elements) {
+    this.elementListsBySelector ??= {};
+    this.elementListsBySelector[selector] = elements;
   }
 }

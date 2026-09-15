@@ -18,7 +18,9 @@
 // shaped like the handful of calls one file makes.
 
 /** A fake element: dispatchEvent, matches, querySelector, textContent --
- * exactly what driver.js reads or calls on a DOM node. */
+ * exactly what driver.js reads or calls on a DOM node -- plus `click`,
+ * `getAttribute` and `value` for shell_behaviour_driver.js's task 016
+ * contracts. */
 export class FakeElement {
   constructor({
     nodeType = 1, // Node.ELEMENT_NODE
@@ -29,8 +31,28 @@ export class FakeElement {
     this.dispatchResult = dispatchResult;
     this.textContent = textContent;
     this.dispatchedEvents = [];
+    this.clicks = 0;
+    this.onClick = null;
+    this.value = "";
     this._matchSelectors = new Set();
     this._children = new Map();
+    this._attributes = new Map();
+  }
+
+  /** Makes `element.getAttribute(name)` return `value`. */
+  withAttribute(name, value) {
+    this._attributes.set(name, value);
+    return this;
+  }
+
+  getAttribute(name) {
+    return this._attributes.get(name) ?? null;
+  }
+
+  /** Counts the click and runs `onClick`, standing in for the app's handler. */
+  click() {
+    this.clicks += 1;
+    this.onClick?.();
   }
 
   /** Makes `element.matches(selector)` return true for this selector. */

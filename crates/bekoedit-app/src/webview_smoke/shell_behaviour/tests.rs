@@ -17,7 +17,7 @@ fn phase_message(kind: MessageKind, phase: &str, exchange_id: u64) -> PhaseMessa
 fn successful_result() -> DriverResult {
     DriverResult {
         ok: true,
-        stage: "enter_opens".into(),
+        stage: TERMINAL_STAGE.into(),
         marker: MARKER.into(),
         milestones: EXPECTED_MILESTONES
             .iter()
@@ -29,7 +29,7 @@ fn successful_result() -> DriverResult {
 }
 
 #[test]
-fn machine_advances_through_all_five_transitions_ending_at_enter_opens() {
+fn machine_advances_through_all_eight_transitions_ending_at_tree_enter_after_new_file() {
     let mut machine = ShellBehaviourMachine::new();
     let progression = [
         (
@@ -57,6 +57,21 @@ fn machine_advances_through_all_five_transitions_ending_at_enter_opens() {
             "non_openable_reachable",
             ShellBehaviourPhase::EnterOpens,
         ),
+        (
+            ShellBehaviourPhase::EnterOpens,
+            "enter_opened_editor_focused",
+            ShellBehaviourPhase::SearchResultOpens,
+        ),
+        (
+            ShellBehaviourPhase::SearchResultOpens,
+            "search_result_editor_focused",
+            ShellBehaviourPhase::NewFileFocuses,
+        ),
+        (
+            ShellBehaviourPhase::NewFileFocuses,
+            "new_file_editor_focused",
+            ShellBehaviourPhase::TreeEnterAfterNewFile,
+        ),
     ];
     for (index, (phase, milestone, next)) in progression.into_iter().enumerate() {
         let exchange_id = (index + 1) as u64;
@@ -68,9 +83,13 @@ fn machine_advances_through_all_five_transitions_ending_at_enter_opens() {
         assert_eq!(machine.current(), next);
     }
     assert_eq!(
-        ShellBehaviourPhase::EnterOpens.next(),
+        ShellBehaviourPhase::TreeEnterAfterNewFile.next(),
         None,
-        "enter_opens (contract 7) is the terminal phase"
+        "tree_enter_after_new_file (task 016 (b)) is the terminal phase"
+    );
+    assert_eq!(
+        ShellBehaviourPhase::TreeEnterAfterNewFile.as_str(),
+        TERMINAL_STAGE
     );
 }
 
@@ -79,7 +98,7 @@ fn terminal_can_come_from_any_phase_not_only_the_last_one() {
     // Regression test: a driver's try/catch turns a thrown error into a
     // terminal *failure* at whichever phase raised it -- exactly as
     // driver.js's own three phases each can. An earlier version of this
-    // validate() incorrectly restricted Terminal to EnterOpens only,
+    // validate() incorrectly restricted Terminal to the last phase only,
     // which meant a real down_up failure surfaced as "only enter_opens can
     // return a terminal result" instead of the driver's actual error
     // (caught by CI on the first real run against a WebView, 2026-09-04).
@@ -125,15 +144,21 @@ fn malformed_progress_and_terminal_messages_are_rejected() {
     assert!(machine.validate(&out_of_order, 1, None).is_err());
 
     let last_phase_terminal_progress =
-        ShellBehaviourMachine::for_phase(ShellBehaviourPhase::EnterOpens);
-    let mut malformed = phase_message(MessageKind::Progress, "enter_opens", 1);
-    malformed.milestone = Some("enter_opened_editor_focused".into());
+        ShellBehaviourMachine::for_phase(ShellBehaviourPhase::TreeEnterAfterNewFile);
+    let mut malformed = phase_message(MessageKind::Progress, TERMINAL_STAGE, 1);
+    malformed.milestone = Some("tree_enter_refocused_after_new_file".into());
     assert!(
         last_phase_terminal_progress
             .validate(&malformed, 1, None)
             .is_err(),
-        "enter_opens cannot return nonterminal progress -- it is the terminal phase"
+        "the terminal phase cannot return nonterminal progress"
     );
+
+    // enter_opens is no longer terminal (task 016): its progress is valid.
+    let enter_opens = ShellBehaviourMachine::for_phase(ShellBehaviourPhase::EnterOpens);
+    let mut progress = phase_message(MessageKind::Progress, "enter_opens", 1);
+    progress.milestone = Some("enter_opened_editor_focused".into());
+    assert!(enter_opens.validate(&progress, 1, None).is_ok());
 }
 
 #[test]
@@ -141,7 +166,7 @@ fn validate_result_checks_stage_marker_toast_and_milestones() {
     assert!(validate_shell_behaviour_result(&successful_result()).is_ok());
 
     let mutations: [fn(&mut DriverResult); 5] = [
-        |result| result.stage = "non_openable".into(),
+        |result| result.stage = "enter_opens".into(),
         |result| result.marker = "wrong".into(),
         |result| result.error_toast_seen = true,
         |result| result.error = Some("contradictory success".into()),
