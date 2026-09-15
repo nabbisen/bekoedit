@@ -153,6 +153,15 @@ primitives — this RFC introduces no parallel focus manager:
      connected as the guard's origin until the guard arms. Focus then arrives
      through rule 4, from the source controller.
 
+     **Only when the action carries a focus claim in the current mode.**
+     Opening a document claims the editor in Text and Split, and nothing in
+     Preview or Form. An item whose action claims nothing is not a handoff: it
+     is explicit dismissal, and it restores focus to the invoking element as
+     before. Otherwise focus is released to nowhere, falls to the document
+     body — and Form is the default mode. *(Clarified 2026-09-16, reviewing
+     task 016, whose first implementation took "source-focus interaction" to
+     mean any call through `submit_source_interaction`.)*
+
    *(Amended 2026-09-15, after task 014 found that a search result could not
    carry an `OpenDocument` focus claim. Explicit dismissal restores focus
    because the user asked to leave the surface and go back. When the item's
