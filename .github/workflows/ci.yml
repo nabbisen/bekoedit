@@ -242,14 +242,20 @@ jobs:
         # Promotion criterion, recorded per handoff §6: promote to blocking
         # after 10 consecutive green runs of this step on `main`.
         #
-        # CLOCK STARTED 2026-09-05 (PR #21 merged, fast-forward to ab6acf9).
-        # Count stands at 1 of 10. Run 1: 33943540388, verified from its log
-        # ("shell-behaviour run PASSED"). Run 33974083411 (54e3c04) is NOT
-        # counted: its retrieved job log is truncated to 420 lines and holds no
-        # result line, so it cannot be verified. Update this line as the count
-        # advances; delete `continue-on-error` when it reaches 10. The count
-        # RESTARTS when this step's phase set changes (RFC-044 §10): tasks 014
-        # and 016 and slice 2 each record a new start here in their merge.
+        # CLOCK RESTARTED 2026-09-15 (task 014, PR #22): contract 7
+        # (enter_opens) changed this step's phase set. Count stands at 0 of 10.
+        # Run 1 will be the first `main` push run after PR #22's fast-forward,
+        # read from its "RFC-044 shell-behaviour outcome:" line, never from a
+        # conclusion. Update this line as the count advances; delete
+        # `continue-on-error` when it reaches 10.
+        #
+        # Previous clock, superseded by the restart above: started 2026-09-05
+        # (PR #21, fast-forward to ab6acf9), reached 1 of 10 (run 33943540388,
+        # verified from its log; run 33974083411 not counted, its job log
+        # truncated with no result line).
+        #
+        # The count RESTARTS when this step's phase set changes (RFC-044 §10):
+        # task 016 and slice 2 each record a new start here in their merge.
         #
         # How to read a run: NOT from any conclusion. continue-on-error masks
         # this step's own API conclusion as well as the job's -- run
