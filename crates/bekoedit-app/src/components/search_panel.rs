@@ -174,9 +174,11 @@ pub fn SearchPanel() -> Element {
                                 let path = m.relative_path.clone();
                                 let line_number = m.line_number;
                                 move |_| {
-                                    // Handoff activation (RFC-042 §6.2 rule 3):
-                                    // release, never restore to the trigger, and
-                                    // close the panel only in the finalizer.
+                                    // Handoff activation (RFC-042 §6.2 rule 3)
+                                    // when opening claims editor focus: release,
+                                    // never restore, close only in the finalizer.
+                                    // In Preview/Form it claims nothing, so
+                                    // `close_search` releases and restores.
                                     submit_handoff_activation(
                                         source_sync,
                                         state,
@@ -189,6 +191,7 @@ pub fn SearchPanel() -> Element {
                                             line_number,
                                         ),
                                         move || search_open.set(false),
+                                        close_search,
                                     );
                                 }
                             },

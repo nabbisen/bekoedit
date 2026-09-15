@@ -244,6 +244,7 @@ pub fn EditorHeader() -> Element {
                                     SourceCommand::SwitchMode(target),
                                     SourceInteractionOrigin::removable_menu_control("mode-split"),
                                     move || open_menu.set(OpenMenu::None),
+                                    close_editor_tools_menu,
                                 );
                             },
                             if mode == EditorMode::Split {

@@ -282,6 +282,13 @@ fn submit_interaction(
     });
 }
 
+/// Whether `command` claims editor focus in `current_mode` -- the test that
+/// separates a handoff activation from explicit dismissal (RFC-042 §6.2 rule
+/// 3, as clarified for task 016).
+pub(super) fn claims_focus(command: &SourceCommand, current_mode: EditorMode) -> bool {
+    focus_target(command, current_mode).is_some()
+}
+
 /// The editor a command claims focus for. `OpenDocument` carries no mode and
 /// does not switch one, so its claim follows the mode the app is already in
 /// (task 014 §2); `NewUntitled` forces Text and `SwitchMode` names its mode.

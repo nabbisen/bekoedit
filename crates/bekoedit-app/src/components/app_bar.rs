@@ -208,6 +208,7 @@ pub fn AppBar() -> Element {
                                     SourceCommand::NewUntitled,
                                     SourceInteractionOrigin::removable_menu_control("appbar-new"),
                                     move || open_menu.set(OpenMenu::None),
+                                    close_app_menu,
                                 );
                             },
                             NewFileIcon {} {tr(ui_lang, "start.new_file")}
