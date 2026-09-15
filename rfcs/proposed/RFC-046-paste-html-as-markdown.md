@@ -165,7 +165,7 @@ noted, and rendered with `pulldown-cmark` 0.13 where correctness was in doubt.
 | `<del>`, `<s>` | plain text | Strikethrough lost |
 | `<li><input type="checkbox" checked>` | `-  done` | Task state lost |
 | Text `1. not a list` | `\1. not a list` | **Visible backslash** — CommonMark cannot escape a digit; correct is `1\.` |
-| `data:` image | `![pix](data:image/png;base64,…)` | Passes through — §5.3 guard |
+| `data:` image | an image whose target is the full base64 `data:` URI | Passes through — §5.3 guard |
 
 Each gap becomes a request to the `mdka` project rather than a workaround in
 bekoedit. The draft with reproductions is kept at
@@ -227,7 +227,7 @@ Scheduled after RFC-044's slices 2 and 3.
 3. **Bridge schema version.** Do new message types require a version bump under
    RFC-041's protocol, or are additive messages compatible?
 4. **`data:` images.** Replace with alt text (proposed), drop entirely, or keep a
-   short placeholder such as `![alt](pasted-image)`?
+   short placeholder image target in place of the URI?
 5. **Tables before `mdka` supports them.** Wait for the upstream fix (proposed), or
    convert simple tables in bekoedit as an interim step?
 6. **Pasted `javascript:` links.** `mdka` keeps `href` verbatim. Typed Markdown can
