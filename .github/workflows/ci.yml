@@ -194,7 +194,8 @@ jobs:
       - name: Install JS dependencies
         run: cd crates/bekoedit-app/js && npm ci
       - name: Test source-editor JavaScript adapter
-        run: cd crates/bekoedit-app/js && { npm test || echo 'TEMP task 016 probe: JS failures expected (contract (a) skipped in the driver)'; }
+        run: |
+          cd crates/bekoedit-app/js && { npm test || echo 'TEMP task 016 probe - JS failures expected, contract (a) skipped in the driver'; }
       - name: Build JS bundle
         run: cd crates/bekoedit-app/js && node build.mjs
       - name: Check committed JS bundles are current
