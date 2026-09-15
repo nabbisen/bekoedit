@@ -254,8 +254,14 @@ jobs:
         # How to read a run: NOT from any conclusion. continue-on-error masks
         # this step's own API conclusion as well as the job's -- run
         # 34971450076 reports conclusion=success for this step while its log
-        # says FAILED. Read the step's log for the PASSED/FAILED line. Task 015
-        # adds an unmasked outcome line and a warning annotation.
+        # says FAILED. Read the next step instead: "RFC-044 shell-behaviour
+        # outcome (unmasked)" prints `RFC-044 shell-behaviour outcome: <outcome>`
+        # from steps.shell_behaviour.outcome, which continue-on-error does not
+        # mask, and on anything but success raises a warning annotation titled
+        # "RFC-044 shell-behaviour run did not pass" (visible in
+        # `gh run view <id>`). This step's own log still carries the
+        # PASSED/FAILED line and the reason.
+        id: shell_behaviour
         continue-on-error: true
         run: |
           BEHAVIOUR_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-shell-behaviour.XXXXXX")"
@@ -264,6 +270,15 @@ jobs:
             env NO_AT_BRIDGE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
             ./target/release/bekoedit \
             --webview-shell-behaviour "$BEHAVIOUR_PARENT/bekoedit-webview-smoke-profile"
+      - name: RFC-044 shell-behaviour outcome (unmasked)
+        if: always()
+        env:
+          OUTCOME: ${{ steps.shell_behaviour.outcome }}
+        run: |
+          echo "RFC-044 shell-behaviour outcome: ${OUTCOME}"
+          if [ "${OUTCOME}" != "success" ]; then
+            echo "::warning title=RFC-044 shell-behaviour run did not pass::non-blocking step outcome=${OUTCOME}; see that step's log"
+          fi
       - name: Check binary links and size
         run: |
           file target/release/bekoedit
