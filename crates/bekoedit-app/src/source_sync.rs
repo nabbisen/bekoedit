@@ -13,6 +13,7 @@ use crate::state::now_ms;
 mod commands;
 mod controller;
 mod focus;
+mod handoff;
 pub mod host;
 pub mod lifecycle;
 
@@ -22,6 +23,7 @@ pub use focus::{
     SourceInteractionOrigin, cancel_pending_source_focus, cancel_source_focus,
     submit_source_interaction, submit_source_shortcut_interaction,
 };
+pub use handoff::submit_handoff_activation;
 pub use lifecycle::MountIntent;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

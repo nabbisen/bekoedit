@@ -101,6 +101,15 @@ impl SourceInteractionOrigin {
         ))
     }
 
+    /// A search result opening its document (task 016). Like backlinks, one
+    /// file can match twice on a line, so the list position is in the id.
+    pub fn search_result(position: usize, relative_path: &Path, line_number: usize) -> Self {
+        Self::document_link(format!(
+            "search:{position}:{}:{line_number}",
+            relative_path.display()
+        ))
+    }
+
     fn document_link(launch_id: String) -> Self {
         Self {
             kind: "documentLink",
@@ -473,6 +482,10 @@ mod tests {
         assert_ne!(first.launch_id(), second.launch_id());
         assert_eq!(first.invocation, "pointer");
         assert_eq!(first.removal_policy, "launchMayBeRemoved");
+
+        let search = SourceInteractionOrigin::search_result(2, Path::new("sub/child.md"), 1);
+        assert_eq!(search.launch_id(), Some("search:2:sub/child.md:1"));
+        assert_eq!(search.removal_policy, "launchMayBeRemoved");
 
         // Fixed ids keep their borrowed, unprefixed form.
         let fixed = SourceInteractionOrigin::start_control("start-new");

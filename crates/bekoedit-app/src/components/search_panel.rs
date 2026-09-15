@@ -14,7 +14,9 @@ use bekoedit_ui_contract::EditorMode;
 use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
 use crate::shell_focus;
-use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
+use crate::source_sync::{
+    SourceCommand, SourceInteractionOrigin, SourceSyncState, submit_handoff_activation,
+};
 use crate::state::SearchOpen;
 
 fn run_search(
@@ -155,21 +157,38 @@ pub fn SearchPanel() -> Element {
                 if *searched.read() && results.read().is_empty() && !*running.read() {
                     li { class: "muted", {tr(lang, "search.empty")} }
                 }
-                for m in results.read().clone() {
+                for (position, m) in results.read().clone().into_iter().enumerate() {
                     li {
                         class: if m.exact_case { "search-match exact" } else { "search-match" },
                         button {
                             class: "search-match-btn",
+                            "data-source-focus-launch": SourceInteractionOrigin::search_result(
+                                    position,
+                                    &m.relative_path,
+                                    m.line_number,
+                                )
+                                .launch_id()
+                                .unwrap_or_default()
+                                .to_owned(),
                             onclick: {
                                 let path = m.relative_path.clone();
+                                let line_number = m.line_number;
                                 move |_| {
-                                    close_search();
-                                    submit_source_command(
+                                    // Handoff activation (RFC-042 §6.2 rule 3):
+                                    // release, never restore to the trigger, and
+                                    // close the panel only in the finalizer.
+                                    submit_handoff_activation(
                                         source_sync,
                                         state,
                                         mode_sig,
                                         toasts,
                                         SourceCommand::OpenDocument(path.clone()),
+                                        SourceInteractionOrigin::search_result(
+                                            position,
+                                            &path,
+                                            line_number,
+                                        ),
+                                        move || search_open.set(false),
                                     );
                                 }
                             },

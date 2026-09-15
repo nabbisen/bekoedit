@@ -15,7 +15,7 @@ use crate::i18n::{Lang, tr};
 use crate::shell_focus;
 use crate::source_sync::{
     SourceCommand, SourceInteractionOrigin, SourceSyncState, cancel_source_focus,
-    submit_source_command, submit_source_interaction,
+    submit_handoff_activation, submit_source_command,
 };
 use crate::state::{NewFileOpen, OpenMenu, OpenMenuState, SearchOpen};
 
@@ -199,7 +199,8 @@ pub fn AppBar() -> Element {
                             tabindex: "-1",
                             onclick: move |_| {
                                 crate::bridge::trace("app_bar.new_file.click", "");
-                                submit_source_interaction(
+                                // Handoff activation (RFC-042 §6.2 rule 3).
+                                submit_handoff_activation(
                                     source_sync,
                                     state,
                                     mode_sig,
