@@ -428,6 +428,11 @@ return (async () => {
           outgoing = advance("enter_opened_editor_focused", "search_result_opens");
         }
       }
+    } else if (
+      requestedPhase === "search_result_opens" &&
+      // TEMP task 016 probe: skip contract (a) so contract (b) runs before the fix.
+      (outgoing = advance("search_result_editor_focused", "new_file_focuses"))
+    ) {
     } else if (requestedPhase === "search_result_opens") {
       // Task 016 §5.2 (a): activating a search result opens its document and
       // the editor takes focus -- not the search trigger. Multi-call: the
