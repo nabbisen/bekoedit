@@ -199,6 +199,11 @@ implements `tabindex` is not this RFC's job.
 Up/Down wrap; Home/End; Escape closes and **restores** focus to the trigger; Tab
 closes and does **not** restore.
 
+**B's Tab item has A.1's problem** (§11, corrected 2026-09-15): the close relies
+on native Tab. It is driven by moving focus outside the menu with `.focus()`
+instead. Slice 2 handoff:
+[`handoffs/044-shell-behaviour-regression-coverage/slice-2-overflow-menus.md`](../handoffs/044-shell-behaviour-regression-coverage/slice-2-overflow-menus.md).
+
 **C. Mode tabs** — Left/Right move focus and **do not** change mode; Enter
 activates. This one is worth naming separately: automatic activation would fire
 one RFC-041 protected command per keystroke, and only an executed test can show
@@ -285,6 +290,13 @@ A blocking gate that flakes gets disabled, and then protects nothing.
 **Land the new run non-blocking** (`continue-on-error`), and promote it to
 blocking only after an agreed number of consecutive green runs on `main`.
 
+**The count restarts whenever the step's phase set changes** — decided
+2026-09-15. Ten green runs are evidence about the stability of what the step
+asserts. A slice or task that adds phases adds flake surface with no green
+history behind it, so each such merge records a new start date beside
+`continue-on-error` in `.github/workflows/ci.yml`. The consequence is intended:
+this gate does not become blocking while its coverage is still growing.
+
 This project has been here before: `ci.yml` carried a stale
 `continue-on-error: true` on the smoke step long after the flag it guarded was
 implemented, and it took an audit to notice. So the promotion must be scheduled
@@ -311,11 +323,23 @@ Rust `onkeydown` handler sees the event, calls `prevent_default()`, and moves
 focus itself. It does **not** work for keys whose effect is a browser default
 action, because synthetic events do not get default actions (§8 A.1).
 
-Every nav key, Enter and Space in the workspace tree, the menu keys and the
-mode-tab keys are app-intercepted, so items B through F inherit no part of this
-problem. Tab is the single exception in the whole coverage set, and A.1 says what
-to do instead. Recorded here so a later slice does not rediscover it by spending
-a CI run on a synthetic `Tab`.
+Most keys in B through F are app-intercepted. **There are two exceptions, not
+one** — corrected 2026-09-15:
+
+- **Tab in the workspace tree** — §8 A.1.
+- **Tab out of an overflow menu** — B's last item. Neither menu handles Tab. The
+  menu closes because native Tab moves focus outside the menu wrap, and the app
+  frame's `onfocusin` then releases the menu without restoring focus: a default
+  action followed by an app handler. Drive bekoedit's half directly — `.focus()`
+  an element outside the wrap, then assert the menu closed and focus stayed where
+  it was put. Script `focus()` fires `focusin`; a synthetic `Tab` fires nothing.
+
+The first version of this note said B through F inherited none of the problem.
+That was written without reading the menu code; reading it before writing slice
+2's handoff found the second exception. §8 D uses the same `onfocusin` close
+path, but is driven by moving focus into the editor rather than by Tab, so it is
+unaffected. Recorded here so a later slice does not rediscover either exception
+by spending a CI run on a synthetic `Tab`.
 
 ## 12. Acceptance criteria
 
