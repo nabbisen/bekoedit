@@ -29,7 +29,7 @@ fn successful_result() -> DriverResult {
 }
 
 #[test]
-fn machine_advances_through_all_eight_transitions_ending_at_tree_enter_after_new_file() {
+fn machine_advances_through_all_nine_transitions_ending_at_form_search_restores() {
     let mut machine = ShellBehaviourMachine::new();
     let progression = [
         (
@@ -72,6 +72,11 @@ fn machine_advances_through_all_eight_transitions_ending_at_tree_enter_after_new
             "new_file_editor_focused",
             ShellBehaviourPhase::TreeEnterAfterNewFile,
         ),
+        (
+            ShellBehaviourPhase::TreeEnterAfterNewFile,
+            "tree_enter_refocused_after_new_file",
+            ShellBehaviourPhase::FormSearchRestores,
+        ),
     ];
     for (index, (phase, milestone, next)) in progression.into_iter().enumerate() {
         let exchange_id = (index + 1) as u64;
@@ -83,12 +88,12 @@ fn machine_advances_through_all_eight_transitions_ending_at_tree_enter_after_new
         assert_eq!(machine.current(), next);
     }
     assert_eq!(
-        ShellBehaviourPhase::TreeEnterAfterNewFile.next(),
+        ShellBehaviourPhase::FormSearchRestores.next(),
         None,
-        "tree_enter_after_new_file (task 016 (b)) is the terminal phase"
+        "form_search_restores (task 016 re-review §2) is the terminal phase"
     );
     assert_eq!(
-        ShellBehaviourPhase::TreeEnterAfterNewFile.as_str(),
+        ShellBehaviourPhase::FormSearchRestores.as_str(),
         TERMINAL_STAGE
     );
 }
@@ -144,9 +149,9 @@ fn malformed_progress_and_terminal_messages_are_rejected() {
     assert!(machine.validate(&out_of_order, 1, None).is_err());
 
     let last_phase_terminal_progress =
-        ShellBehaviourMachine::for_phase(ShellBehaviourPhase::TreeEnterAfterNewFile);
+        ShellBehaviourMachine::for_phase(ShellBehaviourPhase::FormSearchRestores);
     let mut malformed = phase_message(MessageKind::Progress, TERMINAL_STAGE, 1);
-    malformed.milestone = Some("tree_enter_refocused_after_new_file".into());
+    malformed.milestone = Some("form_search_restored_to_trigger".into());
     assert!(
         last_phase_terminal_progress
             .validate(&malformed, 1, None)

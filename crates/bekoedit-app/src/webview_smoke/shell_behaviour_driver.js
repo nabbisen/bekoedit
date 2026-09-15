@@ -14,6 +14,7 @@ return (async () => {
     "search_result_opens",
     "new_file_focuses",
     "tree_enter_after_new_file",
+    "form_search_restores",
   ];
   const request = await dioxus.recv();
   const requestedPhase = request?.phase;
@@ -526,8 +527,67 @@ return (async () => {
         state.deadline = performance.now() + 15000;
         outgoing = { kind: "pending" };
       } else if (editorFocusedWithDoc(docLengths.a)) {
+        outgoing = advance("tree_enter_refocused_after_new_file", "form_search_restores");
+      } else {
+        outgoing = { kind: "pending" };
+      }
+    } else if (requestedPhase === "form_search_restores") {
+      // Task 016 re-review §2: in Form -- the default mode -- a search result
+      // claims no editor focus, so it is not a handoff. Explicit dismissal
+      // applies: the document opens and focus returns to the search trigger.
+      state.stage = "form_search_restores";
+      const trigger = document.querySelector("#workspace-search-trigger");
+      const formTabs = () => [...document.querySelectorAll('[data-source-focus-launch="mode-form"]')];
+      const fileName = () => document.querySelector(".file-name")?.textContent?.trim() ?? null;
+      if (state.step > 0 && timedOut()) {
+        throw new Error(
+          `timed out at form_search_restores (step ${state.step}): ` +
+            `formSelected=${formTabs()[0]?.getAttribute("aria-selected")} fileName=${fileName()} ` +
+            `results=${document.querySelectorAll(".search-match-btn").length} ` +
+            `activeElement=${describeActiveElement()} toastSeen=${state.errorToastSeen}`,
+        );
+      }
+      if (state.step === 0) {
+        // By launch id only, never by position (same rule as appbar-new).
+        const tabs = formTabs();
+        if (tabs.length !== 1) {
+          throw new Error(
+            `form_search_restores: expected exactly one [data-source-focus-launch="mode-form"], found ${tabs.length}`,
+          );
+        }
+        tabs[0].click();
+        state.step = 1;
+        state.deadline = performance.now() + 15000;
+        outgoing = { kind: "pending" };
+      } else if (state.step === 1) {
+        if (formTabs()[0]?.getAttribute("aria-selected") === "true") {
+          if (!trigger) throw new Error("form_search_restores: no #workspace-search-trigger");
+          trigger.click();
+          await waitFor(() => document.querySelector("#workspace-search-input"), "the search panel to open");
+          const input = document.querySelector("#workspace-search-input");
+          input.value = "child";
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          state.step = 2;
+        }
+        outgoing = { kind: "pending" };
+      } else if (state.step === 2) {
+        const input = document.querySelector("#workspace-search-input");
+        if (!input) throw new Error("form_search_restores: the search input disappeared");
+        dispatchKey(input, "Enter");
+        state.step = 3;
+        outgoing = { kind: "pending" };
+      } else if (state.step === 3) {
+        const result = [...document.querySelectorAll(".search-match-btn")].find((button) =>
+          button.textContent.includes("child.md"),
+        );
+        if (result) {
+          result.click();
+          state.step = 4;
+        }
+        outgoing = { kind: "pending" };
+      } else if (fileName() === "child.md" && trigger && document.activeElement === trigger) {
         if (state.errorToastSeen) throw new Error("an error toast appeared");
-        state.milestones.push("tree_enter_refocused_after_new_file");
+        state.milestones.push("form_search_restored_to_trigger");
         outgoing = finish(true);
       } else {
         outgoing = { kind: "pending" };

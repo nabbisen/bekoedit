@@ -452,6 +452,32 @@ async function driveToNewFile(tree) {
   return cursor;
 }
 
+/** The Form tab (by launch id; `aria-selected` flips on click, as
+ * mode_tabs.rs re-renders it) and the header's `.file-name`, reusing the
+ * search fixture already installed for contract (a). */
+function installForm(tree) {
+  const tab = new FakeElement()
+    .withAttribute("data-source-focus-launch", "mode-form")
+    .withAttribute("aria-selected", "false");
+  tab.onClick = () => tab.withAttribute("aria-selected", "true");
+  tree.setElements('[data-source-focus-launch="mode-form"]', [tab]);
+  const fileName = new FakeElement({ textContent: "a.md" });
+  tree.setElement(".file-name", fileName);
+  const trigger = document.querySelector("#workspace-search-trigger");
+  const input = document.querySelector("#workspace-search-input");
+  const result = document.querySelectorAll(".search-match-btn")[0];
+  return { tab, fileName, search: { trigger, input, result } };
+}
+
+async function driveToForm(tree) {
+  const cursor = await driveToTreeEnter(tree);
+  tree.setEditorView(new FakeEditorView({ hasFocus: false, docLength: 4 }));
+  await step("tree_enter_after_new_file", cursor);
+  tree.setEditorView(new FakeEditorView({ hasFocus: true, docLength: 4 }));
+  assert.equal((await step("tree_enter_after_new_file", cursor)).kind, "progress");
+  return cursor;
+}
+
 async function driveToTreeEnter(tree) {
   const cursor = await driveToNewFile(tree);
   installAppMenu(tree);
@@ -462,7 +488,7 @@ async function driveToTreeEnter(tree) {
 }
 
 test(
-  "task 016: search result, New File, then tree Enter each end with the editor focused; terminal success with all nine milestones",
+  "task 016: search result, New File, tree Enter, then a Form-mode search; terminal success with all ten milestones",
   { concurrency: false },
   async () => {
     const tree = new FakeTree();
@@ -497,11 +523,39 @@ test(
     assert.equal(tree.openedPath, "a.md");
     assert.equal((await step("tree_enter_after_new_file", cursor)).kind, "pending");
     tree.setEditorView(new FakeEditorView({ hasFocus: true, docLength: 4 }));
-    const report = await step("tree_enter_after_new_file", cursor);
+    const refocused = await step("tree_enter_after_new_file", cursor);
+    assert.equal(refocused.kind, "progress");
+    assert.equal(refocused.milestone, "tree_enter_refocused_after_new_file");
+
+    const form = installForm(tree);
+    // Step 0: activates Form by its launch id.
+    assert.equal((await step("form_search_restores", cursor)).kind, "pending");
+    assert.equal(form.tab.clicks, 1);
+    // Step 1: Form selected -> opens search and types the query.
+    assert.equal((await step("form_search_restores", cursor)).kind, "pending");
+    assert.equal(form.search.trigger.clicks, 2, "search opened again, once for (a), once here");
+    assert.equal(form.search.input.value, "child");
+    // Step 2: Enter. Step 3: result appears and is clicked.
+    assert.equal((await step("form_search_restores", cursor)).kind, "pending");
+    tree.setElements(".search-match-btn", [form.search.result]);
+    assert.equal((await step("form_search_restores", cursor)).kind, "pending");
+    assert.equal(form.search.result.clicks, 2);
+    // Step 4: document opened but focus is not on the trigger -> pending.
+    form.fileName.textContent = "child.md";
+    assert.equal((await step("form_search_restores", cursor)).kind, "pending");
+    // Focus on the trigger but the document not yet opened -> still pending.
+    form.fileName.textContent = "a.md";
+    Object.defineProperty(document, "activeElement", {
+      configurable: true,
+      get: () => form.search.trigger,
+    });
+    assert.equal((await step("form_search_restores", cursor)).kind, "pending");
+    form.fileName.textContent = "child.md";
+    const report = await step("form_search_restores", cursor);
 
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, true);
-    assert.equal(report.result.stage, "tree_enter_after_new_file");
+    assert.equal(report.result.stage, "form_search_restores");
     assert.deepEqual(report.result.milestones, [
       "down_up_moved",
       "expand_entered",
@@ -512,6 +566,7 @@ test(
       "search_result_editor_focused",
       "new_file_editor_focused",
       "tree_enter_refocused_after_new_file",
+      "form_search_restored_to_trigger",
     ]);
   },
 );
@@ -623,5 +678,52 @@ test(
       report.result.error,
       /timed out at tree_enter_after_new_file: view=true .*hasFocus=false .*activeElement=tree row 2/,
     );
+  },
+);
+
+test(
+  "form_search_restores: a result that leaves focus off the trigger times out naming the phase, the file and activeElement",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const cursor = await driveToForm(tree);
+    const form = installForm(tree);
+    await step("form_search_restores", cursor);
+    await step("form_search_restores", cursor);
+    await step("form_search_restores", cursor);
+    await step("form_search_restores", cursor);
+    form.fileName.textContent = "child.md";
+    tree.setTime(window.__bkWebViewShellBehaviourState.deadline);
+
+    const report = await step("form_search_restores", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.equal(report.result.stage, "form_search_restores");
+    assert.match(
+      report.result.error,
+      /timed out at form_search_restores \(step 4\): formSelected=true fileName=child\.md results=1 activeElement=tree row 2/,
+    );
+  },
+);
+
+test(
+  "form_search_restores: Form is activated only by a unique launch id -- two matches fail and nothing is clicked",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const cursor = await driveToForm(tree);
+    const form = installForm(tree);
+    const other = new FakeElement().withAttribute("data-source-focus-launch", "mode-form");
+    tree.setElements('[data-source-focus-launch="mode-form"]', [form.tab, other]);
+
+    const report = await step("form_search_restores", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.match(report.result.error, /expected exactly one \[data-source-focus-launch="mode-form"\], found 2/);
+    assert.equal(form.tab.clicks + other.clicks, 0);
   },
 );

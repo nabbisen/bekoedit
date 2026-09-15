@@ -36,6 +36,11 @@
 //! terminal `TreeEnterAfterNewFile` -- App menu "New File" focuses the
 //! editor, and a tree Enter afterwards still does, which only holds if the
 //! menu released shell authority. Committed before the fix, like contract 7.
+//!
+//! The terminal `FormSearchRestores` (task 016 re-review §2) covers the mode
+//! users get by default: in Form, a search result claims no editor focus, so
+//! it is not a handoff -- explicit dismissal restores focus to the search
+//! trigger.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -56,7 +61,7 @@ use super::transport::{
 };
 
 const MARKER: &str = "RFC044_SHELL_BEHAVIOUR_MARKER";
-const EXPECTED_MILESTONES: [&str; 9] = [
+const EXPECTED_MILESTONES: [&str; 10] = [
     "down_up_moved",
     "expand_entered",
     "collapse_ascended",
@@ -66,9 +71,10 @@ const EXPECTED_MILESTONES: [&str; 9] = [
     "search_result_editor_focused",
     "new_file_editor_focused",
     "tree_enter_refocused_after_new_file",
+    "form_search_restored_to_trigger",
 ];
 /// The phase whose success is the whole run's terminal result.
-const TERMINAL_STAGE: &str = "tree_enter_after_new_file";
+const TERMINAL_STAGE: &str = "form_search_restores";
 const PHASE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 const SHELL_BEHAVIOUR_JS: &str = include_str!("shell_behaviour_driver.js");
@@ -86,8 +92,11 @@ pub(super) enum ShellBehaviourPhase {
     SearchResultOpens,
     /// Task 016 §5.2 (b), first assertion.
     NewFileFocuses,
-    /// Task 016 §5.2 (b), second assertion; the terminal phase.
+    /// Task 016 §5.2 (b), second assertion.
     TreeEnterAfterNewFile,
+    /// Task 016 re-review §2: a Form-mode search result restores to the
+    /// search trigger. The terminal phase.
+    FormSearchRestores,
 }
 
 impl ShellBehaviourPhase {
@@ -101,7 +110,8 @@ impl ShellBehaviourPhase {
             Self::EnterOpens => "enter_opens",
             Self::SearchResultOpens => "search_result_opens",
             Self::NewFileFocuses => "new_file_focuses",
-            Self::TreeEnterAfterNewFile => TERMINAL_STAGE,
+            Self::TreeEnterAfterNewFile => "tree_enter_after_new_file",
+            Self::FormSearchRestores => TERMINAL_STAGE,
         }
     }
 
@@ -115,12 +125,13 @@ impl ShellBehaviourPhase {
             Self::EnterOpens => Some(Self::SearchResultOpens),
             Self::SearchResultOpens => Some(Self::NewFileFocuses),
             Self::NewFileFocuses => Some(Self::TreeEnterAfterNewFile),
-            Self::TreeEnterAfterNewFile => None,
+            Self::TreeEnterAfterNewFile => Some(Self::FormSearchRestores),
+            Self::FormSearchRestores => None,
         }
     }
 
     /// The `milestone` a `Progress` report from this phase must carry --
-    /// one-to-one with `EXPECTED_MILESTONES`. `TreeEnterAfterNewFile` is
+    /// one-to-one with `EXPECTED_MILESTONES`. `FormSearchRestores` is
     /// terminal, so it reports its milestone via `DriverResult.milestones`.
     const fn expected_milestone(self) -> &'static str {
         match self {
@@ -133,6 +144,7 @@ impl ShellBehaviourPhase {
             Self::SearchResultOpens => "search_result_editor_focused",
             Self::NewFileFocuses => "new_file_editor_focused",
             Self::TreeEnterAfterNewFile => "tree_enter_refocused_after_new_file",
+            Self::FormSearchRestores => "form_search_restored_to_trigger",
         }
     }
 }
