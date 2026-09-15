@@ -117,6 +117,7 @@ superseded).
 | RFC-032 | [Performance optimization and incremental parsing](proposed/RFC-032-performance-optimization-and-incremental-parsing.md) | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | [Plugin system evaluation](proposed/RFC-039-plugin-system-evaluation.md) | Future evaluation only |
 | RFC-040 | [Sync and collaboration evaluation](proposed/RFC-040-sync-and-collaboration-evaluation.md) | Future evaluation only |
+| RFC-046 | [Paste HTML as Markdown](proposed/RFC-046-paste-html-as-markdown.md) | **Drafted** 2026-09-16 at the owner's request; not yet approved. Converts pasted HTML with `mdka`, falling back to plain text where conversion would lose content. Scheduled after RFC-044's remaining slices |
 
 ## Implemented — v0.3.0 (`done/`)
 
