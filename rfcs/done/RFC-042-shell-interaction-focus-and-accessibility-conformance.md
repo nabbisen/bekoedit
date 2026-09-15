@@ -144,6 +144,30 @@ primitives — this RFC introduces no parallel focus manager:
    *(Clarified 2026-07-31 after slice-1 review finding C3: the original text
    named restore-on-Escape and separately retained outside-click close, without
    stating that restore does not apply to the latter.)*
+
+   - **Handoff activation** — activating an item whose own action is a
+     source-focus interaction: opening a search result, "New File" in the app
+     menu, "Split" in the editor-tools menu. Release **only**, and do it
+     **before** the interaction is allocated; never restore. The surface's DOM
+     closes in the interaction's launch finalizer, so the activated item stays
+     connected as the guard's origin until the guard arms. Focus then arrives
+     through rule 4, from the source controller.
+
+   *(Amended 2026-09-15, after task 014 found that a search result could not
+   carry an `OpenDocument` focus claim. Explicit dismissal restores focus
+   because the user asked to leave the surface and go back. When the item's
+   action takes the user to the editor, restoring strands them on a trigger they
+   have finished with. Worse, the restore arrives as a `focusin` outside the
+   guard's origin, which the guard treats as a diversion, so the claim could
+   never succeed. §6.4's ordering still holds: authority is released before the
+   interaction launches, and no timer is involved.*
+
+   *The same reading exposed two existing items, `appbar-new` and `mode-split`,
+   that launch a source-focus interaction while their menu still holds
+   authority. The allocation is refused, the fallback re-acquires authority, and
+   nothing releases it again until some other surface opens and closes — so
+   every later focus claim is refused too. Found by reading; task 016 must show
+   it failing at runtime before it fixes it.)*
 4. **Source reacquires.** Only through the normal controller path, after a
    validated `Ready` editor exists. Restoring shell focus to a trigger button
    is not a source-focus event and must not schedule one.
@@ -229,7 +253,9 @@ lifecycle transition per keystroke.
 
 Workspace search and the new-file row are Disclosure surfaces. Each has a
 trigger exposing `aria-expanded` and `aria-controls`, receives focus on open,
-closes on Escape, and restores focus to its trigger on close. In-flight work
+closes on Escape, and restores focus to its trigger on close — except when
+the close is a handoff activation (§6.2 rule 3, amended 2026-09-15), such as
+opening a search result, where focus goes to the editor instead. In-flight work
 has delivered most of this; focus restore on close is the gap.
 
 ### 7.5 Screen replacements
