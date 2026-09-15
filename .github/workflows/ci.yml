@@ -243,14 +243,19 @@ jobs:
         # after 10 consecutive green runs of this step on `main`.
         #
         # CLOCK STARTED 2026-09-05 (PR #21 merged, fast-forward to ab6acf9).
-        # Run 2 of 10: 33974083411 (54e3c04), this step green. Update this line
-        # as the count advances, and delete `continue-on-error` when it reaches 10.
-        # The count RESTARTS when this step's phase set changes (RFC-044 §10):
-        # task 014 and slice 2 each record a new start here in their merge.
-        # Track via
-        # `gh run list --branch main --workflow=ci.yml`, reading this step's
-        # own conclusion in each run (a job can be green with this step
-        # failed, since continue-on-error masks it at the job level).
+        # Count stands at 1 of 10. Run 1: 33943540388, verified from its log
+        # ("shell-behaviour run PASSED"). Run 33974083411 (54e3c04) is NOT
+        # counted: its retrieved job log is truncated to 420 lines and holds no
+        # result line, so it cannot be verified. Update this line as the count
+        # advances; delete `continue-on-error` when it reaches 10. The count
+        # RESTARTS when this step's phase set changes (RFC-044 §10): tasks 014
+        # and 016 and slice 2 each record a new start here in their merge.
+        #
+        # How to read a run: NOT from any conclusion. continue-on-error masks
+        # this step's own API conclusion as well as the job's -- run
+        # 34971450076 reports conclusion=success for this step while its log
+        # says FAILED. Read the step's log for the PASSED/FAILED line. Task 015
+        # adds an unmasked outcome line and a warning annotation.
         continue-on-error: true
         run: |
           BEHAVIOUR_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-shell-behaviour.XXXXXX")"
