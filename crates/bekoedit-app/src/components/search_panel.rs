@@ -188,7 +188,7 @@ pub fn SearchPanel() -> Element {
                                             &path,
                                             line_number,
                                         ),
-                                        move || search_open.set(false),
+                                        move || close_search(), // TEMP task 016 mutation (a)
                                     );
                                 }
                             },
