@@ -88,6 +88,29 @@ enum SmokeRunKind {
     ShellBehaviour(Arc<shell_behaviour::ShellBehaviourTerminal>),
 }
 
+impl SmokeRunKind {
+    fn succeeded(&self) -> bool {
+        match self {
+            Self::Smoke(terminal) => terminal.succeeded(),
+            Self::ShellBehaviour(terminal) => terminal.succeeded(),
+        }
+    }
+
+    /// Labelled by run so a failed shell-behaviour run never reports itself
+    /// under the RFC-041 regression's name. The RFC-041 text is what logs
+    /// and people already know, so it stays byte-identical.
+    const fn failure_message(&self) -> &'static str {
+        match self {
+            Self::Smoke(_) => {
+                "bekoedit WebView lifecycle smoke FAILED: no validated terminal success"
+            }
+            Self::ShellBehaviour(_) => {
+                "bekoedit RFC-044 shell-behaviour run FAILED: no validated terminal success"
+            }
+        }
+    }
+}
+
 pub struct SmokeRun {
     profile_root: Option<PathBuf>,
     kind: SmokeRunKind,
@@ -95,15 +118,12 @@ pub struct SmokeRun {
 
 impl SmokeRun {
     pub fn finalize_exit_code(mut self) -> i32 {
-        let succeeded = match &self.kind {
-            SmokeRunKind::Smoke(terminal) => terminal.succeeded(),
-            SmokeRunKind::ShellBehaviour(terminal) => terminal.succeeded(),
-        };
+        let succeeded = self.kind.succeeded();
         self.cleanup();
         if succeeded {
             0
         } else {
-            eprintln!("bekoedit WebView lifecycle smoke FAILED: no validated terminal success");
+            eprintln!("{}", self.kind.failure_message());
             1
         }
     }
