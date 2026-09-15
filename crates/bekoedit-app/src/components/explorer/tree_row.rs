@@ -11,7 +11,9 @@ use bekoedit_ui_contract::EditorMode;
 
 use crate::components::toast::Toast;
 use crate::shell_focus;
-use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
+use crate::source_sync::{
+    SourceCommand, SourceInteractionOrigin, SourceSyncState, submit_source_interaction,
+};
 
 use super::tree_nav::{self, NavKey, NavOutcome, NavRow};
 
@@ -43,6 +45,10 @@ pub(super) struct TreeRowItemProps {
 /// activation path shared by mouse click and Enter/Space (RFC-042 §7.1). A
 /// plain function, not a shared closure, so each call site can capture its
 /// own copies of the `Copy` signal/coroutine handles independently.
+///
+/// Opening claims editor focus through the row's launch id (task 014), with
+/// the `pointer` invocation for Enter and Space as well as click: the guard
+/// resolves the origin by id, not by `document.activeElement`.
 #[allow(clippy::too_many_arguments)]
 fn activate_row(
     is_dir: bool,
@@ -65,12 +71,15 @@ fn activate_row(
             .strip_prefix(root)
             .map(|r| r.to_path_buf())
             .unwrap_or_else(|_| path.to_path_buf());
-        submit_source_command(
+        let origin = SourceInteractionOrigin::tree_row(&rel);
+        submit_source_interaction(
             source_sync,
             state,
             mode_sig,
             toasts,
             SourceCommand::OpenDocument(rel),
+            origin,
+            || {},
         );
     }
 }
@@ -102,6 +111,10 @@ pub(super) fn TreeRowItem(props: TreeRowItemProps) -> Element {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| node.path.display().to_string());
     let is_openable = is_dir || bekoedit_fs::paths::is_markdown_path(&path);
+    let launch_id = SourceInteractionOrigin::tree_row(path.strip_prefix(&root).unwrap_or(&path))
+        .launch_id()
+        .unwrap_or_default()
+        .to_owned();
     let (icon, row_class) = if is_dir {
         let arrow = if node.is_expanded { "▾" } else { "▸" };
         (arrow, "tree-row tree-dir")
@@ -117,6 +130,7 @@ pub(super) fn TreeRowItem(props: TreeRowItemProps) -> Element {
             style: "padding-left: {indent_px}px",
             role: "treeitem",
             "data-tree-row": "",
+            "data-source-focus-launch": "{launch_id}",
             tabindex: if is_active { "0" } else { "-1" },
             aria_expanded: if is_dir { "{node.is_expanded}" } else { "false" },
             aria_disabled: "{!is_openable}",

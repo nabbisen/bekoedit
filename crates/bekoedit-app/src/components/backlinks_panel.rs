@@ -10,7 +10,9 @@ use bekoedit_ui_contract::EditorMode;
 
 use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
-use crate::source_sync::{SourceCommand, SourceSyncState, submit_source_command};
+use crate::source_sync::{
+    SourceCommand, SourceInteractionOrigin, SourceSyncState, submit_source_interaction,
+};
 
 #[component]
 pub fn BacklinksPanel() -> Element {
@@ -57,20 +59,37 @@ pub fn BacklinksPanel() -> Element {
                     "{links.read().len()} {tr(lang, \"backlinks.count_suffix\")}"
                 }
                 ul { class: "outline-list",
-                    for entry in links.read().clone() {
+                    for (position, entry) in links.read().clone().into_iter().enumerate() {
                         li {
                             key: "{entry.source_path.display()}-{entry.line_number}",
                             button {
                                 class: "outline-btn",
+                                "data-source-focus-launch": SourceInteractionOrigin::backlink(
+                                        position,
+                                        &entry.source_path,
+                                        entry.line_number,
+                                    )
+                                    .launch_id()
+                                    .unwrap_or_default()
+                                    .to_owned(),
                                 onclick: {
                                     let path = entry.source_path.clone();
+                                    let line_number = entry.line_number;
                                     move |_| {
-                                        submit_source_command(
+                                        // Task 014: opening claims editor focus,
+                                        // resolved by this button's launch id.
+                                        submit_source_interaction(
                                             source_sync,
                                             state,
                                             mode_sig,
                                             toasts,
                                             SourceCommand::OpenDocument(path.clone()),
+                                            SourceInteractionOrigin::backlink(
+                                                position,
+                                                &path,
+                                                line_number,
+                                            ),
+                                            || {},
                                         );
                                     }
                                 },
