@@ -154,9 +154,8 @@ fn smoke_run_failure_message_is_labelled_by_run_kind() {
         "bekoedit WebView lifecycle smoke FAILED: no validated terminal success",
         "the RFC-041 regression's failure text must stay byte-identical"
     );
-    let shell = SmokeRunKind::ShellBehaviour(Arc::new(
-        shell_behaviour::ShellBehaviourTerminal::default(),
-    ));
+    let shell =
+        SmokeRunKind::ShellBehaviour(Arc::new(shell_behaviour::ShellBehaviourTerminal::default()));
     assert_eq!(
         shell.failure_message(),
         "bekoedit RFC-044 shell-behaviour run FAILED: no validated terminal success"
