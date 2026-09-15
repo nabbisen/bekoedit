@@ -199,8 +199,8 @@ pub fn AppBar() -> Element {
                             tabindex: "-1",
                             onclick: move |_| {
                                 crate::bridge::trace("app_bar.new_file.click", "");
-                                // Handoff activation (RFC-042 §6.2 rule 3).
-                                submit_handoff_activation(
+                                // TEMP task 016 mutation (b): no handoff release.
+                                crate::source_sync::submit_source_interaction(
                                     source_sync,
                                     state,
                                     mode_sig,
