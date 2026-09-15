@@ -148,6 +148,22 @@ fn smoke_run_maps_no_result_and_exact_success_to_process_codes() {
 }
 
 #[test]
+fn smoke_run_failure_message_is_labelled_by_run_kind() {
+    assert_eq!(
+        SmokeRunKind::Smoke(Arc::new(SmokeTerminal::default())).failure_message(),
+        "bekoedit WebView lifecycle smoke FAILED: no validated terminal success",
+        "the RFC-041 regression's failure text must stay byte-identical"
+    );
+    let shell = SmokeRunKind::ShellBehaviour(Arc::new(
+        shell_behaviour::ShellBehaviourTerminal::default(),
+    ));
+    assert_eq!(
+        shell.failure_message(),
+        "bekoedit RFC-044 shell-behaviour run FAILED: no validated terminal success"
+    );
+}
+
+#[test]
 fn smoke_run_drop_cleans_profile_before_event_loop_initialization() {
     let parent = tempfile::tempdir().unwrap();
     let profile_root = parent.path().join("bekoedit-webview-smoke-init-panic");
