@@ -243,8 +243,10 @@ jobs:
         # after 10 consecutive green runs of this step on `main`.
         #
         # CLOCK STARTED 2026-09-05 (PR #21 merged, fast-forward to ab6acf9).
-        # Run 1 of 10: 33943540388, this step green. Update this line as the
-        # count advances, and delete `continue-on-error` when it reaches 10.
+        # Run 2 of 10: 33974083411 (54e3c04), this step green. Update this line
+        # as the count advances, and delete `continue-on-error` when it reaches 10.
+        # The count RESTARTS when this step's phase set changes (RFC-044 §10):
+        # task 014 and slice 2 each record a new start here in their merge.
         # Track via
         # `gh run list --branch main --workflow=ci.yml`, reading this step's
         # own conclusion in each run (a job can be green with this step
