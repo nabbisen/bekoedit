@@ -207,7 +207,12 @@ pub fn AppBar() -> Element {
                                     toasts,
                                     SourceCommand::NewUntitled,
                                     SourceInteractionOrigin::removable_menu_control("appbar-new"),
-                                    move || open_menu.set(OpenMenu::None),
+                                    // TEMP task 016 mutation: re-hold authority in the finalizer.
+                                    move || {
+                                        open_menu.set(OpenMenu::None);
+                                        let mut sync = source_sync;
+                                        sync.write().temp_hold_shell_focus_without_cancel();
+                                    },
                                 );
                             },
                             NewFileIcon {} {tr(ui_lang, "start.new_file")}

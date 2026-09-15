@@ -86,6 +86,11 @@ impl SourceSyncState {
         self.cancel_focus_interactions()
     }
 
+    /// TEMP task 016 mutation: hold authority WITHOUT cancelling pending focus.
+    pub fn temp_hold_shell_focus_without_cancel(&mut self) {
+        self.shell_focus_held = true;
+    }
+
     /// Releases shell authority. Source-focus intents may be recorded again.
     pub fn release_shell_focus(&mut self) {
         self.shell_focus_held = false;
