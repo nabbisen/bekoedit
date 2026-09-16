@@ -183,7 +183,9 @@ pub fn EditorHeader() -> Element {
                     onfocusin: move |event| event.stop_propagation(),
                     onkeydown: move |event| {
                         if event.key() == Key::Escape {
-                            close_editor_tools_menu();
+                            // TEMP slice 2 §10.4 mutation: release, no restore.
+                            source_sync.write().release_shell_focus();
+                            open_menu.set(OpenMenu::None);
                             return;
                         }
                         // Inside-menu navigation only (handoff §5.2). The
