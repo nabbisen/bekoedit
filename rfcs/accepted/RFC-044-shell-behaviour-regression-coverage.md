@@ -245,6 +245,9 @@ Two things the implementation must get right:
 A and B are the bulk of the untested surface and should land first. C–F are
 follow-on slices under this RFC.
 
+Slice 3 handoff (C–F):
+[`handoffs/044-shell-behaviour-regression-coverage/slice-3-tabs-authority-screens-conflict.md`](../handoffs/044-shell-behaviour-regression-coverage/slice-3-tabs-authority-screens-conflict.md).
+
 **Amended 2026-09-03 — A and B are split into separate slices.** Most of slice 1
 is not coverage at all: it is a second run, an extraction of the RFC-041
 evaluator-pin transport so both runs share one audited copy, and a CI gate with
@@ -341,8 +344,8 @@ Rust `onkeydown` handler sees the event, calls `prevent_default()`, and moves
 focus itself. It does **not** work for keys whose effect is a browser default
 action, because synthetic events do not get default actions (§8 A.1).
 
-Most keys in B through F are app-intercepted. **There are two exceptions, not
-one** — corrected 2026-09-15:
+Most keys in B through F are app-intercepted. **There are three exceptions** —
+corrected 2026-09-15 (a second), and again 2026-09-17 (a third):
 
 - **Tab in the workspace tree** — §8 A.1.
 - **Tab out of an overflow menu** — B's last item. Neither menu handles Tab. The
@@ -358,6 +361,14 @@ That was written without reading the menu code; reading it before writing slice
 path, but is driven by moving focus into the editor rather than by Tab, so it is
 unaffected. Recorded here so a later slice does not rediscover either exception
 by spending a CI run on a synthetic `Tab`.
+
+**The third exception, found 2026-09-17 while writing slice 3's handoff: Enter and
+Space on a mode tab (§8 C).** The tablist handles only arrows, Home and End.
+Enter and Space activate a tab through native button activation, which turns the
+key into a click, and a synthetic key gets no such default action. C's "Enter
+activates" is therefore driven by a script `click()` on the tab, which runs the
+`onclick` RFC-042 §7.3's manual activation depends on. This is the same boundary
+a third time, found by reading the handler first rather than by a red run.
 
 ## 12. Acceptance criteria
 
