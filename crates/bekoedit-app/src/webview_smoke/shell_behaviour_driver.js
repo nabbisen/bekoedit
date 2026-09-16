@@ -277,6 +277,18 @@ return (async () => {
     // events no handler is attached to any more.
     const target = menuTrigger(spec) ?? trigger;
     dispatchKey(target, key);
+    // TEMP slice 2 diagnostic: sample every frame -- did the menu open at all
+    // after the key, and where did focus go?
+    const samples = [];
+    for (let frame = 0; frame < 40; frame += 1) {
+      samples.push(
+        `${Boolean(document.querySelector(spec.menu)) ? "open" : "shut"}:${
+          menuTrigger(spec)?.getAttribute("aria-expanded")
+        }:${describeActiveElement()}`,
+      );
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    const distinct = [...new Set(samples)];
     try {
       await waitFor(
         () => atMenuEdge(spec, which),
@@ -295,7 +307,7 @@ return (async () => {
       }
       const open = document.querySelector(spec.menu);
       throw new Error(
-        `${String(error)} | TEMP diagnostic: clickOpens=${clickOpens} ` +
+        `${String(error)} | TEMP samples=${distinct.join(" | ")} | clickOpens=${clickOpens} ` +
           `afterClick=${describeMenu(spec, target)} ` +
           `menuHtmlLength=${open?.outerHTML?.length ?? null}`,
       );
