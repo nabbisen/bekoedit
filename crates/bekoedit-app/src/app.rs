@@ -11,7 +11,7 @@ use bekoedit_fs::{FsWatcher, WatchEvent};
 use bekoedit_ui_contract::EditorMode;
 
 use crate::components::{
-    app_bar::{AppBar, release_menu_focus},
+    app_bar::{AppBar, release_and_restore_menu_focus, release_menu_focus},
     backlinks_panel::BacklinksPanel,
     conflict_banner::ConflictBanner,
     editor_header::EditorHeader,
@@ -282,7 +282,8 @@ pub fn App() -> Element {
                 open_menu.set(OpenMenu::None);
             },
             onfocusin: move |_| {
-                release_menu_focus(source_sync, *open_menu.read());
+                // TEMP slice 2 §10.4 mutation: the C3 defect's shape -- restore on focus-leave.
+                release_and_restore_menu_focus(source_sync, *open_menu.read());
                 open_menu.set(OpenMenu::None);
             },
             AppBar {}
