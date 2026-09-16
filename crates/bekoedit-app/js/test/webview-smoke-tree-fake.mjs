@@ -38,7 +38,7 @@ class FakeTreeRowElement {
   }
 
   focus() {
-    this.tree.activeIndex = this.index;
+    this.tree.setFocus(this);
   }
 
   dispatchEvent(event) {
@@ -89,6 +89,29 @@ export class FakeTree {
     this.root = root;
     this.activeIndex = 0;
     this.openedPath = null;
+    // The tree owns `document.activeElement` for the whole fake document, so
+    // a menu (webview-smoke-menu-fake.mjs) and the tree share one focus
+    // location, as the real document does.
+    this.externalFocus = null;
+    this.focusWatchers = [];
+  }
+
+  /** Moves focus to `element`: a tree row moves the roving index, anything
+   * else becomes the external focus. Watchers see every move, standing in
+   * for the app frame's `onfocusin`. */
+  setFocus(element) {
+    if (this.elements().includes(element)) {
+      this.externalFocus = null;
+      this.activeIndex = element.index;
+    } else {
+      this.externalFocus = element;
+    }
+    for (const watcher of this.focusWatchers) watcher(element);
+  }
+
+  /** Registers a listener for focus moves, like the app frame's focusin. */
+  watchFocus(watcher) {
+    this.focusWatchers.push(watcher);
   }
 
   /** Flattened `(node, depth)` pairs in render order -- the root itself
@@ -133,7 +156,7 @@ export class FakeTree {
   }
 
   activeElement() {
-    return this.elements()[this.activeIndex] ?? null;
+    return this.externalFocus ?? this.elements()[this.activeIndex] ?? null;
   }
 
   /** Mirrors tree_row.rs's onkeydown match arms + tree_nav::navigate. */

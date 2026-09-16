@@ -22,6 +22,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { FakeElement, FakeEditorView } from "./webview-smoke-dom-fake.mjs";
 import { FakeTree } from "./webview-smoke-tree-fake.mjs";
+import { FakeMenu } from "./webview-smoke-menu-fake.mjs";
 import {
   FakeDioxus,
   acknowledgement,
@@ -551,11 +552,21 @@ test(
     });
     assert.equal((await step("form_search_restores", cursor)).kind, "pending");
     form.fileName.textContent = "child.md";
-    const report = await step("form_search_restores", cursor);
+    const formSearched = await step("form_search_restores", cursor);
+
+    assert.equal(formSearched.kind, "progress");
+    assert.equal(formSearched.milestone, "form_search_restored_to_trigger");
+    assert.equal(window.__bkWebViewShellBehaviourState.phase, "app_menu_keys");
+
+    // Slice 2: both overflow menus, three phases each, ending terminal.
+    restoreTreeFocus(tree);
+    const menus = installMenus(tree);
+    const report = await driveMenus(cursor);
 
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, true);
-    assert.equal(report.result.stage, "form_search_restores");
+    assert.equal(report.result.stage, "tools_menu_focus_leave");
+    assert.equal(menus.app.activations + menus.tools.activations, 0, "no menu item is ever activated");
     assert.deepEqual(report.result.milestones, [
       "down_up_moved",
       "expand_entered",
@@ -567,6 +578,12 @@ test(
       "new_file_editor_focused",
       "tree_enter_refocused_after_new_file",
       "form_search_restored_to_trigger",
+      "app_menu_keys_verified",
+      "app_menu_escape_restored",
+      "app_menu_focus_leave_kept",
+      "tools_menu_keys_verified",
+      "tools_menu_escape_restored",
+      "tools_menu_focus_leave_kept",
     ]);
   },
 );
@@ -725,5 +742,208 @@ test(
     assert.equal(report.result.ok, false);
     assert.match(report.result.error, /expected exactly one \[data-source-focus-launch="mode-form"\], found 2/);
     assert.equal(form.tab.clicks + other.clicks, 0);
+  },
+);
+
+// ---- slice 2: overflow menus ---------------------------------------------
+
+/** The form phase leaves `document.activeElement` pinned to the search
+ * trigger; the menu phases need the tree's own focus back. */
+function restoreTreeFocus(tree) {
+  Object.defineProperty(document, "activeElement", {
+    configurable: true,
+    get: () => tree.activeElement(),
+  });
+  tree.setFocus(tree.elements()[2]);
+}
+
+function installMenus(tree, options = {}) {
+  const app = new FakeMenu(tree, {
+    triggerSelector: "#app-menu-trigger",
+    menuSelector: "#app-overflow-menu",
+    ...(options.app ?? {}),
+  }).install();
+  const tools = new FakeMenu(tree, {
+    triggerSelector: "#editor-tools-trigger",
+    menuSelector: "#editor-tools-menu",
+    ...(options.tools ?? {}),
+  }).install();
+  return { app, tools };
+}
+
+const MENU_PHASE_ORDER = [
+  "app_menu_keys",
+  "app_menu_escape",
+  "app_menu_focus_leave",
+  "tools_menu_keys",
+  "tools_menu_escape",
+  "tools_menu_focus_leave",
+];
+
+/** Runs the six menu phases in order, stopping early on a terminal report. */
+async function driveMenus(cursor, upTo = MENU_PHASE_ORDER.length) {
+  let report;
+  for (const phase of MENU_PHASE_ORDER.slice(0, upTo)) {
+    report = await step(phase, cursor);
+    if (report.kind === "terminal") return report;
+  }
+  return report;
+}
+
+/** Drives every earlier phase, then hands back a cursor at app_menu_keys. */
+async function driveToMenus(tree, menuOptions) {
+  const cursor = await driveToForm(tree);
+  const form = installForm(tree);
+  await step("form_search_restores", cursor); // activate Form
+  await step("form_search_restores", cursor); // open search, type
+  await step("form_search_restores", cursor); // Enter
+  tree.setElements(".search-match-btn", [form.search.result]);
+  await step("form_search_restores", cursor); // activate the result
+  form.fileName.textContent = "child.md";
+  Object.defineProperty(document, "activeElement", {
+    configurable: true,
+    get: () => form.search.trigger,
+  });
+  const searched = await step("form_search_restores", cursor);
+  assert.equal(searched.kind, "progress");
+  restoreTreeFocus(tree);
+  const menus = installMenus(tree, menuOptions);
+  return { cursor, menus };
+}
+
+test(
+  "app_menu_keys: Down/Up/Enter/Space open to the right edge, Down/Up wrap, Home/End jump, and no item is activated",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, menus } = await driveToMenus(tree);
+
+    const report = await step("app_menu_keys", cursor);
+
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "app_menu_keys_verified");
+    assert.equal(menus.app.open, false, "the phase leaves the menu closed");
+    assert.equal(document.activeElement, menus.app.trigger);
+    assert.equal(menus.app.activations, 0);
+    const keys = menus.app.trigger.dispatchedEvents.map((event) => event.key);
+    assert.deepEqual(keys, ["ArrowDown", "ArrowUp", "Enter", " "], "contracts 1-3, on the trigger");
+  },
+);
+
+test(
+  "app_menu_escape: Escape closes the menu and restores focus to the trigger",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, menus } = await driveToMenus(tree);
+    await step("app_menu_keys", cursor);
+
+    const report = await step("app_menu_escape", cursor);
+
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "app_menu_escape_restored");
+    assert.equal(menus.app.open, false);
+    assert.equal(document.activeElement, menus.app.trigger);
+  },
+);
+
+test(
+  "app_menu_focus_leave: focus moving to the tree row closes the menu and is NOT restored to the trigger",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, menus } = await driveToMenus(tree);
+    await driveMenus(cursor, 2);
+
+    const report = await step("app_menu_focus_leave", cursor);
+
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "app_menu_focus_leave_kept");
+    assert.equal(menus.app.open, false);
+    assert.equal(document.activeElement, tree.elements()[2], "focus stays where it went");
+    assert.notEqual(document.activeElement, menus.app.trigger);
+  },
+);
+
+test(
+  "contract 4: a menu whose Down does not wrap fails, naming the key and the menu state",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor } = await driveToMenus(tree, { app: { wraps: false } });
+
+    const report = await step("app_menu_keys", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.equal(report.result.stage, "app_menu_keys");
+    assert.match(
+      report.result.error,
+      /app_menu: ArrowDown to reach the first item \(menu=true expanded=true items=3/,
+    );
+  },
+);
+
+test(
+  "contract 6: Escape that releases without restoring fails, naming the phase",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor } = await driveToMenus(tree, { app: { restoreOnEscape: false } });
+
+    const report = await step("app_menu_keys", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.match(report.result.error, /app_menu: Escape to close and restore focus to the trigger/);
+  },
+);
+
+test(
+  "contract 7: a menu that restores focus on focus-leave fails, naming implicit dismissal",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor } = await driveToMenus(tree, { app: { restoreOnFocusLeave: true } });
+    await driveMenus(cursor, 2);
+
+    const report = await step("app_menu_focus_leave", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.equal(report.result.stage, "app_menu_focus_leave");
+    assert.match(
+      report.result.error,
+      /app_menu: (focus leaving to the roving tree row to close the menu|focus was restored to the trigger; implicit dismissal must not restore)/,
+    );
+  },
+);
+
+test(
+  "the editor-tools menu is driven through the same three phases, ending terminal",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, menus } = await driveToMenus(tree);
+
+    const report = await driveMenus(cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, true);
+    assert.equal(report.result.stage, "tools_menu_focus_leave");
+    assert.equal(menus.tools.open, false);
+    assert.equal(menus.tools.activations, 0);
+    assert.deepEqual(
+      menus.tools.trigger.dispatchedEvents.map((event) => event.key),
+      ["ArrowDown", "ArrowUp", "Enter", " ", "ArrowDown", "ArrowDown"],
+      "contracts 1-3 in the keys phase, then one open each for escape and focus-leave",
+    );
   },
 );

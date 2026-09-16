@@ -37,10 +37,15 @@
 //! editor, and a tree Enter afterwards still does, which only holds if the
 //! menu released shell authority. Committed before the fix, like contract 7.
 //!
-//! The terminal `FormSearchRestores` (task 016 re-review §2) covers the mode
-//! users get by default: in Form, a search result claims no editor focus, so
-//! it is not a handoff -- explicit dismissal restores focus to the search
-//! trigger.
+//! `FormSearchRestores` (task 016 re-review §2) covers the mode users get by
+//! default: in Form, a search result claims no editor focus, so it is not a
+//! handoff -- explicit dismissal restores focus to the search trigger.
+//!
+//! Slice 2 appends RFC-044 §8 B's menu-button contracts, three phases per
+//! overflow menu: the trigger and in-menu keys (contracts 1-5), Escape
+//! restoring focus to the trigger (6), and focus leaving the wrap closing it
+//! without restoring (7). Contract 7 moves focus with a script `focus()`
+//! rather than a synthetic Tab, per the slice-2 handoff §4.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -61,7 +66,7 @@ use super::transport::{
 };
 
 const MARKER: &str = "RFC044_SHELL_BEHAVIOUR_MARKER";
-const EXPECTED_MILESTONES: [&str; 10] = [
+const EXPECTED_MILESTONES: [&str; 16] = [
     "down_up_moved",
     "expand_entered",
     "collapse_ascended",
@@ -72,9 +77,15 @@ const EXPECTED_MILESTONES: [&str; 10] = [
     "new_file_editor_focused",
     "tree_enter_refocused_after_new_file",
     "form_search_restored_to_trigger",
+    "app_menu_keys_verified",
+    "app_menu_escape_restored",
+    "app_menu_focus_leave_kept",
+    "tools_menu_keys_verified",
+    "tools_menu_escape_restored",
+    "tools_menu_focus_leave_kept",
 ];
 /// The phase whose success is the whole run's terminal result.
-const TERMINAL_STAGE: &str = "form_search_restores";
+const TERMINAL_STAGE: &str = "tools_menu_focus_leave";
 const PHASE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 const SHELL_BEHAVIOUR_JS: &str = include_str!("shell_behaviour_driver.js");
@@ -95,8 +106,20 @@ pub(super) enum ShellBehaviourPhase {
     /// Task 016 §5.2 (b), second assertion.
     TreeEnterAfterNewFile,
     /// Task 016 re-review §2: a Form-mode search result restores to the
-    /// search trigger. The terminal phase.
+    /// search trigger.
     FormSearchRestores,
+    /// Slice 2, RFC-044 §8 B contracts 1-5, app menu.
+    AppMenuKeys,
+    /// Contract 6, app menu.
+    AppMenuEscape,
+    /// Contract 7, app menu.
+    AppMenuFocusLeave,
+    /// Contracts 1-5, editor-tools menu.
+    ToolsMenuKeys,
+    /// Contract 6, editor-tools menu.
+    ToolsMenuEscape,
+    /// Contract 7, editor-tools menu; the terminal phase.
+    ToolsMenuFocusLeave,
 }
 
 impl ShellBehaviourPhase {
@@ -111,7 +134,13 @@ impl ShellBehaviourPhase {
             Self::SearchResultOpens => "search_result_opens",
             Self::NewFileFocuses => "new_file_focuses",
             Self::TreeEnterAfterNewFile => "tree_enter_after_new_file",
-            Self::FormSearchRestores => TERMINAL_STAGE,
+            Self::FormSearchRestores => "form_search_restores",
+            Self::AppMenuKeys => "app_menu_keys",
+            Self::AppMenuEscape => "app_menu_escape",
+            Self::AppMenuFocusLeave => "app_menu_focus_leave",
+            Self::ToolsMenuKeys => "tools_menu_keys",
+            Self::ToolsMenuEscape => "tools_menu_escape",
+            Self::ToolsMenuFocusLeave => TERMINAL_STAGE,
         }
     }
 
@@ -126,12 +155,18 @@ impl ShellBehaviourPhase {
             Self::SearchResultOpens => Some(Self::NewFileFocuses),
             Self::NewFileFocuses => Some(Self::TreeEnterAfterNewFile),
             Self::TreeEnterAfterNewFile => Some(Self::FormSearchRestores),
-            Self::FormSearchRestores => None,
+            Self::FormSearchRestores => Some(Self::AppMenuKeys),
+            Self::AppMenuKeys => Some(Self::AppMenuEscape),
+            Self::AppMenuEscape => Some(Self::AppMenuFocusLeave),
+            Self::AppMenuFocusLeave => Some(Self::ToolsMenuKeys),
+            Self::ToolsMenuKeys => Some(Self::ToolsMenuEscape),
+            Self::ToolsMenuEscape => Some(Self::ToolsMenuFocusLeave),
+            Self::ToolsMenuFocusLeave => None,
         }
     }
 
     /// The `milestone` a `Progress` report from this phase must carry --
-    /// one-to-one with `EXPECTED_MILESTONES`. `FormSearchRestores` is
+    /// one-to-one with `EXPECTED_MILESTONES`. `ToolsMenuFocusLeave` is
     /// terminal, so it reports its milestone via `DriverResult.milestones`.
     const fn expected_milestone(self) -> &'static str {
         match self {
@@ -145,6 +180,12 @@ impl ShellBehaviourPhase {
             Self::NewFileFocuses => "new_file_editor_focused",
             Self::TreeEnterAfterNewFile => "tree_enter_refocused_after_new_file",
             Self::FormSearchRestores => "form_search_restored_to_trigger",
+            Self::AppMenuKeys => "app_menu_keys_verified",
+            Self::AppMenuEscape => "app_menu_escape_restored",
+            Self::AppMenuFocusLeave => "app_menu_focus_leave_kept",
+            Self::ToolsMenuKeys => "tools_menu_keys_verified",
+            Self::ToolsMenuEscape => "tools_menu_escape_restored",
+            Self::ToolsMenuFocusLeave => "tools_menu_focus_leave_kept",
         }
     }
 }

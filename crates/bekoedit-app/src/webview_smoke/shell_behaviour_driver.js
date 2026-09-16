@@ -15,6 +15,12 @@ return (async () => {
     "new_file_focuses",
     "tree_enter_after_new_file",
     "form_search_restores",
+    "app_menu_keys",
+    "app_menu_escape",
+    "app_menu_focus_leave",
+    "tools_menu_keys",
+    "tools_menu_escape",
+    "tools_menu_focus_leave",
   ];
   const request = await dioxus.recv();
   const requestedPhase = request?.phase;
@@ -204,6 +210,142 @@ return (async () => {
         view.state?.doc?.length === docLength,
     );
   };
+  // ---- slice 2: overflow menus (RFC-042 §7.2, RFC-044 §8 B) ------------
+
+  const MENUS = {
+    app: { name: "app_menu", trigger: "#app-menu-trigger", menu: "#app-overflow-menu" },
+    tools: {
+      name: "tools_menu",
+      trigger: "#editor-tools-trigger",
+      menu: "#editor-tools-menu",
+    },
+  };
+  const menuTrigger = (spec) => document.querySelector(spec.trigger);
+  const menuItems = (spec) => {
+    const menu = document.querySelector(spec.menu);
+    return menu ? [...menu.querySelectorAll('[role="menuitem"]')] : [];
+  };
+  const describeMenu = (spec) =>
+    `menu=${Boolean(document.querySelector(spec.menu))} ` +
+    `expanded=${menuTrigger(spec)?.getAttribute("aria-expanded")} ` +
+    `items=${menuItems(spec).length} activeElement=${describeActiveElement()}`;
+  const expectExpanded = (spec, expected, after) => {
+    const actual = menuTrigger(spec)?.getAttribute("aria-expanded");
+    if (actual !== expected) {
+      throw new Error(
+        `${spec.name}: aria-expanded is ${actual}, expected ${expected}, after ${after} (${describeMenu(spec)})`,
+      );
+    }
+  };
+  const focusMenuTrigger = async (spec) => {
+    const trigger = menuTrigger(spec);
+    if (!trigger) throw new Error(`${spec.name}: no ${spec.trigger}`);
+    trigger.focus();
+    await waitFor(
+      () => document.activeElement === trigger,
+      `${spec.name}: focus onto its own trigger (${describeMenu(spec)})`,
+    );
+    return trigger;
+  };
+  const atMenuEdge = (spec, which) => {
+    const items = menuItems(spec);
+    const target = which === "first" ? items[0] : items[items.length - 1];
+    return items.length > 0 && document.activeElement === target;
+  };
+  /** Opens by a trigger key and waits for the named item to hold focus.
+   * §5: Enter and Space are dispatched only while the trigger is focused --
+   * on a menu item they would activate it natively, and "Open Folder" and
+   * "Export HTML" open a portal dialog that escapes xvfb (RFC-042 §10). */
+  const openMenuWith = async (spec, key, which) => {
+    const trigger = await focusMenuTrigger(spec);
+    if (document.activeElement !== trigger) {
+      throw new Error(
+        `${spec.name}: refusing to press ${key}; activeElement is ${describeActiveElement()}, not the trigger`,
+      );
+    }
+    dispatchKey(trigger, key);
+    await waitFor(
+      () => atMenuEdge(spec, which),
+      `${spec.name}: ${key} on the trigger to open and focus the ${which} item (${describeMenu(spec)})`,
+    );
+    expectExpanded(spec, "true", `${key} on the trigger`);
+  };
+  const moveWithinMenu = async (spec, key, which) => {
+    dispatchKey(document.activeElement, key);
+    await waitFor(
+      () => atMenuEdge(spec, which),
+      `${spec.name}: ${key} to reach the ${which} item (${describeMenu(spec)})`,
+    );
+  };
+  /** Contract 6: Escape closes and restores focus to the trigger. */
+  const escapeMenu = async (spec) => {
+    dispatchKey(document.activeElement ?? menuTrigger(spec), "Escape");
+    await waitFor(
+      () => !document.querySelector(spec.menu) && document.activeElement === menuTrigger(spec),
+      `${spec.name}: Escape to close and restore focus to the trigger (${describeMenu(spec)})`,
+    );
+    expectExpanded(spec, "false", "Escape");
+  };
+  /** Contract 7, per handoff §4: a synthetic Tab moves nothing, so this moves
+   * focus to an element outside the wrap -- script focus() does fire focusin,
+   * which is bekoedit's half of the close. Shared with slice 3 (§8 D). */
+  const focusLeavesMenu = async (spec, outside, label) => {
+    outside.focus();
+    await waitFor(
+      () => !document.querySelector(spec.menu) && document.activeElement === outside,
+      `${spec.name}: focus leaving to ${label} to close the menu (${describeMenu(spec)})`,
+    );
+    expectExpanded(spec, "false", "focus leaving the menu");
+    if (document.activeElement === menuTrigger(spec)) {
+      throw new Error(
+        `${spec.name}: focus was restored to the trigger; implicit dismissal must not restore (${describeMenu(spec)})`,
+      );
+    }
+  };
+  const rovingTreeRow = () => {
+    const row = rows().find((candidate) => candidate.getAttribute("tabindex") === "0");
+    if (!row) throw new Error("no tree row at tabindex=0 to move focus out of the menu");
+    return row;
+  };
+  const MENU_PHASES = {
+    app_menu_keys: {
+      spec: MENUS.app,
+      kind: "keys",
+      milestone: "app_menu_keys_verified",
+      next: "app_menu_escape",
+    },
+    app_menu_escape: {
+      spec: MENUS.app,
+      kind: "escape",
+      milestone: "app_menu_escape_restored",
+      next: "app_menu_focus_leave",
+    },
+    app_menu_focus_leave: {
+      spec: MENUS.app,
+      kind: "focusLeave",
+      milestone: "app_menu_focus_leave_kept",
+      next: "tools_menu_keys",
+    },
+    tools_menu_keys: {
+      spec: MENUS.tools,
+      kind: "keys",
+      milestone: "tools_menu_keys_verified",
+      next: "tools_menu_escape",
+    },
+    tools_menu_escape: {
+      spec: MENUS.tools,
+      kind: "escape",
+      milestone: "tools_menu_escape_restored",
+      next: "tools_menu_focus_leave",
+    },
+    tools_menu_focus_leave: {
+      spec: MENUS.tools,
+      kind: "focusLeave",
+      milestone: "tools_menu_focus_leave_kept",
+      next: null,
+    },
+  };
+
   /** Leaves the current phase for `next` with a fresh step and deadline, so
    * no phase ever reads the previous one's deadline. */
   const advance = (milestone, next) => {
@@ -586,11 +728,39 @@ return (async () => {
         }
         outgoing = { kind: "pending" };
       } else if (fileName() === "child.md" && trigger && document.activeElement === trigger) {
-        if (state.errorToastSeen) throw new Error("an error toast appeared");
-        state.milestones.push("form_search_restored_to_trigger");
-        outgoing = finish(true);
+        outgoing = advance("form_search_restored_to_trigger", "app_menu_keys");
       } else {
         outgoing = { kind: "pending" };
+      }
+    } else if (MENU_PHASES[requestedPhase]) {
+      const { spec, kind, milestone, next } = MENU_PHASES[requestedPhase];
+      state.stage = requestedPhase;
+      if (kind === "keys") {
+        await openMenuWith(spec, "ArrowDown", "first"); // contract 1
+        await escapeMenu(spec);
+        await openMenuWith(spec, "ArrowUp", "last"); // contract 2
+        await escapeMenu(spec);
+        await openMenuWith(spec, "Enter", "first"); // contract 3, Enter
+        await escapeMenu(spec);
+        await openMenuWith(spec, " ", "first"); // contract 3, Space
+        await moveWithinMenu(spec, "End", "last"); // contract 5
+        await moveWithinMenu(spec, "ArrowDown", "first"); // contract 4, wrap down
+        await moveWithinMenu(spec, "ArrowUp", "last"); // contract 4, wrap up
+        await moveWithinMenu(spec, "Home", "first"); // contract 5
+        await escapeMenu(spec);
+      } else if (kind === "escape") {
+        await openMenuWith(spec, "ArrowDown", "first");
+        await escapeMenu(spec); // contract 6
+      } else {
+        await openMenuWith(spec, "ArrowDown", "first");
+        await focusLeavesMenu(spec, rovingTreeRow(), "the roving tree row"); // contract 7
+      }
+      if (state.errorToastSeen) throw new Error("an error toast appeared");
+      if (next) {
+        outgoing = advance(milestone, next);
+      } else {
+        state.milestones.push(milestone);
+        outgoing = finish(true);
       }
     } else {
       throw new Error(`unknown phase: ${requestedPhase}`);

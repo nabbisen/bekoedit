@@ -29,7 +29,7 @@ fn successful_result() -> DriverResult {
 }
 
 #[test]
-fn machine_advances_through_all_nine_transitions_ending_at_form_search_restores() {
+fn machine_advances_through_every_transition_ending_at_tools_menu_focus_leave() {
     let mut machine = ShellBehaviourMachine::new();
     let progression = [
         (
@@ -77,6 +77,36 @@ fn machine_advances_through_all_nine_transitions_ending_at_form_search_restores(
             "tree_enter_refocused_after_new_file",
             ShellBehaviourPhase::FormSearchRestores,
         ),
+        (
+            ShellBehaviourPhase::FormSearchRestores,
+            "form_search_restored_to_trigger",
+            ShellBehaviourPhase::AppMenuKeys,
+        ),
+        (
+            ShellBehaviourPhase::AppMenuKeys,
+            "app_menu_keys_verified",
+            ShellBehaviourPhase::AppMenuEscape,
+        ),
+        (
+            ShellBehaviourPhase::AppMenuEscape,
+            "app_menu_escape_restored",
+            ShellBehaviourPhase::AppMenuFocusLeave,
+        ),
+        (
+            ShellBehaviourPhase::AppMenuFocusLeave,
+            "app_menu_focus_leave_kept",
+            ShellBehaviourPhase::ToolsMenuKeys,
+        ),
+        (
+            ShellBehaviourPhase::ToolsMenuKeys,
+            "tools_menu_keys_verified",
+            ShellBehaviourPhase::ToolsMenuEscape,
+        ),
+        (
+            ShellBehaviourPhase::ToolsMenuEscape,
+            "tools_menu_escape_restored",
+            ShellBehaviourPhase::ToolsMenuFocusLeave,
+        ),
     ];
     for (index, (phase, milestone, next)) in progression.into_iter().enumerate() {
         let exchange_id = (index + 1) as u64;
@@ -88,12 +118,12 @@ fn machine_advances_through_all_nine_transitions_ending_at_form_search_restores(
         assert_eq!(machine.current(), next);
     }
     assert_eq!(
-        ShellBehaviourPhase::FormSearchRestores.next(),
+        ShellBehaviourPhase::ToolsMenuFocusLeave.next(),
         None,
-        "form_search_restores (task 016 re-review §2) is the terminal phase"
+        "tools_menu_focus_leave (slice 2, contract 7) is the terminal phase"
     );
     assert_eq!(
-        ShellBehaviourPhase::FormSearchRestores.as_str(),
+        ShellBehaviourPhase::ToolsMenuFocusLeave.as_str(),
         TERMINAL_STAGE
     );
 }
@@ -149,9 +179,9 @@ fn malformed_progress_and_terminal_messages_are_rejected() {
     assert!(machine.validate(&out_of_order, 1, None).is_err());
 
     let last_phase_terminal_progress =
-        ShellBehaviourMachine::for_phase(ShellBehaviourPhase::FormSearchRestores);
+        ShellBehaviourMachine::for_phase(ShellBehaviourPhase::ToolsMenuFocusLeave);
     let mut malformed = phase_message(MessageKind::Progress, TERMINAL_STAGE, 1);
-    malformed.milestone = Some("form_search_restored_to_trigger".into());
+    malformed.milestone = Some("tools_menu_focus_leave_kept".into());
     assert!(
         last_phase_terminal_progress
             .validate(&malformed, 1, None)
