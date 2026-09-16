@@ -22,6 +22,10 @@ return (async () => {
     "tools_menu_keys",
     "tools_menu_escape",
     "tools_menu_focus_leave",
+    "tabs_arrows_focus_only",
+    "tabs_click_activates",
+    "menu_closes_into_editor",
+    "authority_released_after_editor_focus",
   ];
   const request = await dioxus.recv();
   const requestedPhase = request?.phase;
@@ -337,8 +341,8 @@ return (async () => {
   /** Contract 7, per handoff §4: a synthetic Tab moves nothing, so this moves
    * focus to an element outside the wrap -- script focus() does fire focusin,
    * which is bekoedit's half of the close. Shared with slice 3 (§8 D). */
-  const focusLeavesMenu = async (spec, outside, label) => {
-    outside.focus();
+  const focusLeavesMenu = async (spec, outside, label, moveFocus = () => outside.focus()) => {
+    moveFocus();
     const atFocus = describeMenu(spec);
     await waitFor(
       () => !document.querySelector(spec.menu) && document.activeElement === outside,
@@ -389,6 +393,75 @@ return (async () => {
     }
     await escapeMenu(spec);
   };
+  /** Watches `check` for ABSENCE_OBSERVATION_FRAMES frames (and once more),
+   * throwing the first violation it returns. For every "must not happen"
+   * assertion after the positive condition it follows (slice 3 handoff §5). */
+  const observeWindow = async (check) => {
+    for (let frame = 0; frame <= ABSENCE_OBSERVATION_FRAMES; frame += 1) {
+      const violation = check();
+      if (violation) throw new Error(violation);
+      if (frame < ABSENCE_OBSERVATION_FRAMES) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+    }
+  };
+
+  // ---- slice 3 stage 1: mode tabs (§8 C) and focus authority (§8 D) -----
+
+  const modeTabs = () => {
+    const list = document.querySelector("#editor-mode-switch");
+    return list ? [...list.querySelectorAll('[role="tab"]')] : [];
+  };
+  /** By launch id, exactly one match -- as task 016's Form tab. */
+  const uniqueTab = (launchId) => {
+    const matches = [...document.querySelectorAll(`[data-source-focus-launch="${launchId}"]`)];
+    if (matches.length !== 1) {
+      throw new Error(
+        `expected exactly one [data-source-focus-launch="${launchId}"], found ${matches.length}`,
+      );
+    }
+    return matches[0];
+  };
+  const describeTabs = () =>
+    `tabs=[${modeTabs()
+      .map(
+        (tab) =>
+          `${tab.getAttribute("data-source-focus-launch")}:selected=${tab.getAttribute(
+            "aria-selected",
+          )}:tabindex=${tab.getAttribute("tabindex")}`,
+      )
+      .join(" ")}] activeElement=${describeActiveElement()}`;
+  const selectionViolation = (launchId) => {
+    const selected = modeTabs().filter((tab) => tab.getAttribute("aria-selected") === "true");
+    if (selected.length !== 1) return `expected exactly one selected tab, found ${selected.length}`;
+    const id = selected[0].getAttribute("data-source-focus-launch");
+    if (id !== launchId) return `the selected tab is ${id}, expected ${launchId}`;
+    if (selected[0].getAttribute("tabindex") !== "0") {
+      return `the selected tab ${id} does not hold tabindex=0`;
+    }
+    return null;
+  };
+  const focusTab = async (launchId, contract) => {
+    const tab = uniqueTab(launchId);
+    tab.focus();
+    await waitFor(
+      () => document.activeElement === tab,
+      () => `${contract}: focus onto the ${launchId} tab (at timeout: ${describeTabs()})`,
+    );
+    return tab;
+  };
+  /** Activation through bekoedit's half (handoff §3.3): a script click runs
+   * the tab's onclick, which a real Enter or Space reaches only through the
+   * browser's native activation. The tab is focused first, as it is for a
+   * keyboard user pressing Enter on it: the source focus guard accepts a
+   * persistent control's claim only while its launch origin holds focus
+   * (launchMustRemain), and a script click moves no focus. The editor focus
+   * asserted afterwards still comes from the claim, not from the click. */
+  const activateTab = async (launchId, contract) => {
+    const tab = await focusTab(launchId, contract);
+    tab.click();
+    return tab;
+  };
   const rovingTreeRow = () => {
     const row = rows().find((candidate) => candidate.getAttribute("tabindex") === "0");
     if (!row) throw new Error("no tree row at tabindex=0 to move focus out of the menu");
@@ -435,7 +508,7 @@ return (async () => {
       spec: MENUS.tools,
       kind: "focusLeave",
       milestone: "tools_menu_focus_leave_kept",
-      next: null,
+      next: "tabs_arrows_focus_only",
     },
   };
 
@@ -825,6 +898,82 @@ return (async () => {
       } else {
         outgoing = { kind: "pending" };
       }
+    } else if (requestedPhase === "tabs_arrows_focus_only") {
+      // §8 C1: Right, Left, Home, End move focus and nothing else. Checked
+      // after every key -- Right then Left starts and ends on Form, so one
+      // check at the end would pass a build that switched mode twice.
+      state.stage = "tabs_arrows_focus_only";
+      await focusTab("mode-form", "C1");
+      const before = selectionViolation("mode-form");
+      if (before) throw new Error(`C1: before any key, ${before} (${describeTabs()})`);
+      for (const [key, expected] of [
+        ["ArrowRight", "mode-text"],
+        ["ArrowLeft", "mode-form"],
+        ["Home", "mode-text"],
+        ["End", "mode-form"],
+      ]) {
+        const atDispatch = describeTabs();
+        dispatchKey(document.activeElement, key);
+        await waitFor(
+          () => document.activeElement === uniqueTab(expected),
+          () =>
+            `C1: ${key} to move focus to ${expected} ` +
+            `(at dispatch: ${atDispatch}; at timeout: ${describeTabs()})`,
+        );
+        await observeWindow(() => {
+          const violation = selectionViolation("mode-form");
+          if (violation) {
+            return `C1: ${key} changed the selected tab, not only focus: ${violation} (${describeTabs()})`;
+          }
+          if (document.activeElement !== uniqueTab(expected)) {
+            return `C1: focus did not stay on ${expected} after ${key} (${describeTabs()})`;
+          }
+          return null;
+        });
+      }
+      outgoing = advance("tabs_arrows_moved_focus_only", "tabs_click_activates");
+    } else if (requestedPhase === "tabs_click_activates") {
+      // §8 C2: activating Text selects it and SwitchMode(Text) claims the editor.
+      state.stage = "tabs_click_activates";
+      await activateTab("mode-text", "C2");
+      await waitFor(
+        () => selectionViolation("mode-text") === null && editorFocusedWithDoc(docLengths.child),
+        () =>
+          `C2: activating the Text tab to select it and focus the editor ` +
+          `(at timeout: ${describeTabs()} ${editorSummary()})`,
+      );
+      outgoing = advance("tabs_click_focused_editor", "menu_closes_into_editor");
+    } else if (requestedPhase === "menu_closes_into_editor") {
+      // §8 D1: with the app menu open, focus entering the editor closes it,
+      // without a restore to the trigger, and focus stays in the editor.
+      state.stage = "menu_closes_into_editor";
+      await openMenuWith(MENUS.app, "ArrowDown", "first");
+      const view = window.__bk?._view;
+      if (!view?.contentDOM) throw new Error(`D1: no editor view to focus (${editorSummary()})`);
+      await focusLeavesMenu(MENUS.app, view.contentDOM, "the source editor", () => view.focus());
+      if (!view.hasFocus) {
+        throw new Error(`D1: view.hasFocus is false after the menu closed (${editorSummary()})`);
+      }
+      outgoing = advance("menu_closed_into_editor_kept", "authority_released_after_editor_focus");
+    } else if (requestedPhase === "authority_released_after_editor_focus") {
+      // §8 D2: a close that kept shell authority looks right to D1 and refuses
+      // every later claim. Prove the release by making one.
+      state.stage = "authority_released_after_editor_focus";
+      uniqueTab("mode-preview").click(); // Preview claims nothing, so no focus is needed.
+      await waitFor(
+        () => selectionViolation("mode-preview") === null,
+        () => `D2: clicking the Preview tab to select it (at timeout: ${describeTabs()})`,
+      );
+      await activateTab("mode-text", "D2");
+      await waitFor(
+        () => selectionViolation("mode-text") === null && editorFocusedWithDoc(docLengths.child),
+        () =>
+          `D2: activating Text to claim the editor again; a refused claim means the menu's ` +
+          `close into the editor kept shell authority (at timeout: ${describeTabs()} ${editorSummary()})`,
+      );
+      if (state.errorToastSeen) throw new Error("an error toast appeared");
+      state.milestones.push("authority_released_editor_refocused");
+      outgoing = finish(true);
     } else if (MENU_PHASES[requestedPhase]) {
       const { spec, kind, milestone, next } = MENU_PHASES[requestedPhase];
       state.stage = requestedPhase;

@@ -48,6 +48,12 @@
 //! restoring focus to the trigger (6), and focus leaving the wrap closing it
 //! without restoring (7). Contract 7 moves focus with a script `focus()`
 //! rather than a synthetic Tab, per the slice-2 handoff §4.
+//!
+//! Slice 3 stage 1 appends RFC-044 §8 C (mode tabs: arrows move focus only;
+//! activating Text selects it and focuses the editor) and §8 D (focus
+//! entering the editor closes an open menu and stays; that close released
+//! shell authority, proven by a later claim succeeding). The phase table
+//! lives in `phase.rs` (slice 3 handoff §4.4).
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -63,146 +69,17 @@ use crate::settings::AppSettings;
 
 use super::SmokeProfile;
 use super::transport::{
-    self, CompletedProbe, DriverResult, MessageKind, PhaseKind, PhaseMessage, PinnedExchange,
+    self, CompletedProbe, DriverResult, MessageKind, PhaseMessage, PinnedExchange,
     SMOKE_PROTOCOL_VERSION,
 };
 
+mod phase;
+use phase::{EXPECTED_MILESTONES, ShellBehaviourPhase, TERMINAL_STAGE};
+
 const MARKER: &str = "RFC044_SHELL_BEHAVIOUR_MARKER";
-const EXPECTED_MILESTONES: [&str; 17] = [
-    "down_up_moved",
-    "expand_entered",
-    "collapse_ascended",
-    "home_end_reached",
-    "non_openable_reachable",
-    "enter_opened_editor_focused",
-    "search_result_editor_focused",
-    "new_file_editor_focused",
-    "tree_enter_refocused_after_new_file",
-    "form_search_restored_to_trigger",
-    "app_menu_mouse_open_kept_focus",
-    "app_menu_keys_verified",
-    "app_menu_escape_restored",
-    "app_menu_focus_leave_kept",
-    "tools_menu_keys_verified",
-    "tools_menu_escape_restored",
-    "tools_menu_focus_leave_kept",
-];
-/// The phase whose success is the whole run's terminal result.
-const TERMINAL_STAGE: &str = "tools_menu_focus_leave";
 const PHASE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 const SHELL_BEHAVIOUR_JS: &str = include_str!("shell_behaviour_driver.js");
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ShellBehaviourPhase {
-    DownUp,
-    ExpandEnter,
-    CollapseAscend,
-    HomeEnd,
-    NonOpenable,
-    /// Contract 7 (task 014).
-    EnterOpens,
-    /// Task 016 §5.2 (a).
-    SearchResultOpens,
-    /// Task 016 §5.2 (b), first assertion.
-    NewFileFocuses,
-    /// Task 016 §5.2 (b), second assertion.
-    TreeEnterAfterNewFile,
-    /// Task 016 re-review §2: a Form-mode search result restores to the
-    /// search trigger.
-    FormSearchRestores,
-    /// Task 017 §2's mouse rows, app menu.
-    AppMenuMouseOpen,
-    /// Slice 2, RFC-044 §8 B contracts 1-5, app menu.
-    AppMenuKeys,
-    /// Contract 6, app menu.
-    AppMenuEscape,
-    /// Contract 7, app menu.
-    AppMenuFocusLeave,
-    /// Contracts 1-5, editor-tools menu.
-    ToolsMenuKeys,
-    /// Contract 6, editor-tools menu.
-    ToolsMenuEscape,
-    /// Contract 7, editor-tools menu; the terminal phase.
-    ToolsMenuFocusLeave,
-}
-
-impl ShellBehaviourPhase {
-    const fn as_str(self) -> &'static str {
-        match self {
-            Self::DownUp => "down_up",
-            Self::ExpandEnter => "expand_enter",
-            Self::CollapseAscend => "collapse_ascend",
-            Self::HomeEnd => "home_end",
-            Self::NonOpenable => "non_openable",
-            Self::EnterOpens => "enter_opens",
-            Self::SearchResultOpens => "search_result_opens",
-            Self::NewFileFocuses => "new_file_focuses",
-            Self::TreeEnterAfterNewFile => "tree_enter_after_new_file",
-            Self::FormSearchRestores => "form_search_restores",
-            Self::AppMenuMouseOpen => "app_menu_mouse_open",
-            Self::AppMenuKeys => "app_menu_keys",
-            Self::AppMenuEscape => "app_menu_escape",
-            Self::AppMenuFocusLeave => "app_menu_focus_leave",
-            Self::ToolsMenuKeys => "tools_menu_keys",
-            Self::ToolsMenuEscape => "tools_menu_escape",
-            Self::ToolsMenuFocusLeave => TERMINAL_STAGE,
-        }
-    }
-
-    const fn next(self) -> Option<Self> {
-        match self {
-            Self::DownUp => Some(Self::ExpandEnter),
-            Self::ExpandEnter => Some(Self::CollapseAscend),
-            Self::CollapseAscend => Some(Self::HomeEnd),
-            Self::HomeEnd => Some(Self::NonOpenable),
-            Self::NonOpenable => Some(Self::EnterOpens),
-            Self::EnterOpens => Some(Self::SearchResultOpens),
-            Self::SearchResultOpens => Some(Self::NewFileFocuses),
-            Self::NewFileFocuses => Some(Self::TreeEnterAfterNewFile),
-            Self::TreeEnterAfterNewFile => Some(Self::FormSearchRestores),
-            Self::FormSearchRestores => Some(Self::AppMenuMouseOpen),
-            Self::AppMenuMouseOpen => Some(Self::AppMenuKeys),
-            Self::AppMenuKeys => Some(Self::AppMenuEscape),
-            Self::AppMenuEscape => Some(Self::AppMenuFocusLeave),
-            Self::AppMenuFocusLeave => Some(Self::ToolsMenuKeys),
-            Self::ToolsMenuKeys => Some(Self::ToolsMenuEscape),
-            Self::ToolsMenuEscape => Some(Self::ToolsMenuFocusLeave),
-            Self::ToolsMenuFocusLeave => None,
-        }
-    }
-
-    /// The `milestone` a `Progress` report from this phase must carry --
-    /// one-to-one with `EXPECTED_MILESTONES`. `ToolsMenuFocusLeave` is
-    /// terminal, so it reports its milestone via `DriverResult.milestones`.
-    const fn expected_milestone(self) -> &'static str {
-        match self {
-            Self::DownUp => "down_up_moved",
-            Self::ExpandEnter => "expand_entered",
-            Self::CollapseAscend => "collapse_ascended",
-            Self::HomeEnd => "home_end_reached",
-            Self::NonOpenable => "non_openable_reachable",
-            Self::EnterOpens => "enter_opened_editor_focused",
-            Self::SearchResultOpens => "search_result_editor_focused",
-            Self::NewFileFocuses => "new_file_editor_focused",
-            Self::TreeEnterAfterNewFile => "tree_enter_refocused_after_new_file",
-            Self::FormSearchRestores => "form_search_restored_to_trigger",
-            Self::AppMenuMouseOpen => "app_menu_mouse_open_kept_focus",
-            Self::AppMenuKeys => "app_menu_keys_verified",
-            Self::AppMenuEscape => "app_menu_escape_restored",
-            Self::AppMenuFocusLeave => "app_menu_focus_leave_kept",
-            Self::ToolsMenuKeys => "tools_menu_keys_verified",
-            Self::ToolsMenuEscape => "tools_menu_escape_restored",
-            Self::ToolsMenuFocusLeave => "tools_menu_focus_leave_kept",
-        }
-    }
-}
-
-impl PhaseKind for ShellBehaviourPhase {
-    fn as_str(self) -> &'static str {
-        Self::as_str(self)
-    }
-}
 
 #[derive(Debug)]
 struct ShellBehaviourMachine {

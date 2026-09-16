@@ -29,7 +29,7 @@ fn successful_result() -> DriverResult {
 }
 
 #[test]
-fn machine_advances_through_every_transition_ending_at_tools_menu_focus_leave() {
+fn machine_advances_through_every_transition_ending_at_authority_released() {
     let mut machine = ShellBehaviourMachine::new();
     let progression = [
         (
@@ -112,6 +112,26 @@ fn machine_advances_through_every_transition_ending_at_tools_menu_focus_leave() 
             "tools_menu_escape_restored",
             ShellBehaviourPhase::ToolsMenuFocusLeave,
         ),
+        (
+            ShellBehaviourPhase::ToolsMenuFocusLeave,
+            "tools_menu_focus_leave_kept",
+            ShellBehaviourPhase::TabsArrowsFocusOnly,
+        ),
+        (
+            ShellBehaviourPhase::TabsArrowsFocusOnly,
+            "tabs_arrows_moved_focus_only",
+            ShellBehaviourPhase::TabsClickActivates,
+        ),
+        (
+            ShellBehaviourPhase::TabsClickActivates,
+            "tabs_click_focused_editor",
+            ShellBehaviourPhase::MenuClosesIntoEditor,
+        ),
+        (
+            ShellBehaviourPhase::MenuClosesIntoEditor,
+            "menu_closed_into_editor_kept",
+            ShellBehaviourPhase::AuthorityReleasedAfterEditorFocus,
+        ),
     ];
     for (index, (phase, milestone, next)) in progression.into_iter().enumerate() {
         let exchange_id = (index + 1) as u64;
@@ -123,12 +143,12 @@ fn machine_advances_through_every_transition_ending_at_tools_menu_focus_leave() 
         assert_eq!(machine.current(), next);
     }
     assert_eq!(
-        ShellBehaviourPhase::ToolsMenuFocusLeave.next(),
+        ShellBehaviourPhase::AuthorityReleasedAfterEditorFocus.next(),
         None,
-        "tools_menu_focus_leave (slice 2, contract 7) is the terminal phase"
+        "authority_released_after_editor_focus (slice 3, D2) is the terminal phase"
     );
     assert_eq!(
-        ShellBehaviourPhase::ToolsMenuFocusLeave.as_str(),
+        ShellBehaviourPhase::AuthorityReleasedAfterEditorFocus.as_str(),
         TERMINAL_STAGE
     );
 }
@@ -184,9 +204,9 @@ fn malformed_progress_and_terminal_messages_are_rejected() {
     assert!(machine.validate(&out_of_order, 1, None).is_err());
 
     let last_phase_terminal_progress =
-        ShellBehaviourMachine::for_phase(ShellBehaviourPhase::ToolsMenuFocusLeave);
+        ShellBehaviourMachine::for_phase(ShellBehaviourPhase::AuthorityReleasedAfterEditorFocus);
     let mut malformed = phase_message(MessageKind::Progress, TERMINAL_STAGE, 1);
-    malformed.milestone = Some("tools_menu_focus_leave_kept".into());
+    malformed.milestone = Some("authority_released_editor_refocused".into());
     assert!(
         last_phase_terminal_progress
             .validate(&malformed, 1, None)

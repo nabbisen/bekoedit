@@ -23,6 +23,7 @@ import test from "node:test";
 import { FakeElement, FakeEditorView } from "./webview-smoke-dom-fake.mjs";
 import { FakeTree } from "./webview-smoke-tree-fake.mjs";
 import { FakeMenu } from "./webview-smoke-menu-fake.mjs";
+import { FakeModeTabs } from "./webview-smoke-tabs-fake.mjs";
 import {
   FakeDioxus,
   acknowledgement,
@@ -565,12 +566,19 @@ test(
     const mouse = await step("app_menu_mouse_open", cursor);
     assert.equal(mouse.kind, "progress");
     assert.equal(mouse.milestone, "app_menu_mouse_open_kept_focus");
-    const report = await driveMenus(cursor);
+    const menuReport = await driveMenus(cursor);
+    assert.equal(menuReport.kind, "progress");
+    assert.equal(menuReport.milestone, "tools_menu_focus_leave_kept");
+
+    // Slice 3 stage 1: mode tabs and focus authority, ending terminal.
+    const tabs = new FakeModeTabs(tree).install();
+    const report = await driveTabsAndAuthority(cursor);
 
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, true);
-    assert.equal(report.result.stage, "tools_menu_focus_leave");
+    assert.equal(report.result.stage, "authority_released_after_editor_focus");
     assert.equal(menus.app.activations + menus.tools.activations, 0, "no menu item is ever activated");
+    assert.equal(tabs.selected, "mode-text");
     assert.deepEqual(report.result.milestones, [
       "down_up_moved",
       "expand_entered",
@@ -589,6 +597,10 @@ test(
       "tools_menu_keys_verified",
       "tools_menu_escape_restored",
       "tools_menu_focus_leave_kept",
+      "tabs_arrows_moved_focus_only",
+      "tabs_click_focused_editor",
+      "menu_closed_into_editor_kept",
+      "authority_released_editor_refocused",
     ]);
   },
 );
@@ -939,7 +951,7 @@ test(
 );
 
 test(
-  "the editor-tools menu is driven through the same three phases, ending terminal",
+  "the editor-tools menu is driven through the same three phases, then hands over to the mode tabs",
   { concurrency: false },
   async () => {
     const tree = new FakeTree();
@@ -948,9 +960,9 @@ test(
 
     const report = await driveMenus(cursor);
 
-    assert.equal(report.kind, "terminal");
-    assert.equal(report.result.ok, true);
-    assert.equal(report.result.stage, "tools_menu_focus_leave");
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "tools_menu_focus_leave_kept");
+    assert.equal(window.__bkWebViewShellBehaviourState.phase, "tabs_arrows_focus_only");
     assert.equal(menus.tools.open, false);
     assert.equal(menus.tools.activations, 0);
     assert.deepEqual(
@@ -1060,5 +1072,198 @@ test(
       /app_menu: focus was restored to the trigger; implicit dismissal must not restore/,
     );
     assert.equal(document.activeElement, menus.app.trigger, "the fake did restore, one frame late");
+  },
+);
+
+// ---- slice 3 stage 1: mode tabs (§8 C) and focus authority (§8 D) ---------
+
+const STAGE_1_PHASES = [
+  "tabs_arrows_focus_only",
+  "tabs_click_activates",
+  "menu_closes_into_editor",
+  "authority_released_after_editor_focus",
+];
+
+/** Runs stage 1's phases in order, stopping early on a terminal report. */
+async function driveTabsAndAuthority(cursor, upTo = STAGE_1_PHASES.length) {
+  let report;
+  for (const phase of STAGE_1_PHASES.slice(0, upTo)) {
+    report = await step(phase, cursor);
+    if (report.kind === "terminal") return report;
+  }
+  return report;
+}
+
+/** Drives every earlier phase, then hands back a cursor at stage 1's start,
+ * with the Form tab selected and focus on a tree row -- slice 2's end state. */
+async function driveToTabs(tree, { menus: menuOptions, tabs: tabOptions } = {}) {
+  const { cursor, menus } = await driveToMenus(tree, menuOptions);
+  const last = await driveMenus(cursor);
+  assert.equal(last.kind, "progress", "slice 2's last phase hands over to stage 1");
+  const tabs = new FakeModeTabs(tree, tabOptions).install();
+  return { cursor, menus, tabs };
+}
+
+test(
+  "C1 tabs_arrows_focus_only: Right, Left, Home and End move focus only; Form stays selected",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, tabs } = await driveToTabs(tree);
+
+    const report = await step("tabs_arrows_focus_only", cursor);
+
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "tabs_arrows_moved_focus_only");
+    assert.equal(tabs.selected, "mode-form");
+    assert.equal(document.activeElement, tabs.tab("mode-form"));
+    const keys = tabs.elements.flatMap((tab) => tab.dispatchedEvents.map((event) => event.key));
+    assert.deepEqual(keys.sort(), ["ArrowLeft", "ArrowRight", "End", "Home"]);
+    assert.equal(tabs.elements.reduce((sum, tab) => sum + tab.clicks, 0), 0, "C1 clicks nothing");
+  },
+);
+
+test(
+  "C1: a tab that activates one frame after the arrow key fails, naming the selection change",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor } = await driveToTabs(tree, { tabs: { activateOnArrow: "nextFrame" } });
+
+    const report = await step("tabs_arrows_focus_only", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.equal(report.result.stage, "tabs_arrows_focus_only");
+    assert.match(
+      report.result.error,
+      /C1: ArrowRight changed the selected tab, not only focus: the selected tab is mode-text, expected mode-form/,
+    );
+  },
+);
+
+test(
+  "C2 tabs_click_activates: activating Text selects it and the editor takes focus",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, tabs } = await driveToTabs(tree);
+    await driveTabsAndAuthority(cursor, 1);
+
+    const report = await step("tabs_click_activates", cursor);
+
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "tabs_click_focused_editor");
+    assert.equal(tabs.selected, "mode-text");
+    assert.equal(tabs.tab("mode-text").clicks, 1);
+    assert.equal(document.activeElement, tabs.content);
+  },
+);
+
+test(
+  "C2: a refused editor claim times out, naming C2 and the tab and editor state",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, tabs } = await driveToTabs(tree);
+    await driveTabsAndAuthority(cursor, 1);
+    tabs.authorityHeld = true;
+
+    const report = await step("tabs_click_activates", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.match(
+      report.result.error,
+      /C2: activating the Text tab to select it and focus the editor \(at timeout: tabs=\[mode-text:selected=true.* hasFocus=false/,
+    );
+  },
+);
+
+test(
+  "D1 menu_closes_into_editor: focus entering the editor closes the menu and stays in the editor",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, menus, tabs } = await driveToTabs(tree);
+    await driveTabsAndAuthority(cursor, 2);
+
+    const report = await step("menu_closes_into_editor", cursor);
+
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "menu_closed_into_editor_kept");
+    assert.equal(menus.app.open, false);
+    assert.equal(document.activeElement, tabs.content);
+    assert.equal(tabs.view.hasFocus, true);
+  },
+);
+
+test(
+  "D1: a restore to the trigger one frame after the editor takes focus fails, naming implicit dismissal",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, menus } = await driveToTabs(tree);
+    await driveTabsAndAuthority(cursor, 2);
+    menus.app.restoreOnFocusLeave = "nextFrame";
+
+    const report = await step("menu_closes_into_editor", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.equal(report.result.stage, "menu_closes_into_editor");
+    assert.match(
+      report.result.error,
+      /app_menu: focus was restored to the trigger; implicit dismissal must not restore/,
+    );
+  },
+);
+
+test(
+  "D2 authority_released_after_editor_focus: a later claim succeeds, ending terminal with all milestones",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, tabs } = await driveToTabs(tree);
+    await driveTabsAndAuthority(cursor, 3);
+
+    const report = await step("authority_released_after_editor_focus", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, true);
+    assert.equal(report.result.stage, "authority_released_after_editor_focus");
+    assert.equal(report.result.milestones.length, 21);
+    assert.equal(tabs.tab("mode-preview").clicks, 1);
+    assert.equal(document.activeElement, tabs.content);
+  },
+);
+
+test(
+  "D2: authority still held after the close into the editor fails at D2, naming the refused claim",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, tabs } = await driveToTabs(tree);
+    await driveTabsAndAuthority(cursor, 3);
+    // The defect D1 cannot see: the menu closed, but authority stayed held.
+    tabs.authorityHeld = true;
+
+    const report = await step("authority_released_after_editor_focus", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.equal(report.result.stage, "authority_released_after_editor_focus");
+    assert.match(
+      report.result.error,
+      /D2: activating Text to claim the editor again; a refused claim means the menu's close into the editor kept shell authority/,
+    );
   },
 );
