@@ -242,15 +242,19 @@ jobs:
         # Promotion criterion, recorded per handoff §6: promote to blocking
         # after 10 consecutive green runs of this step on `main`.
         #
-        # CLOCK RESTARTED 2026-09-16 (task 016, PR #25): the three
-        # handoff-activation contracts and the Form-mode one changed this
-        # step's phase set. Count stands at 1 of 10: run 35045829469 (push at
-        # 896e151), outcome line `success`, read from the log, never from a
-        # conclusion.
+        # CLOCK RESTARTED 2026-09-16 (RFC-044 slice 2, PR #30): the seven menu
+        # phases (app_menu_mouse_open, and keys / escape / focus_leave for the
+        # app menu and the editor-tools menu) changed this step's phase set.
+        # Count stands at 0 of 10. Run 1 will be the first `main` push run
+        # after PR #30's fast-forward, read from its
+        # "RFC-044 shell-behaviour outcome:" line, never from a conclusion.
         # Update this line as the count advances; delete `continue-on-error`
         # when it reaches 10.
         #
         # Previous clocks, each superseded by the restart above:
+        # - 2026-09-16 (task 016, PR #25): reached 3 of 10, runs 35045829469
+        #   (push at 896e151), 35103008667 (d9b0051) and 35108175240 (e9779bc,
+        #   task 017's merge), each outcome line `success`.
         # - 2026-09-15 (task 014, PR #22, contract 7): reached 1 of 10, run
         #   34978372539 (push at 685ea9a), outcome line `success`.
         # - 2026-09-05 (PR #21, fast-forward to ab6acf9): reached 1 of 10, run
@@ -258,7 +262,7 @@ jobs:
         #   its job log truncated with no result line.
         #
         # The count RESTARTS when this step's phase set changes (RFC-044 §10):
-        # slice 2 records a new start here in its merge.
+        # slice 3 records a new start here in its merge.
         #
         # How to read a run: NOT from any conclusion. continue-on-error masks
         # this step's own API conclusion as well as the job's -- run
