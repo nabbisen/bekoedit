@@ -38,6 +38,7 @@ pub fn consume_menu_entry(mut intent: Signal<Option<FocusMove>>, menu_id: &'stat
     let pending = *intent.peek();
     if let Some(target) = pending {
         intent.set(None);
-        shell_focus::focus_menu_item(menu_id, target);
+        // TEMP task 017 non-vacuity: the mount no longer moves focus.
+        let _ = (menu_id, target);
     }
 }
