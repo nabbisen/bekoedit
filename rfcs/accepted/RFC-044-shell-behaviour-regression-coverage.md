@@ -268,6 +268,24 @@ asking why it is non-blocking will look.
 Handoff for slice 1:
 [`handoffs/044-shell-behaviour-regression-coverage/slice-1-second-run-and-tree-navigation.md`](../handoffs/044-shell-behaviour-regression-coverage/slice-1-second-run-and-tree-navigation.md).
 
+**Slice 2 implemented 2026-09-16**, merged as `59f21b7` (PR #30, fast-forward).
+All seven of B's contracts now run for both overflow menus, plus a permanent
+check that opening a menu with the mouse leaves focus on its trigger. B's Tab
+item uses §11's `.focus()` mechanism, and after the close it keeps watching for
+30 frames, because checking once cannot prove a restore never happens.
+
+**Slice 2 found a shipped defect**, just as slice 1 did with A.7. Opening either
+menu from the keyboard never focused an item. RFC-042 had recorded that as
+implemented in v0.14.0. Task 017 fixed it first (`e9779bc`), and slice 2's
+contracts were its proof. The history of how it was found is kept on `main`:
+`74344a0` holds the red contracts and `e571254` the diagnostic.
+
+The merge restarted the promotion clock, since the phase set changed. Run 1 is
+`35111768240`, the push at `59f21b7`.
+
+Handoff for slice 2:
+[`handoffs/044-shell-behaviour-regression-coverage/slice-2-overflow-menus.md`](../handoffs/044-shell-behaviour-regression-coverage/slice-2-overflow-menus.md).
+
 **One assumption gates all of it**, and slice 1 must prove it before anything
 else: that a synthetic `KeyboardEvent` dispatched by the driver reaches a Dioxus
 `onkeydown` handler in a real WebView. The existing driver only ever dispatches

@@ -245,9 +245,8 @@ jobs:
         # CLOCK RESTARTED 2026-09-16 (RFC-044 slice 2, PR #30): the seven menu
         # phases (app_menu_mouse_open, and keys / escape / focus_leave for the
         # app menu and the editor-tools menu) changed this step's phase set.
-        # Count stands at 0 of 10. Run 1 will be the first `main` push run
-        # after PR #30's fast-forward, read from its
-        # "RFC-044 shell-behaviour outcome:" line, never from a conclusion.
+        # Count stands at 1 of 10: run 35111768240 (push at 59f21b7), outcome
+        # line `success`, read from the log, never from a conclusion.
         # Update this line as the count advances; delete `continue-on-error`
         # when it reaches 10.
         #
