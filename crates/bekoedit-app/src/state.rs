@@ -45,6 +45,11 @@ pub enum OpenMenu {
 #[derive(Clone, Copy)]
 pub struct OpenMenuState(pub Signal<OpenMenu>);
 
+/// Which item a keyboard-opened menu should focus once it is mounted
+/// (task 017). `None` whenever no keyboard entry is pending.
+#[derive(Clone, Copy)]
+pub struct MenuEntryIntent(pub Signal<Option<crate::shell_focus::FocusMove>>);
+
 /// Autosave debounce (external design §25.4 default).
 pub const AUTOSAVE_DEBOUNCE_MS: u64 = 1500;
 
