@@ -1040,3 +1040,25 @@ test(
     assert.equal(report.milestone, "down_up_moved");
   },
 );
+
+test(
+  "contract 7: a restore that lands one frame after the menu is removed still fails, naming implicit dismissal",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, menus } = await driveToMenus(tree, { app: { restoreOnFocusLeave: "nextFrame" } });
+    await driveMenus(cursor, 2);
+
+    const report = await step("app_menu_focus_leave", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.equal(report.result.stage, "app_menu_focus_leave");
+    assert.match(
+      report.result.error,
+      /app_menu: focus was restored to the trigger; implicit dismissal must not restore/,
+    );
+    assert.equal(document.activeElement, menus.app.trigger, "the fake did restore, one frame late");
+  },
+);

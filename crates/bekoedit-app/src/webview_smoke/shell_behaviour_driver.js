@@ -237,6 +237,13 @@ return (async () => {
       menu: "#editor-tools-menu",
     },
   };
+  /** How long a "must not happen" check keeps looking after the positive
+   * condition it waited for. An absence cannot be proven by waiting for
+   * something to become true: a focus restore scheduled on a later frame
+   * (shell_focus::focus_element) can land after the menu's removal has
+   * already been observed. This bounds the harness's observation; it is not
+   * an app timer (RFC-042 §6.4 concerns focus authority). */
+  const ABSENCE_OBSERVATION_FRAMES = 30;
   const menuTrigger = (spec) => document.querySelector(spec.trigger);
   const menuItems = (spec) => {
     const menu = document.querySelector(spec.menu);
@@ -340,9 +347,20 @@ return (async () => {
         `(at focus: ${atFocus}; at timeout: ${describeMenu(spec)})`,
     );
     expectExpanded(spec, "false", "focus leaving the menu");
-    if (document.activeElement === menuTrigger(spec)) {
+    // The close was observed; a restore may still be one frame behind it.
+    for (let frame = 0; frame <= ABSENCE_OBSERVATION_FRAMES; frame += 1) {
+      if (document.activeElement === menuTrigger(spec)) {
+        throw new Error(
+          `${spec.name}: focus was restored to the trigger; implicit dismissal must not restore (${describeMenu(spec)})`,
+        );
+      }
+      if (frame < ABSENCE_OBSERVATION_FRAMES) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+    }
+    if (document.activeElement !== outside) {
       throw new Error(
-        `${spec.name}: focus was restored to the trigger; implicit dismissal must not restore (${describeMenu(spec)})`,
+        `${spec.name}: focus did not stay on ${label} after the menu closed (${describeMenu(spec)})`,
       );
     }
   };
@@ -356,7 +374,7 @@ return (async () => {
       () => `${spec.name}: a mouse open (${label}) to show the menu (at timeout: ${describeMenu(spec)})`,
     );
     // Long enough for the container's onmounted entry and its frame to run.
-    for (let frame = 0; frame < 30; frame += 1) {
+    for (let frame = 0; frame < ABSENCE_OBSERVATION_FRAMES; frame += 1) {
       if (menuItems(spec).includes(document.activeElement)) {
         throw new Error(
           `${spec.name}: a mouse open (${label}) moved focus into the menu (${describeMenu(spec)})`,

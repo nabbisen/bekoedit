@@ -99,6 +99,9 @@ class FakeMenuContainer {
  * `restoreOnEscape: false` models the mutation where Escape releases without
  * restoring, and `restoreOnFocusLeave: true` models the app frame restoring
  * on focusin -- the C3 defect's shape (slice-2 handoff §10.4).
+ * `restoreOnFocusLeave: "nextFrame"` is the same defect in the order CI did
+ * not produce: the menu is removed at once, and focus returns to the trigger
+ * one animation frame later, as `shell_focus::focus_element` schedules it.
  * `leftoverIntent: true` models a keyboard entry intent that was never
  * cleared, so a mouse open moves focus into the menu (task 017 §2).
  */
@@ -208,6 +211,10 @@ export class FakeMenu {
   onFocusMoved(element) {
     if (!this.open || this.contains(element)) return;
     this.setOpen(false);
-    if (this.restoreOnFocusLeave) this.owner.setFocus(this.trigger);
+    if (this.restoreOnFocusLeave === "nextFrame") {
+      requestAnimationFrame(() => this.owner.setFocus(this.trigger));
+    } else if (this.restoreOnFocusLeave) {
+      this.owner.setFocus(this.trigger);
+    }
   }
 }
