@@ -41,6 +41,13 @@ pub fn ConflictBanner() -> Element {
         div {
             class: "conflict-banner",
             role: "alert",
+            // TEMP slice 3 §9.4 mutation: RFC-042 §7.6's withdrawn text --
+            // focus the first action when the banner mounts.
+            onmounted: move |_| {
+                document::eval(
+                    "requestAnimationFrame(() => document.querySelector('.conflict-banner button')?.focus())",
+                );
+            },
             aria_label: tr(lang, title_key),
             p { {tr(lang, title_key)} }
             div { class: "conflict-actions",
