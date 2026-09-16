@@ -289,6 +289,19 @@ return (async () => {
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
     const distinct = [...new Set(samples)];
+    // TEMP slice 2 diagnostic: with the menu now rendered, press the same key
+    // again. If focus lands on the first item this time, the first press lost
+    // a race against the render, not against the handler.
+    let secondPress = "notAttempted";
+    if (document.querySelector(spec.menu)) {
+      dispatchKey(menuTrigger(spec), key);
+      for (let frame = 0; frame < 30; frame += 1) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+      secondPress = atMenuEdge(spec, which)
+        ? `focused-${which}`
+        : `still-${describeActiveElement()}`;
+    }
     try {
       await waitFor(
         () => atMenuEdge(spec, which),
@@ -307,7 +320,7 @@ return (async () => {
       }
       const open = document.querySelector(spec.menu);
       throw new Error(
-        `${String(error)} | TEMP samples=${distinct.join(" | ")} | clickOpens=${clickOpens} ` +
+        `${String(error)} | TEMP samples=${distinct.join(" | ")} | secondPress=${secondPress} | clickOpens=${clickOpens} ` +
           `afterClick=${describeMenu(spec, target)} ` +
           `menuHtmlLength=${open?.outerHTML?.length ?? null}`,
       );
