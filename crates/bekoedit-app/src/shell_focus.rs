@@ -120,8 +120,9 @@ fn focus_move_expr(array: &'static str, position: FocusMove) -> String {
     match position {
         FocusMove::First => format!("{array}[0]"),
         FocusMove::Last => format!("{array}[{array}.length - 1]"),
-        FocusMove::Next => format!("{array}[(current + 1) % {array}.length]"),
-        FocusMove::Previous => format!("{array}[(current - 1 + {array}.length) % {array}.length]"),
+        // TEMP slice 2 §10.4 mutation: no wrap at either end.
+        FocusMove::Next => format!("{array}[Math.min(current + 1, {array}.length - 1)]"),
+        FocusMove::Previous => format!("{array}[Math.max(current - 1, 0)]"),
     }
 }
 
