@@ -1,10 +1,10 @@
 # RFC-044 handoff — slice 1: the second run, and tree navigation
 
-**Governing RFC:** [RFC-044](../../accepted/RFC-044-shell-behaviour-regression-coverage.md) §5, §8 A, §10
+**Governing RFC:** [RFC-044](../../done/RFC-044-shell-behaviour-regression-coverage.md) §5, §8 A, §10
 **Slice:** 1 of 3 (see §1.1 — the RFC's A+B pairing is split)
 **Baseline:** `main` after task 012 merges (`3655df2`). Task 012 adds the DOM
 fake this slice's tests depend on; if it has not merged, **stop and report**.
-**Status:** inherited from RFC-044 (Accepted 2026-08-24)
+**Status:** inherited from RFC-044 (Implemented, on `main`; accepted 2026-08-24)
 **Date:** 2026-09-03
 
 ---

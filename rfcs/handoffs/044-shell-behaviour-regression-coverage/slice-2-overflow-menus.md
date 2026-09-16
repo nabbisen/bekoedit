@@ -1,6 +1,6 @@
 # RFC-044 handoff — slice 2: overflow menus
 
-**Governing RFC:** [RFC-044](../../accepted/RFC-044-shell-behaviour-regression-coverage.md) §8 B, §10, §11
+**Governing RFC:** [RFC-044](../../done/RFC-044-shell-behaviour-regression-coverage.md) §8 B, §10, §11
 **Slice:** 2 of 3
 **Baseline:** `main` after **task 016** merges (moved from task 014,
 2026-09-15). Tasks 014 and 016 both add phases to the same phase machine, driver
@@ -8,7 +8,7 @@ and milestone list this slice extends. If 016 has not merged, **stop and report*
 rather than branching around it. The run's state when your first phase starts
 is whatever 016's last phase leaves — expect a new untitled document in Text
 mode; read the state rather than assuming it.
-**Status:** inherited from RFC-044 (Accepted 2026-08-24)
+**Status:** inherited from RFC-044 (Implemented, on `main`; accepted 2026-08-24)
 **Date:** 2026-09-15
 
 ---

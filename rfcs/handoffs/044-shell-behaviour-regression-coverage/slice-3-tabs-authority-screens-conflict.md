@@ -1,12 +1,12 @@
 # RFC-044 handoff — slice 3: mode tabs, focus authority, Settings and Recovery, conflict banner
 
-**Governing RFC:** [RFC-044](../../accepted/RFC-044-shell-behaviour-regression-coverage.md) §8 C–F, §10, §11
+**Governing RFC:** [RFC-044](../../done/RFC-044-shell-behaviour-regression-coverage.md) §8 C–F, §10, §11
 **Slice:** 3 of 3
 **Baseline:** `main` at `472b13f` or later, with slice 2 merged. If `main` has moved
 in a file this slice touches, merge `origin/main` in; never rebase. Read the run's
 state rather than assuming it. When slice 2's terminal phase finishes,
 `sub/child.md` is open in **Form** mode and focus is on a tree row.
-**Status:** inherited from RFC-044 (Accepted 2026-08-24)
+**Status:** inherited from RFC-044 (Implemented, on `main`; accepted 2026-08-24)
 **Date:** 2026-09-17
 
 ---

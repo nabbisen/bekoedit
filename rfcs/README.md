@@ -91,9 +91,8 @@ to `done/` when the work ships.
 
 | RFC | Title | Notes |
 |-----|-------|-------|
-| RFC-044 | [Shell behaviour regression coverage](accepted/RFC-044-shell-behaviour-regression-coverage.md) | Accepted 2026-08-24, all §14 questions resolved — reproducible coverage for RFC-042's keyboard contracts. **Unblocked** 2026-09-03 — RFC-043 merged. Slices 1 (tree, 2026-09-05) and 2 (overflow menus, 2026-09-16, `59f21b7`) are merged. Each found a shipped defect, fixed first by tasks 014 and 017. Slice 3 (§8 C–F: mode tabs, focus authority, Settings/Recovery, conflict banner) is next. The shell-behaviour step stays non-blocking until its promotion clock reaches 10 of 10 |
 | RFC-045 | [Release artifact portability and completeness](accepted/RFC-045-release-artifact-portability-and-completeness.md) | Accepted 2026-08-17. Slices 1–2 shipped to `main`: the platform scripts now ship in every archive, and a cross-distribution `ldd` check gates both pull requests and the publish job. Slice 3 (Linux portability) is open — see its §10 Q1. Handoffs: [`handoffs/045-release-artifact-portability-and-completeness/`](handoffs/045-release-artifact-portability-and-completeness/) |
-| RFC-046 | [Paste HTML as Markdown](accepted/RFC-046-paste-html-as-markdown.md) | Accepted 2026-09-16, the day it was drafted. Converts pasted HTML with `mdka`, falling back to plain text where conversion would lose content. Implementation is scheduled **after RFC-044's remaining slices** (2 and 3) — acceptance authorises the design, not an immediate start. All six §10 questions are answered in-file (2026-09-16). Two **preconditions** on slice 2, both pre-existing defects recorded under `.git-exclude/governance/`: the Preview link-scheme filter and the bridge payload encoding |
+| RFC-046 | [Paste HTML as Markdown](accepted/RFC-046-paste-html-as-markdown.md) | Accepted 2026-09-16, the day it was drafted. Converts pasted HTML with `mdka`, falling back to plain text where conversion would lose content. Implementation was scheduled **after RFC-044's remaining slices**; that condition was met 2026-09-17, when RFC-044 slice 3 merged, so it is now startable, but the owner has not yet ordered it started. All six §10 questions are answered in-file (2026-09-16). Two **preconditions** on slice 2, both pre-existing defects recorded under `.git-exclude/governance/`: the Preview link-scheme filter and the bridge payload encoding |
 
 ## Implemented — merged to `main`, not yet released (`done/`)
 
@@ -103,6 +102,7 @@ above when that release goes out.
 | RFC | Title | Notes |
 |-----|-------|-------|
 | RFC-043 | [Reopen last workspace on launch](done/RFC-043-reopen-last-workspace-on-launch.md) | Merged 2026-09-03 (`2afe1df`, PR #19). The setting existed since v0.2.0 and controlled nothing; it now opens the most recent workspace before first render, never a document, never falling through to an older entry. Unblocks RFC-044. Handoff: [`handoffs/043-reopen-last-workspace-on-launch/`](handoffs/043-reopen-last-workspace-on-launch/implementation-handoff.md) |
+| RFC-044 | [Shell behaviour regression coverage](done/RFC-044-shell-behaviour-regression-coverage.md) | Merged in three slices: tree 2026-09-05 (`ab6acf9`), overflow menus 2026-09-16 (`59f21b7`), and C–F 2026-09-17 (`0978ff5`). RFC-042's keyboard and focus contracts now execute against a real WebView on every push and pull request. Slices 1 and 2 each found a shipped defect (tasks 014 and 017). **The step is still non-blocking**: promotion waits for its clock to reach 10 of 10, recorded in `ci.yml`. Cross-OS is deferred until promotion has happened. Handoffs: [`handoffs/044-shell-behaviour-regression-coverage/`](handoffs/044-shell-behaviour-regression-coverage/) |
 
 ## Open — under review or deferred (`proposed/`)
 

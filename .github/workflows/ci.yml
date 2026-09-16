@@ -248,9 +248,8 @@ jobs:
         # authority_released_after_editor_focus, settings_entry,
         # settings_exit_restored, conflict_dirtied and
         # conflict_banner_focus_kept last) changed this step's phase set.
-        # Count stands at 0 of 10. Run 1 will be the first `main` push run
-        # after PR #40's fast-forward, read from its
-        # "RFC-044 shell-behaviour outcome:" line, never from a conclusion.
+        # Count stands at 1 of 10: run 35161575247 (push at 0978ff5), outcome
+        # line `success`, read from the log, never from a conclusion.
         # Update this line as the count advances; delete `continue-on-error`
         # when it reaches 10.
         #

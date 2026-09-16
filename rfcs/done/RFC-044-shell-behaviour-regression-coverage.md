@@ -1,13 +1,22 @@
 # RFC-044: Shell Behaviour Regression Coverage
 
 **Project:** bekoedit
-**Status:** Accepted — by the project owner 2026-08-24, with all three §14
-questions resolved the same day. Not yet built.
-**Unblocked 2026-09-03**: RFC-043, the required dependency (§6), merged to
-`main` as `2afe1df`. A seeded `Isolated` profile now lands in the shell rather
-than the Start Screen, which is the seam this RFC's driver needs. The §7
-JavaScript relocation remains a **prerequisite task outside this RFC**
-(§14 Q2) and was never blocked by RFC-043.
+**Status:** Implemented — on `main`, not yet released. All three slices merged:
+slice 1 on 2026-09-05 (`ab6acf9`), slice 2 on 2026-09-16 (`59f21b7`) and slice 3
+on 2026-09-17 (`0978ff5`). §8 A–F all run in the second WebView run on every push
+and pull request.
+**Deferred, with a written trigger:**
+- **Promotion to blocking (§10).** The step is still `continue-on-error`. It
+  becomes blocking when its promotion clock reaches 10 consecutive green `main`
+  push runs with no change to the phase set. The count lives beside
+  `continue-on-error` in `.github/workflows/ci.yml`. Making it blocking is a
+  one-line change, and whoever reads the tenth outcome line instructs it.
+- **Cross-OS (§9).** Linux only, revisited once promotion has happened.
+*Moved to `done/` 2026-09-17.* Every §12 acceptance criterion is met, including
+7 (a written promotion criterion). Promotion itself is an operational follow-up
+with a trigger, not unshipped design, and the lifecycle policy's granularity
+rule says to move on shipped design and record what did not make it.
+Accepted by the project owner 2026-08-24.
 **Track:** Verification infrastructure
 **Priority:** High
 **Date:** 2026-08-12
@@ -288,6 +297,36 @@ The merge restarted the promotion clock, since the phase set changed. Run 1 is
 
 Handoff for slice 2:
 [`handoffs/044-shell-behaviour-regression-coverage/slice-2-overflow-menus.md`](../handoffs/044-shell-behaviour-regression-coverage/slice-2-overflow-menus.md).
+
+**Slice 3 implemented 2026-09-17**, merged as `0978ff5` (PR #40, fast-forward).
+It covers C–F:
+
+- **C.** Mode-tab arrows move focus without changing the mode. Activation is
+  driven by focus then script `click()`, which is §11's third exception.
+- **D.** Focus entering the editor closes a menu without restoring. A later
+  editor claim then succeeds, which proves the close released shell authority.
+- **E.** Recovery at launch, from a seeded snapshot, and Settings: focus on each
+  heading at entry, and a held restore at exit.
+- **F.** A dirty document is changed on disk by the Rust sequence between two
+  phases. The conflict banner appears, and focus does not move.
+
+Every "must not happen" check is observed over a shared frame window. Each of
+five app-code mutations fails its named contract in CI.
+
+**Slice 3 found no app defect.** Because every contract was shown able to fail,
+that is a result, not a gap.
+
+What slice 3 cannot reach is a trusted mouse click on a mode tab. It is a manual
+release check in task 013.
+
+Two things changed in production: two identifying `id` attributes, which exist so
+the harness never clicks near a dialog-opening menu item.
+
+The merge restarted the promotion clock. Run 1 is `35161575247`, the push at
+`0978ff5`.
+
+Handoff for slice 3:
+[`handoffs/044-shell-behaviour-regression-coverage/slice-3-tabs-authority-screens-conflict.md`](../handoffs/044-shell-behaviour-regression-coverage/slice-3-tabs-authority-screens-conflict.md).
 
 **One assumption gates all of it**, and slice 1 must prove it before anything
 else: that a synthetic `KeyboardEvent` dispatched by the driver reaches a Dioxus
