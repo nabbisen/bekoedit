@@ -225,10 +225,20 @@ return (async () => {
     const menu = document.querySelector(spec.menu);
     return menu ? [...menu.querySelectorAll('[role="menuitem"]')] : [];
   };
-  const describeMenu = (spec) =>
-    `menu=${Boolean(document.querySelector(spec.menu))} ` +
-    `expanded=${menuTrigger(spec)?.getAttribute("aria-expanded")} ` +
-    `items=${menuItems(spec).length} activeElement=${describeActiveElement()}`;
+  const describeMenu = (spec, dispatchedTo = null) => {
+    const current = menuTrigger(spec);
+    // `dispatchedTo` distinguishes "the app ignored the key" from "the key
+    // went to a node Dioxus had already replaced": a re-render swaps the
+    // button for an identical one, and the stale reference is detached.
+    const dispatch = dispatchedTo
+      ? ` dispatchedToConnected=${dispatchedTo.isConnected} dispatchedToIsCurrent=${dispatchedTo === current}`
+      : "";
+    return (
+      `menu=${Boolean(document.querySelector(spec.menu))} ` +
+      `expanded=${current?.getAttribute("aria-expanded")} ` +
+      `items=${menuItems(spec).length} activeElement=${describeActiveElement()}${dispatch}`
+    );
+  };
   const expectExpanded = (spec, expected, after) => {
     const actual = menuTrigger(spec)?.getAttribute("aria-expanded");
     if (actual !== expected) {
@@ -263,10 +273,13 @@ return (async () => {
         `${spec.name}: refusing to press ${key}; activeElement is ${describeActiveElement()}, not the trigger`,
       );
     }
-    dispatchKey(trigger, key);
+    // Re-query: focusing can re-render the bar, and a stale node receives
+    // events no handler is attached to any more.
+    const target = menuTrigger(spec) ?? trigger;
+    dispatchKey(target, key);
     await waitFor(
       () => atMenuEdge(spec, which),
-      `${spec.name}: ${key} on the trigger to open and focus the ${which} item (${describeMenu(spec)})`,
+      `${spec.name}: ${key} on the trigger to open and focus the ${which} item (${describeMenu(spec, target)})`,
     );
     expectExpanded(spec, "true", `${key} on the trigger`);
   };
