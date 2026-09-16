@@ -58,9 +58,10 @@ async function exchange(phase, exchangeId, release = null) {
     window.__bkWebViewShellBehaviourState === undefined
   ) {
     new FakeRecovery(tree).install();
-    await exchange("recovery_entry", 9001);
-    await exchange("recovery_exit", 9002, { exchangeId: 9001, phase: "recovery_entry" });
-    release = { exchangeId: 9002, phase: "recovery_exit" };
+    const preamble = { exchangeId: 9001, release: null };
+    await stepToResult("recovery_entry", preamble);
+    await stepToResult("recovery_exit", preamble);
+    release = preamble.release;
   }
   const dioxus = new FakeDioxus();
   const completion = runDriver(dioxus);
@@ -396,6 +397,27 @@ test(
 
 // ---- task 016: handoff-activation contracts ------------------------------
 
+/** The transport's per-exchange evaluator timeout (transport.rs,
+ * PHASE_EVALUATOR_TIMEOUT). No exchange may hold longer while it waits. */
+const TRANSPORT_EVALUATOR_BUDGET_MS = 5000;
+
+/** Steps a pollable phase until it stops returning pending. If it is still
+ * pending after `expireAfter` exchanges, moves the fake clock to the phase's
+ * own deadline, so its named timeout fires on the next exchange. */
+async function stepToResult(phase, cursor, { expireAfter = 3 } = {}) {
+  let report = await step(phase, cursor);
+  let calls = 1;
+  while (report.kind === "pending") {
+    if (calls >= expireAfter) {
+      globalThis.__bkFakeTree.setTime(window.__bkWebViewShellBehaviourState.deadline);
+    }
+    if (calls > expireAfter + 2) throw new Error(`${phase} never settled`);
+    report = await step(phase, cursor);
+    calls += 1;
+  }
+  return report;
+}
+
 /** One exchange of `phase` at `cursor`, then moves the cursor on. */
 async function step(phase, cursor) {
   const report = await exchange(phase, cursor.exchangeId, cursor.release);
@@ -596,11 +618,11 @@ test(
     // Slice 3 stage 2: Settings, then the conflict banner, ending terminal.
     const settings = new FakeSettings(tree, { menu: menus.app, tabs }).install();
     const conflict = new FakeConflict(tree, { tabs }).install();
-    assert.equal((await step("settings_entry", cursor)).kind, "progress");
-    assert.equal((await step("settings_exit_restored", cursor)).kind, "progress");
-    assert.equal((await step("conflict_dirtied", cursor)).kind, "progress");
+    assert.equal((await stepToResult("settings_entry", cursor)).kind, "progress");
+    assert.equal((await stepToResult("settings_exit_restored", cursor)).kind, "progress");
+    assert.equal((await stepToResult("conflict_dirtied", cursor)).kind, "progress");
     conflict.showBanner(); // the Rust sequence's on-disk write, then the poll
-    const report = await step("conflict_banner_focus_kept", cursor);
+    const report = await stepToResult("conflict_banner_focus_kept", cursor);
 
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, true);
@@ -1320,7 +1342,7 @@ test(
     tree.install();
     const { recovery, cursor } = await driveRecovery(tree);
 
-    const report = await step("recovery_entry", cursor);
+    const report = await stepToResult("recovery_entry", cursor);
 
     assert.equal(report.kind, "progress");
     assert.equal(report.milestone, "recovery_heading_focused");
@@ -1337,7 +1359,7 @@ test(
     tree.install();
     const { cursor } = await driveRecovery(tree, { focusHeading: false });
 
-    const report = await step("recovery_entry", cursor);
+    const report = await stepToResult("recovery_entry", cursor);
 
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.stage, "recovery_entry");
@@ -1353,7 +1375,7 @@ test(
     tree.install();
     const { cursor } = await driveRecovery(tree, { count: 2 });
 
-    const report = await step("recovery_entry", cursor);
+    const report = await stepToResult("recovery_entry", cursor);
 
     assert.equal(report.kind, "terminal");
     assert.match(report.result.error, /E1: the Recovery status does not report one snapshot: "2 recoverable"/);
@@ -1367,9 +1389,9 @@ test(
     const tree = new FakeTree();
     tree.install();
     const { recovery, cursor } = await driveRecovery(tree);
-    await step("recovery_entry", cursor);
+    await stepToResult("recovery_entry", cursor);
 
-    const report = await step("recovery_exit", cursor);
+    const report = await stepToResult("recovery_exit", cursor);
 
     assert.equal(report.kind, "progress");
     assert.equal(report.milestone, "recovery_exit_restored_logo");
@@ -1386,9 +1408,9 @@ test(
     const tree = new FakeTree();
     tree.install();
     const { cursor } = await driveRecovery(tree, { restoreToLogo: false });
-    await step("recovery_entry", cursor);
+    await stepToResult("recovery_entry", cursor);
 
-    const report = await step("recovery_exit", cursor);
+    const report = await stepToResult("recovery_exit", cursor);
 
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.stage, "recovery_exit");
@@ -1403,9 +1425,9 @@ test(
     const tree = new FakeTree();
     tree.install();
     const { cursor } = await driveRecovery(tree, { stealFocusNextFrame: true });
-    await step("recovery_entry", cursor);
+    await stepToResult("recovery_entry", cursor);
 
-    const report = await step("recovery_exit", cursor);
+    const report = await stepToResult("recovery_exit", cursor);
 
     assert.equal(report.kind, "terminal");
     assert.match(report.result.error, /E2: focus did not stay on #app-bar-logo-trigger after Recovery closed/);
@@ -1431,7 +1453,7 @@ test(
     tree.install();
     const { cursor, menus, settings } = await driveToSettings(tree);
 
-    const report = await step("settings_entry", cursor);
+    const report = await stepToResult("settings_entry", cursor);
 
     assert.equal(report.kind, "progress");
     assert.equal(report.milestone, "settings_heading_focused");
@@ -1450,7 +1472,7 @@ test(
     const { cursor, menus, settings } = await driveToSettings(tree);
     menus.app.extraContained.length = 0;
 
-    const report = await step("settings_entry", cursor);
+    const report = await stepToResult("settings_entry", cursor);
 
     assert.equal(report.kind, "terminal");
     assert.match(
@@ -1468,9 +1490,9 @@ test(
     const tree = new FakeTree();
     tree.install();
     const { cursor, menus, settings } = await driveToSettings(tree);
-    await step("settings_entry", cursor);
+    await stepToResult("settings_entry", cursor);
 
-    const report = await step("settings_exit_restored", cursor);
+    const report = await stepToResult("settings_exit_restored", cursor);
 
     assert.equal(report.kind, "progress");
     assert.equal(report.milestone, "settings_exit_restored_trigger");
@@ -1487,9 +1509,9 @@ test(
     const tree = new FakeTree();
     tree.install();
     const { cursor } = await driveToSettings(tree, { settings: { restoreToTrigger: false } });
-    await step("settings_entry", cursor);
+    await stepToResult("settings_entry", cursor);
 
-    const report = await step("settings_exit_restored", cursor);
+    const report = await stepToResult("settings_exit_restored", cursor);
 
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.stage, "settings_exit_restored");
@@ -1504,9 +1526,9 @@ test(
     const tree = new FakeTree();
     tree.install();
     const { cursor } = await driveToSettings(tree, { settings: { editorTakesFocusNextFrame: true } });
-    await step("settings_entry", cursor);
+    await stepToResult("settings_entry", cursor);
 
-    const report = await step("settings_exit_restored", cursor);
+    const report = await stepToResult("settings_exit_restored", cursor);
 
     assert.equal(report.kind, "terminal");
     assert.match(report.result.error, /E4: focus did not stay on #app-menu-trigger after Settings closed/);
@@ -1520,10 +1542,10 @@ test(
     const tree = new FakeTree();
     tree.install();
     const { cursor, conflict, tabs } = await driveToSettings(tree);
-    await step("settings_entry", cursor);
-    await step("settings_exit_restored", cursor);
+    await stepToResult("settings_entry", cursor);
+    await stepToResult("settings_exit_restored", cursor);
 
-    const report = await step("conflict_dirtied", cursor);
+    const report = await stepToResult("conflict_dirtied", cursor);
 
     assert.equal(report.kind, "progress");
     assert.equal(report.milestone, "conflict_document_dirtied");
@@ -1539,10 +1561,10 @@ test(
     const tree = new FakeTree();
     tree.install();
     const { cursor, conflict } = await driveToSettings(tree, { conflict: { fileName: "a.md" } });
-    await step("settings_entry", cursor);
-    await step("settings_exit_restored", cursor);
+    await stepToResult("settings_entry", cursor);
+    await stepToResult("settings_exit_restored", cursor);
 
-    const report = await step("conflict_dirtied", cursor);
+    const report = await stepToResult("conflict_dirtied", cursor);
 
     assert.equal(report.kind, "terminal");
     assert.match(report.result.error, /F1: the open document is a\.md, not child\.md/);
@@ -1552,9 +1574,9 @@ test(
 
 async function driveToBanner(tree, conflictOptions) {
   const drive = await driveToSettings(tree, { conflict: conflictOptions });
-  await step("settings_entry", drive.cursor);
-  await step("settings_exit_restored", drive.cursor);
-  await step("conflict_dirtied", drive.cursor);
+  await stepToResult("settings_entry", drive.cursor);
+  await stepToResult("settings_exit_restored", drive.cursor);
+  await stepToResult("conflict_dirtied", drive.cursor);
   drive.conflict.showBanner();
   return drive;
 }
@@ -1567,7 +1589,7 @@ test(
     tree.install();
     const { cursor, conflict, tabs } = await driveToBanner(tree);
 
-    const report = await step("conflict_banner_focus_kept", cursor);
+    const report = await stepToResult("conflict_banner_focus_kept", cursor);
 
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, true);
@@ -1586,7 +1608,7 @@ test(
     tree.install();
     const { cursor } = await driveToBanner(tree, { buttons: 2 });
 
-    const report = await step("conflict_banner_focus_kept", cursor);
+    const report = await stepToResult("conflict_banner_focus_kept", cursor);
 
     assert.equal(report.kind, "terminal");
     assert.match(report.result.error, /F2: expected the dirty-memory banner's three actions, found 2/);
@@ -1601,10 +1623,48 @@ test(
     tree.install();
     const { cursor } = await driveToBanner(tree, { focusFirstActionNextFrame: true });
 
-    const report = await step("conflict_banner_focus_kept", cursor);
+    const report = await stepToResult("conflict_banner_focus_kept", cursor);
 
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.stage, "conflict_banner_focus_kept");
     assert.match(report.result.error, /F2: focus moved into the conflict banner/);
+  },
+);
+
+test(
+  "stage 2 phases never hold one exchange past the transport's 5 s evaluator timeout while they wait",
+  { concurrency: false },
+  async () => {
+    // A missing restore must fail with the contract's own message, which
+    // only reaches the log if every exchange returns before the transport
+    // gives up on it (35157442989: "recovery_exit phase evaluator did not
+    // report progress").
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor } = await driveRecovery(tree, { restoreToLogo: false });
+    await stepToResult("recovery_entry", cursor);
+    for (let call = 0; call < 4; call += 1) {
+      const before = performance.now();
+      const report = await step("recovery_exit", cursor);
+      assert.equal(report.kind, "pending");
+      assert.ok(
+        performance.now() - before < TRANSPORT_EVALUATOR_BUDGET_MS,
+        `recovery_exit exchange ${call} held ${performance.now() - before} ms`,
+      );
+    }
+
+    const settingsTree = new FakeTree();
+    settingsTree.install();
+    const drive = await driveToSettings(settingsTree, { settings: { restoreToTrigger: false } });
+    await stepToResult("settings_entry", drive.cursor);
+    for (let call = 0; call < 4; call += 1) {
+      const before = performance.now();
+      const report = await step("settings_exit_restored", drive.cursor);
+      assert.equal(report.kind, "pending");
+      assert.ok(
+        performance.now() - before < TRANSPORT_EVALUATOR_BUDGET_MS,
+        `settings_exit_restored exchange ${call} held ${performance.now() - before} ms`,
+      );
+    }
   },
 );
