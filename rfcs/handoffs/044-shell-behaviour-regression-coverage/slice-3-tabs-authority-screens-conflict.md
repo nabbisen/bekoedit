@@ -150,10 +150,18 @@ Then, one key at a time: **Right** (wraps to Text), **Left** (back to Form),
 Check after **every** key, not once at the end. Right then Left starts and ends on
 Form, so a single check at the end would pass a build that switched the mode twice.
 
-**C2. Activation, through bekoedit's half.** C1 ends with focus on the Form tab.
-`.click()` the Text tab (§3.3 explains why this is not Enter). A script `click()`
-runs the handler but does not move focus, so the focus asserted below comes from
-the claim, not from the click. Assert:
+**C2. Activation, through bekoedit's half.** `.focus()` the Text tab and wait for
+focus to land, then `.click()` it (§3.3 explains why this is not Enter). That is
+a keyboard user arrowing to the tab and pressing Enter. The editor's focus
+asserted below still comes only from the claim. Assert:
+
+*Corrected 2026-09-17, at the stage 1 review.* This originally said to click Text
+while focus stayed on the Form tab. That would have failed on a working build.
+A tab's claim is `launchMustRemain`, and `focus-guard.js`'s `consumeDiagnostic`
+accepts such a claim only while `activeElement` is inside the tab. I wrote the
+contract without reading the guard. The dev team found it before spending a CI
+run. Use focus-then-click for every tab activation in this slice.
+
 
 - Text is now the only selected tab, and it holds `tabindex="0"`;
 - the source editor is mounted and **has focus**, because `SwitchMode(Text)`
