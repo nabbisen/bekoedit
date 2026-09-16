@@ -242,15 +242,22 @@ jobs:
         # Promotion criterion, recorded per handoff §6: promote to blocking
         # after 10 consecutive green runs of this step on `main`.
         #
-        # CLOCK RESTARTED 2026-09-16 (RFC-044 slice 2, PR #30): the seven menu
-        # phases (app_menu_mouse_open, and keys / escape / focus_leave for the
-        # app menu and the editor-tools menu) changed this step's phase set.
-        # Count stands at 1 of 10: run 35111768240 (push at 59f21b7), outcome
-        # line `success`, read from the log, never from a conclusion.
+        # CLOCK RESTARTED 2026-09-17 (RFC-044 slice 3, PR #40): the ten C-F
+        # phases (recovery_entry and recovery_exit first; tabs_arrows_focus_only,
+        # tabs_click_activates, menu_closes_into_editor,
+        # authority_released_after_editor_focus, settings_entry,
+        # settings_exit_restored, conflict_dirtied and
+        # conflict_banner_focus_kept last) changed this step's phase set.
+        # Count stands at 0 of 10. Run 1 will be the first `main` push run
+        # after PR #40's fast-forward, read from its
+        # "RFC-044 shell-behaviour outcome:" line, never from a conclusion.
         # Update this line as the count advances; delete `continue-on-error`
         # when it reaches 10.
         #
         # Previous clocks, each superseded by the restart above:
+        # - 2026-09-16 (RFC-044 slice 2, PR #30): reached 4 of 10, runs
+        #   35111768240 (push at 59f21b7), 35113268467 (472b13f), 35114429436
+        #   (dd0c6aa) and 35155291453 (f3986a2), each outcome line `success`.
         # - 2026-09-16 (task 016, PR #25): reached 3 of 10, runs 35045829469
         #   (push at 896e151), 35103008667 (d9b0051) and 35108175240 (e9779bc,
         #   task 017's merge), each outcome line `success`.
@@ -261,7 +268,8 @@ jobs:
         #   its job log truncated with no result line.
         #
         # The count RESTARTS when this step's phase set changes (RFC-044 §10):
-        # slice 3 records a new start here in its merge.
+        # any later change to the phase set records a new start here in its
+        # merge.
         #
         # How to read a run: NOT from any conclusion. continue-on-error masks
         # this step's own API conclusion as well as the job's -- run
