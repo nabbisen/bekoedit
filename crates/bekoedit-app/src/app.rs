@@ -34,8 +34,8 @@ use crate::source_sync::{
     SourceCommand, SourceSyncState, submit_source_command, submit_source_shortcut_interaction,
 };
 use crate::state::{
-    BacklinksOpen, ExplorerCollapsed, HistoryOpen, NewFileOpen, OpenMenu, OpenMenuState,
-    OutlineOpen, SearchOpen, SettingsOpen, create_app_state, now_ms,
+    BacklinksOpen, ExplorerCollapsed, HistoryOpen, MenuEntryIntent, NewFileOpen, OpenMenu,
+    OpenMenuState, OutlineOpen, SearchOpen, SettingsOpen, create_app_state, now_ms,
 };
 use crate::webview_smoke::{WebViewShellBehaviourDriver, WebViewSmokeDriver, launch_config};
 
@@ -78,6 +78,17 @@ pub fn App() -> Element {
     use_context_provider(|| HistoryOpen(Signal::new(false_val())));
     use_context_provider(|| NewFileOpen(Signal::new(false_val())));
     let mut open_menu = use_context_provider(|| OpenMenuState(Signal::new(OpenMenu::None))).0;
+    // Task 017: a keyboard-opened menu's entry intent is consumed once by the
+    // menu container's `onmounted` (menu_entry.rs). Every close path -- any
+    // component setting `open_menu` back to `None` -- also clears it here, so
+    // an intent left by a menu that closed before it mounted cannot move
+    // focus on a later mouse open.
+    let mut menu_entry = use_context_provider(|| MenuEntryIntent(Signal::new(None))).0;
+    use_effect(move || {
+        if *open_menu.read() == OpenMenu::None && menu_entry.peek().is_some() {
+            menu_entry.set(None);
+        }
+    });
     let mut toasts = use_context_provider(|| Signal::new(Vec::<Toast>::new()));
     let source_sync = use_context_provider(|| Signal::new(SourceSyncState::default()));
     let recovery_pending_at_launch = use_signal(|| has_pending_recovery(&state.read()));
