@@ -277,10 +277,29 @@ return (async () => {
     // events no handler is attached to any more.
     const target = menuTrigger(spec) ?? trigger;
     dispatchKey(target, key);
-    await waitFor(
-      () => atMenuEdge(spec, which),
-      `${spec.name}: ${key} on the trigger to open and focus the ${which} item (${describeMenu(spec, target)})`,
-    );
+    try {
+      await waitFor(
+        () => atMenuEdge(spec, which),
+        `${spec.name}: ${key} on the trigger to open and focus the ${which} item (${describeMenu(spec, target)})`,
+      );
+    } catch (error) {
+      // TEMP slice 2 diagnostic: does the trigger open its menu at all here?
+      // Clicking the TRIGGER is not activating a menu item (handoff §5).
+      let clickOpens = false;
+      try {
+        menuTrigger(spec)?.click();
+        await waitFor(() => Boolean(document.querySelector(spec.menu)), "click to open", 1500);
+        clickOpens = true;
+      } catch (_ignored) {
+        clickOpens = false;
+      }
+      const open = document.querySelector(spec.menu);
+      throw new Error(
+        `${String(error)} | TEMP diagnostic: clickOpens=${clickOpens} ` +
+          `afterClick=${describeMenu(spec, target)} ` +
+          `menuHtmlLength=${open?.outerHTML?.length ?? null}`,
+      );
+    }
     expectExpanded(spec, "true", `${key} on the trigger`);
   };
   const moveWithinMenu = async (spec, key, which) => {
