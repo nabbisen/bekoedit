@@ -14,14 +14,15 @@ use bekoedit_ui_contract::EditorMode;
 
 use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
+use crate::menu_entry::{consume_menu_entry, enter_menu_by_key};
 use crate::shell_focus;
 use crate::source_sync::{
     SourceCommand, SourceInteractionOrigin, SourceSyncState, cancel_pending_source_focus,
     cancel_source_focus, submit_handoff_activation, submit_source_command,
 };
 use crate::state::{
-    BacklinksOpen, ExplorerCollapsed, HistoryOpen, NewFileOpen, OpenMenu, OpenMenuState,
-    OutlineOpen, SearchOpen,
+    BacklinksOpen, ExplorerCollapsed, HistoryOpen, MenuEntryIntent, NewFileOpen, OpenMenu,
+    OpenMenuState, OutlineOpen, SearchOpen,
 };
 
 mod mode_tabs;
@@ -39,6 +40,7 @@ pub fn EditorHeader() -> Element {
     let mut backlinks_open = use_context::<BacklinksOpen>().0;
     let mut history_open = use_context::<HistoryOpen>().0;
     let mut open_menu = use_context::<OpenMenuState>().0;
+    let menu_entry = use_context::<MenuEntryIntent>().0;
     let mut new_file_open = use_context::<NewFileOpen>().0;
     let toasts = use_context::<Signal<Vec<Toast>>>();
     let ui_lang = *use_context::<Signal<Lang>>().read();
@@ -214,15 +216,20 @@ pub fn EditorHeader() -> Element {
                             };
                             event.prevent_default();
                             event.stop_propagation();
-                            if *open_menu.read() != OpenMenu::EditorTools {
-                                open_editor_tools_menu();
-                            }
-                            shell_focus::focus_menu_item(shell_focus::MENU_EDITOR_TOOLS, target);
+                            // Task 017: entry into a closed menu waits for it to mount.
+                            enter_menu_by_key(
+                                menu_entry,
+                                *open_menu.read() == OpenMenu::EditorTools,
+                                shell_focus::MENU_EDITOR_TOOLS,
+                                target,
+                                open_editor_tools_menu,
+                            );
                         },
                         "•••"
                     }
                     if adv_open {
                     div { id: shell_focus::MENU_EDITOR_TOOLS, class: "adv-dropdown", role: "menu",
+                        onmounted: move |_| consume_menu_entry(menu_entry, shell_focus::MENU_EDITOR_TOOLS),
                         // Split
                         button {
                             class: if mode == EditorMode::Split { "dropdown-item active" } else { "dropdown-item" },

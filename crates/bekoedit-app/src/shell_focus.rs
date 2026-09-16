@@ -68,8 +68,15 @@ pub enum FocusMove {
 /// frame. The item set is read from the DOM at the moment of use, not
 /// mirrored in Rust: item counts vary at runtime (a conditional item behind
 /// `has_workspace`/`backlinks_available`), so a Rust-side list could drift
-/// from what is actually rendered (RFC-042 slice 3 handoff §5.3). A missing
-/// menu or empty item list is a no-op, never a panic.
+/// from what is actually rendered (RFC-042 slice 3 handoff §5.3).
+///
+/// A missing menu or empty item list is a no-op. That is for moves inside a
+/// menu that is **already open** -- a stray key after the menu has closed
+/// must do nothing. **Entry into a menu that is just opening must not rely on
+/// it**: that menu's items may not be rendered yet, and the move would be
+/// silently lost, which is exactly how keyboard entry to both menus failed
+/// until task 017. Opening by keyboard goes through `menu_entry`, whose focus
+/// move runs from the container's `onmounted`.
 pub fn focus_menu_item(menu_id: &'static str, position: FocusMove) {
     document::eval(&focus_menu_item_script(menu_id, position));
 }

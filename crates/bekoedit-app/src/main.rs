@@ -5,6 +5,7 @@ mod bridge;
 mod components;
 mod error_keys;
 mod i18n;
+mod menu_entry;
 mod persistence;
 mod settings;
 mod shell_focus;

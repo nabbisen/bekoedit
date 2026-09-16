@@ -12,12 +12,13 @@ use bekoedit_ui_contract::EditorMode;
 use crate::components::icons::{FolderIcon, NewFileIcon};
 use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
+use crate::menu_entry::{consume_menu_entry, enter_menu_by_key};
 use crate::shell_focus;
 use crate::source_sync::{
     SourceCommand, SourceInteractionOrigin, SourceSyncState, cancel_source_focus,
     submit_handoff_activation, submit_source_command,
 };
-use crate::state::{NewFileOpen, OpenMenu, OpenMenuState, SearchOpen};
+use crate::state::{MenuEntryIntent, NewFileOpen, OpenMenu, OpenMenuState, SearchOpen};
 
 /// Releases shell focus authority for whichever menu was open, without
 /// moving DOM focus. No-ops if no menu was open. For *implicit* dismissal —
@@ -56,6 +57,7 @@ pub fn AppBar() -> Element {
     let toasts = use_context::<Signal<Vec<Toast>>>();
     let ui_lang = *use_context::<Signal<Lang>>().read();
     let mut open_menu = use_context::<OpenMenuState>().0;
+    let menu_entry = use_context::<MenuEntryIntent>().0;
     let mut search_open = use_context::<SearchOpen>().0;
     let mut new_file_open = use_context::<NewFileOpen>().0;
 
@@ -148,16 +150,21 @@ pub fn AppBar() -> Element {
                         };
                         event.prevent_default();
                         event.stop_propagation();
-                        if *open_menu.read() != OpenMenu::App {
-                            open_app_menu();
-                        }
-                        shell_focus::focus_menu_item(shell_focus::MENU_APP_OVERFLOW, target);
+                        // Task 017: entry into a closed menu waits for it to mount.
+                        enter_menu_by_key(
+                            menu_entry,
+                            *open_menu.read() == OpenMenu::App,
+                            shell_focus::MENU_APP_OVERFLOW,
+                            target,
+                            open_app_menu,
+                        );
                     },
                     "⋯"
                 }
                 if menu_open {
                     div {
                         id: shell_focus::MENU_APP_OVERFLOW,
+                        onmounted: move |_| consume_menu_entry(menu_entry, shell_focus::MENU_APP_OVERFLOW),
                         class: "app-bar-dropdown",
                         role: "menu",
                         tabindex: "-1",
