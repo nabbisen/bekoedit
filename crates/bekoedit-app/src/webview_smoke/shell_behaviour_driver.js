@@ -748,6 +748,36 @@ return (async () => {
     } else if (MENU_PHASES[requestedPhase]) {
       const { spec, kind, milestone, next } = MENU_PHASES[requestedPhase];
       state.stage = requestedPhase;
+      if (kind === "keys" && spec === MENUS.app) {
+        // TEMP task 017 §5.4: a mouse open leaves focus on the trigger, on its
+        // own and after a keyboard open and close (no leftover entry intent).
+        const mouseOpenLeavesFocus = async (label) => {
+          await focusMenuTrigger(spec);
+          menuTrigger(spec).click();
+          await waitFor(
+            () => Boolean(document.querySelector(spec.menu)),
+            `${spec.name}: TEMP mouse open (${label}) to show the menu (${describeMenu(spec)})`,
+          );
+          for (let frame = 0; frame < 30; frame += 1) {
+            if (menuItems(spec).includes(document.activeElement)) {
+              throw new Error(
+                `${spec.name}: TEMP mouse open (${label}) moved focus into the menu (${describeMenu(spec)})`,
+              );
+            }
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+          }
+          if (document.activeElement !== menuTrigger(spec)) {
+            throw new Error(
+              `${spec.name}: TEMP mouse open (${label}) left focus on ${describeActiveElement()}`,
+            );
+          }
+          await escapeMenu(spec);
+        };
+        await mouseOpenLeavesFocus("alone");
+        await openMenuWith(spec, "ArrowDown", "first");
+        await escapeMenu(spec);
+        await mouseOpenLeavesFocus("after a keyboard open and close");
+      }
       if (kind === "keys") {
         await openMenuWith(spec, "ArrowDown", "first"); // contract 1
         await escapeMenu(spec);
