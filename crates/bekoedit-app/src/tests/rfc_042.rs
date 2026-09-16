@@ -328,6 +328,22 @@ fn task_017_menu_keyboard_entry_is_driven_by_the_menu_mounting() {
             source.contains("enter_menu_by_key("),
             "{name}: trigger bypasses menu_entry"
         );
+        // ...with the open-state read bound to a local first. Inline as a call
+        // argument, the read guard outlives the call and opening the menu
+        // writes `open_menu`: an AlreadyBorrowed panic on every keyboard open.
+        let call = source
+            .split("enter_menu_by_key(")
+            .nth(1)
+            .and_then(|rest| rest.split(");").next())
+            .expect("enter_menu_by_key call");
+        assert!(
+            !call.contains(".read()"),
+            "{name}: open_menu read inside the call"
+        );
+        assert!(
+            source.contains("let already_open = *open_menu.read() =="),
+            "{name}: open-state read not bound to a local"
+        );
         // ...so the only direct focus call left is the wrap's in-menu move.
         let direct = format!("focus_menu_item(shell_focus::{menu}");
         assert_eq!(

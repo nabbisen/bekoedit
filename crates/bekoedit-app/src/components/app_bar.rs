@@ -151,9 +151,13 @@ pub fn AppBar() -> Element {
                         event.prevent_default();
                         event.stop_propagation();
                         // Task 017: entry into a closed menu waits for it to mount.
+                        // Read into a local first: a `read()` guard held as a call
+                        // argument lives until the call returns, and opening writes
+                        // `open_menu`, which would panic with AlreadyBorrowed.
+                        let already_open = *open_menu.read() == OpenMenu::App;
                         enter_menu_by_key(
                             menu_entry,
-                            *open_menu.read() == OpenMenu::App,
+                            already_open,
                             shell_focus::MENU_APP_OVERFLOW,
                             target,
                             open_app_menu,

@@ -217,9 +217,11 @@ pub fn EditorHeader() -> Element {
                             event.prevent_default();
                             event.stop_propagation();
                             // Task 017: entry into a closed menu waits for it to mount.
+                            // Read into a local first; see app_bar.rs (AlreadyBorrowed).
+                            let already_open = *open_menu.read() == OpenMenu::EditorTools;
                             enter_menu_by_key(
                                 menu_entry,
-                                *open_menu.read() == OpenMenu::EditorTools,
+                                already_open,
                                 shell_focus::MENU_EDITOR_TOOLS,
                                 target,
                                 open_editor_tools_menu,
