@@ -244,9 +244,9 @@ jobs:
         #
         # CLOCK RESTARTED 2026-09-16 (task 016, PR #25): the three
         # handoff-activation contracts and the Form-mode one changed this
-        # step's phase set. Count stands at 0 of 10. Run 1 will be the first
-        # `main` push run after PR #25's fast-forward, read from its
-        # "RFC-044 shell-behaviour outcome:" line, never from a conclusion.
+        # step's phase set. Count stands at 1 of 10: run 35045829469 (push at
+        # 896e151), outcome line `success`, read from the log, never from a
+        # conclusion.
         # Update this line as the count advances; delete `continue-on-error`
         # when it reaches 10.
         #

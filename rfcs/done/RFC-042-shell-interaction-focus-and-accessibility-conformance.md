@@ -465,6 +465,16 @@ rots in `proposed/` — the failure this project has already corrected once.
 *Slice 5 closed this RFC. Updated 2026-08-12 when it merged; the RFC moved to
 `done/` in the same change.*
 
+**Correction, 2026-09-16: slice 3 did not deliver §7.2's focus entry.** Enter,
+Space, Down or Up on either overflow-menu trigger opens the menu but leaves focus
+on the trigger. `focus_menu_item` queries the menu one animation frame after the
+state change, before the menu has been rendered, and silently does nothing when it
+is not there. The slice was recorded as implemented without any WebView check.
+RFC-044 slice 2's contracts 1–3 found the defect in CI. It shipped in 0.14.0 and
+0.15.0. The fix is task 017, which focuses from the menu's mount event instead of
+a frame count. The rest of §7.2 (wrap, Home/End, Escape restore, focus-leave)
+was confirmed working by the same slice.
+
 **Why slice 5 is not in 0.14.0.** It merged after the `0.14.0` tag, deliberately.
 That release's CHANGELOG and ROADMAP both state that Form Mode block editing
 exposes no accessibility metadata, and merging slice 5 first would have made the
