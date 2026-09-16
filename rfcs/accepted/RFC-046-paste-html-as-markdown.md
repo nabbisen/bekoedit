@@ -213,10 +213,13 @@ noted, and rendered with `pulldown-cmark` 0.13 where correctness was in doubt.
 | `data:` image | an image whose target is the full base64 `data:` URI | Passes through — §5.3 guard |
 
 Each gap becomes a request to the `mdka` project rather than a workaround in
-bekoedit. The draft with reproductions is kept at
-`.git-exclude/governance/2026-09-16-mdka-upstream-requests.md`. bekoedit does not
-block on them: §5.4's fallbacks and §5.3's guards cover the gaps, and each fix
-arrives here as a version bump with updated fixture expectations.
+bekoedit. The letter carrying them, with reproductions, lives under
+`.git-exclude/upstream/mdka/send/` — inside `draft/` until it is actually sent,
+and moved up out of it once it has been. The folder is the state, as it is for
+RFCs, so this reference is deliberately to the directory rather than to a filename
+that is meant to move. bekoedit does not block on any of it: §5.4's fallbacks and
+§5.3's guards cover the gaps, and each fix arrives here as a version bump with
+updated fixture expectations.
 
 ## 7. Testing
 
