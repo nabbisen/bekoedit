@@ -238,6 +238,9 @@ export class FakeTree {
    * shell_behaviour_driver.js reads or calls, backed by this tree. */
   install() {
     const tree = this;
+    // Lets the driver test's `exchange` find the installed tree, to pass the
+    // Recovery phases that now run before down_up (slice 3 §4.1).
+    globalThis.__bkFakeTree = this;
     globalThis.window = { __bk: undefined };
     globalThis.Node = { ELEMENT_NODE: 1 };
     globalThis.KeyboardEvent = class KeyboardEvent {

@@ -24,6 +24,7 @@ import { FakeElement, FakeEditorView } from "./webview-smoke-dom-fake.mjs";
 import { FakeTree } from "./webview-smoke-tree-fake.mjs";
 import { FakeMenu } from "./webview-smoke-menu-fake.mjs";
 import { FakeModeTabs } from "./webview-smoke-tabs-fake.mjs";
+import { FakeConflict, FakeRecovery, FakeSettings } from "./webview-smoke-screens-fake.mjs";
 import {
   FakeDioxus,
   acknowledgement,
@@ -45,6 +46,22 @@ function runDriver(dioxus) {
  * would. State persists across calls via
  * `window.__bkWebViewShellBehaviourState`. */
 async function exchange(phase, exchangeId, release = null) {
+  // Slice 3 §4.1: the Recovery phases now run first. A test that starts at
+  // down_up passes them against a default Recovery fake; stage 2's own
+  // Recovery tests set `skipRecoveryPreamble` and drive them directly.
+  const tree = globalThis.__bkFakeTree;
+  if (
+    phase === "down_up" &&
+    release === null &&
+    tree &&
+    !tree.skipRecoveryPreamble &&
+    window.__bkWebViewShellBehaviourState === undefined
+  ) {
+    new FakeRecovery(tree).install();
+    await exchange("recovery_entry", 9001);
+    await exchange("recovery_exit", 9002, { exchangeId: 9001, phase: "recovery_entry" });
+    release = { exchangeId: 9002, phase: "recovery_exit" };
+  }
   const dioxus = new FakeDioxus();
   const completion = runDriver(dioxus);
   dioxus.push(request(exchangeId, phase, release));
@@ -572,14 +589,29 @@ test(
 
     // Slice 3 stage 1: mode tabs and focus authority, ending terminal.
     const tabs = new FakeModeTabs(tree).install();
-    const report = await driveTabsAndAuthority(cursor);
+    const d2 = await driveTabsAndAuthority(cursor);
+    assert.equal(d2.kind, "progress");
+    assert.equal(d2.milestone, "authority_released_editor_refocused");
+
+    // Slice 3 stage 2: Settings, then the conflict banner, ending terminal.
+    const settings = new FakeSettings(tree, { menu: menus.app, tabs }).install();
+    const conflict = new FakeConflict(tree, { tabs }).install();
+    assert.equal((await step("settings_entry", cursor)).kind, "progress");
+    assert.equal((await step("settings_exit_restored", cursor)).kind, "progress");
+    assert.equal((await step("conflict_dirtied", cursor)).kind, "progress");
+    conflict.showBanner(); // the Rust sequence's on-disk write, then the poll
+    const report = await step("conflict_banner_focus_kept", cursor);
 
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, true);
-    assert.equal(report.result.stage, "authority_released_after_editor_focus");
+    assert.equal(report.result.stage, "conflict_banner_focus_kept");
+    assert.equal(settings.save.clicks, 0, "Settings' Save is never clicked");
+    assert.equal(conflict.actions.reduce((sum, action) => sum + action.clicks, 0), 0, "no banner action");
     assert.equal(menus.app.activations + menus.tools.activations, 0, "no menu item is ever activated");
     assert.equal(tabs.selected, "mode-text");
     assert.deepEqual(report.result.milestones, [
+      "recovery_heading_focused",
+      "recovery_exit_restored_logo",
       "down_up_moved",
       "expand_entered",
       "collapse_ascended",
@@ -601,6 +633,10 @@ test(
       "tabs_click_focused_editor",
       "menu_closed_into_editor_kept",
       "authority_released_editor_refocused",
+      "settings_heading_focused",
+      "settings_exit_restored_trigger",
+      "conflict_document_dirtied",
+      "conflict_banner_focus_kept",
     ]);
   },
 );
@@ -1226,7 +1262,7 @@ test(
 );
 
 test(
-  "D2 authority_released_after_editor_focus: a later claim succeeds, ending terminal with all milestones",
+  "D2 authority_released_after_editor_focus: a later claim succeeds, then hands over to Settings",
   { concurrency: false },
   async () => {
     const tree = new FakeTree();
@@ -1236,10 +1272,9 @@ test(
 
     const report = await step("authority_released_after_editor_focus", cursor);
 
-    assert.equal(report.kind, "terminal");
-    assert.equal(report.result.ok, true);
-    assert.equal(report.result.stage, "authority_released_after_editor_focus");
-    assert.equal(report.result.milestones.length, 21);
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "authority_released_editor_refocused");
+    assert.equal(window.__bkWebViewShellBehaviourState.phase, "settings_entry");
     assert.equal(tabs.tab("mode-preview").clicks, 1);
     assert.equal(document.activeElement, tabs.content);
   },
@@ -1265,5 +1300,311 @@ test(
       report.result.error,
       /D2: activating Text to claim the editor again; a refused claim means the menu's close into the editor kept shell authority/,
     );
+  },
+);
+
+// ---- slice 3 stage 2: Settings and Recovery (§8 E), conflict banner (§8 F) --
+
+async function driveRecovery(tree, options) {
+  tree.skipRecoveryPreamble = true;
+  const recovery = new FakeRecovery(tree, options).install();
+  const cursor = { exchangeId: 1, release: null };
+  return { recovery, cursor };
+}
+
+test(
+  "E1 recovery_entry: the Recovery screen shows one snapshot with focus on its heading",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { recovery, cursor } = await driveRecovery(tree);
+
+    const report = await step("recovery_entry", cursor);
+
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "recovery_heading_focused");
+    assert.equal(document.activeElement, recovery.heading);
+    assert.equal(recovery.skipped, 0);
+  },
+);
+
+test(
+  "E1: entry focus that never reaches the heading times out, naming E1",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor } = await driveRecovery(tree, { focusHeading: false });
+
+    const report = await step("recovery_entry", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.stage, "recovery_entry");
+    assert.match(report.result.error, /E1: the Recovery screen with focus on #recovery-heading \(at timeout: recovery=true/);
+  },
+);
+
+test(
+  "E1: a status that does not report one snapshot fails, quoting it",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor } = await driveRecovery(tree, { count: 2 });
+
+    const report = await step("recovery_entry", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.match(report.result.error, /E1: the Recovery status does not report one snapshot: "2 recoverable"/);
+  },
+);
+
+test(
+  "E2 recovery_exit: Skip all closes Recovery and focus stays on the app-bar logo",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { recovery, cursor } = await driveRecovery(tree);
+    await step("recovery_entry", cursor);
+
+    const report = await step("recovery_exit", cursor);
+
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "recovery_exit_restored_logo");
+    assert.equal(recovery.skip.clicks, 1, "only Skip all");
+    assert.equal(document.activeElement, recovery.logo);
+    assert.equal(recovery.logo.clicks, 0, "the logo is never clicked");
+  },
+);
+
+test(
+  "E2: a Recovery exit that does not restore to the logo times out, naming E2",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor } = await driveRecovery(tree, { restoreToLogo: false });
+    await step("recovery_entry", cursor);
+
+    const report = await step("recovery_exit", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.stage, "recovery_exit");
+    assert.match(report.result.error, /E2: Skip all to close Recovery and restore focus to #app-bar-logo-trigger/);
+  },
+);
+
+test(
+  "E2: focus taken from the logo one frame after Recovery exits fails, naming E2",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor } = await driveRecovery(tree, { stealFocusNextFrame: true });
+    await step("recovery_entry", cursor);
+
+    const report = await step("recovery_exit", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.match(report.result.error, /E2: focus did not stay on #app-bar-logo-trigger after Recovery closed/);
+  },
+);
+
+/** Drives every phase through D2, then installs Settings and the conflict
+ * banner: Text mode, editor focused -- stage 1's end state. */
+async function driveToSettings(tree, { settings: settingsOptions, conflict: conflictOptions } = {}) {
+  const { cursor, menus, tabs } = await driveToTabs(tree);
+  const d2 = await driveTabsAndAuthority(cursor);
+  assert.equal(d2.kind, "progress", "stage 1 hands over to stage 2");
+  const settings = new FakeSettings(tree, { menu: menus.app, tabs, ...settingsOptions }).install();
+  const conflict = new FakeConflict(tree, { tabs, ...conflictOptions }).install();
+  return { cursor, menus, tabs, settings, conflict };
+}
+
+test(
+  "E3 settings_entry: Settings opens by its id from the keyboard-opened app menu, focus on its heading",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, menus, settings } = await driveToSettings(tree);
+
+    const report = await step("settings_entry", cursor);
+
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "settings_heading_focused");
+    assert.equal(settings.item.clicks, 1);
+    assert.equal(menus.app.activations, 0, "no other menu item");
+    assert.equal(document.activeElement, settings.heading);
+  },
+);
+
+test(
+  "E3: a Settings handle outside the app menu is refused, and nothing is clicked",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, menus, settings } = await driveToSettings(tree);
+    menus.app.extraContained.length = 0;
+
+    const report = await step("settings_entry", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.match(
+      report.result.error,
+      /E3: refusing to click: expected exactly one #app-menu-settings inside #app-overflow-menu, found 1 \(inside the menu: false\)/,
+    );
+    assert.equal(settings.item.clicks, 0);
+  },
+);
+
+test(
+  "E4 settings_exit_restored: Close leaves Settings, the editor remounts, focus stays on the trigger",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, menus, settings } = await driveToSettings(tree);
+    await step("settings_entry", cursor);
+
+    const report = await step("settings_exit_restored", cursor);
+
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "settings_exit_restored_trigger");
+    assert.equal(settings.close.clicks, 1);
+    assert.equal(settings.save.clicks, 0, "never Save");
+    assert.equal(document.activeElement, menus.app.trigger);
+  },
+);
+
+test(
+  "E4: a Settings exit that does not restore to the trigger times out, naming E4",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor } = await driveToSettings(tree, { settings: { restoreToTrigger: false } });
+    await step("settings_entry", cursor);
+
+    const report = await step("settings_exit_restored", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.stage, "settings_exit_restored");
+    assert.match(report.result.error, /E4: Close to leave Settings, remount the editor and restore focus to #app-menu-trigger/);
+  },
+);
+
+test(
+  "E4: the remounted editor taking focus one frame after the restore fails, naming E4",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor } = await driveToSettings(tree, { settings: { editorTakesFocusNextFrame: true } });
+    await step("settings_entry", cursor);
+
+    const report = await step("settings_exit_restored", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.match(report.result.error, /E4: focus did not stay on #app-menu-trigger after Settings closed/);
+  },
+);
+
+test(
+  "F1 conflict_dirtied: one insertion into child.md, then the header's dirty dot",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, conflict, tabs } = await driveToSettings(tree);
+    await step("settings_entry", cursor);
+    await step("settings_exit_restored", cursor);
+
+    const report = await step("conflict_dirtied", cursor);
+
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "conflict_document_dirtied");
+    assert.equal(conflict.dispatches, 1);
+    assert.equal(document.activeElement, tabs.content);
+  },
+);
+
+test(
+  "F1: a different open document fails before any edit, naming the file",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, conflict } = await driveToSettings(tree, { conflict: { fileName: "a.md" } });
+    await step("settings_entry", cursor);
+    await step("settings_exit_restored", cursor);
+
+    const report = await step("conflict_dirtied", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.match(report.result.error, /F1: the open document is a\.md, not child\.md/);
+    assert.equal(conflict.dispatches, 0);
+  },
+);
+
+async function driveToBanner(tree, conflictOptions) {
+  const drive = await driveToSettings(tree, { conflict: conflictOptions });
+  await step("settings_entry", drive.cursor);
+  await step("settings_exit_restored", drive.cursor);
+  await step("conflict_dirtied", drive.cursor);
+  drive.conflict.showBanner();
+  return drive;
+}
+
+test(
+  "F2 conflict_banner_focus_kept: the three-action banner appears and focus stays in the editor",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, conflict, tabs } = await driveToBanner(tree);
+
+    const report = await step("conflict_banner_focus_kept", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, true);
+    assert.equal(report.result.stage, "conflict_banner_focus_kept");
+    assert.equal(report.result.milestones.length, 27);
+    assert.equal(document.activeElement, tabs.content);
+    assert.equal(conflict.actions.reduce((sum, action) => sum + action.clicks, 0), 0);
+  },
+);
+
+test(
+  "F2: a two-action banner (a deleted file, not dirty memory) fails, naming the count",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor } = await driveToBanner(tree, { buttons: 2 });
+
+    const report = await step("conflict_banner_focus_kept", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.match(report.result.error, /F2: expected the dirty-memory banner's three actions, found 2/);
+  },
+);
+
+test(
+  "F2: a banner that focuses its first action one frame after it appears fails, naming F2",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor } = await driveToBanner(tree, { focusFirstActionNextFrame: true });
+
+    const report = await step("conflict_banner_focus_kept", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.stage, "conflict_banner_focus_kept");
+    assert.match(report.result.error, /F2: focus moved into the conflict banner/);
   },
 );

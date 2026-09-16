@@ -147,6 +147,7 @@ pub fn SettingsScreen() -> Element {
                     {tr(lang, "settings.save")}
                 }
                 button {
+                    id: shell_focus::BUTTON_SETTINGS_CLOSE,
                     onclick: move |_| close_settings(),
                     {tr(lang, "settings.close")}
                 }

@@ -388,6 +388,53 @@ fn task_017_menu_keyboard_entry_is_driven_by_the_menu_mounting() {
     assert!(reset.contains("menu_entry.set(None)"));
 }
 
+/// The `button { … }` block that contains `marker`: from the last
+/// `button {` before it to the next `button {` after it, or the end.
+fn enclosing_button<'a>(source: &'a str, marker: &str) -> &'a str {
+    let at = source
+        .find(marker)
+        .unwrap_or_else(|| panic!("{marker} not found"));
+    let start = source[..at].rfind("button {").expect("an enclosing button");
+    let end = source[at..]
+        .find("button {")
+        .map_or(source.len(), |offset| at + offset);
+    &source[start..end]
+}
+
+#[test]
+fn rfc_044_slice_3_settings_handles_sit_on_the_right_buttons() {
+    // Slice 3 handoff §6.1: two static ids, and nothing else, so the second
+    // run never finds Settings or Close by position or translated label.
+    let shell_focus = include_str!("../shell_focus.rs");
+    let app_bar = include_str!("../components/app_bar.rs");
+    let settings = include_str!("../components/settings_screen.rs");
+    assert!(
+        shell_focus.contains(r#"pub const MENU_ITEM_APP_SETTINGS: &str = "app-menu-settings";"#)
+    );
+    assert!(shell_focus.contains(r#"pub const BUTTON_SETTINGS_CLOSE: &str = "settings-close";"#));
+
+    let settings_id = "id: shell_focus::MENU_ITEM_APP_SETTINGS,";
+    assert_eq!(app_bar.matches(settings_id).count(), 1);
+    let item = enclosing_button(app_bar, settings_id);
+    assert!(
+        item.contains("SourceCommand::OpenSettings"),
+        "Settings id on the wrong item"
+    );
+    assert!(item.contains(r#"role: "menuitem""#));
+
+    let close_id = "id: shell_focus::BUTTON_SETTINGS_CLOSE,";
+    assert_eq!(settings.matches(close_id).count(), 1);
+    let close = enclosing_button(settings, close_id);
+    assert!(
+        close.contains("close_settings()"),
+        "Close id on the wrong button"
+    );
+    assert!(
+        !close.contains("save_settings"),
+        "Close id on the Save button"
+    );
+}
+
 #[test]
 fn rfc_042_slice_4_conflict_recovery_and_settings_metadata() {
     let banner = include_str!("../components/conflict_banner.rs");

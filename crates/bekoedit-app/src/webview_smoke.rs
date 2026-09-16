@@ -178,7 +178,9 @@ pub fn prepare_launch(run_mode: RunMode) -> Result<Option<SmokeRun>, String> {
         }
         RunMode::WebViewShellBehaviour(requested_root) => {
             let profile = shell_behaviour::prepare(&requested_root)?;
-            let terminal = Arc::new(shell_behaviour::ShellBehaviourTerminal::default());
+            let terminal = Arc::new(shell_behaviour::ShellBehaviourTerminal::with_conflict_file(
+                profile.conflict_file.clone(),
+            ));
             let config = LaunchConfig {
                 persistence: profile.persistence.clone(),
                 webview_smoke: false,

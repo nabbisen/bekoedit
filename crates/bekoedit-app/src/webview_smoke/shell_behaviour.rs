@@ -54,6 +54,12 @@
 //! entering the editor closes an open menu and stays; that close released
 //! shell authority, proven by a later claim succeeding). The phase table
 //! lives in `phase.rs` (slice 3 handoff §4.4).
+//!
+//! Slice 3 stage 2 adds §8 E and F. Recovery only appears at launch, so
+//! `prepare` seeds one snapshot and its two phases run first. Settings is
+//! entered and closed through static ids. For F, `prepare` seeds a one-day
+//! autosave debounce so the document stays dirty, and the sequence writes a
+//! change to the open file on disk between F1 and F2 (§4.2).
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -62,7 +68,7 @@ use std::time::Duration;
 use dioxus::desktop::DesktopContext;
 use dioxus::prelude::*;
 
-use bekoedit_fs::RecentWorkspaces;
+use bekoedit_fs::{RecentWorkspaces, RecoverySnapshot, RecoveryStore, UserSettings};
 
 use crate::persistence::AppPersistence;
 use crate::settings::AppSettings;
@@ -90,7 +96,7 @@ struct ShellBehaviourMachine {
 impl ShellBehaviourMachine {
     const fn new() -> Self {
         Self {
-            current: ShellBehaviourPhase::DownUp,
+            current: ShellBehaviourPhase::RecoveryEntry,
             last_applied_exchange_id: None,
         }
     }
@@ -210,9 +216,19 @@ fn validate_shell_behaviour_result(result: &DriverResult) -> Result<(), String> 
 #[derive(Debug, Default)]
 pub struct ShellBehaviourTerminal {
     state: AtomicU8,
+    /// The document F's Rust-side write targets, handed over from `prepare`
+    /// rather than rediscovered at run time (slice 3 handoff §4.2).
+    conflict_file: Option<PathBuf>,
 }
 
 impl ShellBehaviourTerminal {
+    pub(super) fn with_conflict_file(conflict_file: PathBuf) -> Self {
+        Self {
+            state: AtomicU8::new(0),
+            conflict_file: Some(conflict_file),
+        }
+    }
+
     fn accept(&self, result: &DriverResult) -> Result<(), String> {
         validate_shell_behaviour_result(result)?;
         self.state
@@ -229,6 +245,31 @@ impl ShellBehaviourTerminal {
 pub(super) struct PreparedShellBehaviour {
     pub(super) root: PathBuf,
     pub(super) persistence: AppPersistence,
+    pub(super) conflict_file: PathBuf,
+}
+
+/// Slice 3 §4.3: autosave must not clean F1's edit before the write. One
+/// day, not `u64::MAX` -- `note_edit` adds the debounce to the current time.
+pub(super) const CONFLICT_AUTOSAVE_DEBOUNCE_MS: u64 = 86_400_000;
+
+/// Slice 3 §4.2: the Rust-side write that makes F2's conflict happens after
+/// exactly this phase reports progress, and before F2 is requested.
+pub(super) const fn writes_conflict_after(phase: ShellBehaviourPhase) -> bool {
+    matches!(phase, ShellBehaviourPhase::ConflictDirtied)
+}
+
+/// Changes `path` on disk to content of a different length. Detection is
+/// length plus content hash, not mtime (`bekoedit-fs/src/atomic.rs`).
+pub(super) fn write_conflicting_change(path: &Path) -> Result<(), String> {
+    let current = std::fs::read_to_string(path)
+        .map_err(|error| format!("cannot read the conflict file {}: {error}", path.display()))?;
+    let changed = format!("{current}\nChanged on disk by the RFC-044 harness (§8 F).\n");
+    std::fs::write(path, changed).map_err(|error| {
+        format!(
+            "cannot write the conflict change to {}: {error}",
+            path.display()
+        )
+    })
 }
 
 /// Creates an isolated profile and seeds a workspace shaped for §8 A's
@@ -251,10 +292,22 @@ pub(super) fn prepare(requested_root: &Path) -> Result<PreparedShellBehaviour, S
     std::fs::create_dir(&sub).map_err(|error| {
         format!("cannot create shell-behaviour workspace subdirectory: {error}")
     })?;
-    std::fs::write(sub.join("child.md"), "# child\n")
+    let conflict_file = sub.join("child.md");
+    std::fs::write(&conflict_file, "# child\n")
         .map_err(|error| format!("cannot seed shell-behaviour child.md: {error}"))?;
     std::fs::write(workspace.join("a.md"), "# a\n")
         .map_err(|error| format!("cannot seed shell-behaviour a.md: {error}"))?;
+    // Slice 3 §4.1: one recovery snapshot, through the same API AppState
+    // uses, so the run launches into the Recovery screen. Its text differs
+    // from the file; only Skip all is ever clicked, so it is never restored.
+    RecoveryStore::at(paths.recovery_dir().to_path_buf())
+        .save(&RecoverySnapshot {
+            original_path: workspace.join("a.md"),
+            text: "# a (recovered by the RFC-044 harness)\n".into(),
+            revision: 1,
+            created_at_secs: 1,
+        })
+        .map_err(|error| format!("cannot seed shell-behaviour recovery snapshot: {error}"))?;
     std::fs::write(workspace.join("notes.txt"), "not markdown\n")
         .map_err(|error| format!("cannot seed shell-behaviour notes.txt: {error}"))?;
     std::fs::write(workspace.join("z.md"), "# z\n")
@@ -272,6 +325,10 @@ pub(super) fn prepare(requested_root: &Path) -> Result<PreparedShellBehaviour, S
         // the intended behaviour -- just something this fixture must set
         // explicitly since RFC-044 slice-1 §5's contract needs Text mode.
         default_mode: bekoedit_ui_contract::EditorMode::Text,
+        core: UserSettings {
+            autosave_debounce_ms: CONFLICT_AUTOSAVE_DEBOUNCE_MS,
+            ..Default::default()
+        },
         ..Default::default()
     };
     profile
@@ -288,6 +345,7 @@ pub(super) fn prepare(requested_root: &Path) -> Result<PreparedShellBehaviour, S
     Ok(PreparedShellBehaviour {
         root: profile.root,
         persistence: profile.persistence,
+        conflict_file,
     })
 }
 
@@ -313,7 +371,8 @@ async fn run_shell_behaviour_sequence(
     let mut exchange_id = 1_u64;
     let mut release = None;
     loop {
-        let completed = run_shell_behaviour_phase(machine.current(), exchange_id, release).await?;
+        let phase = machine.current();
+        let completed = run_shell_behaviour_phase(phase, exchange_id, release).await?;
         machine.validate(&completed.message, exchange_id, release)?;
         transport::validate_completion(
             &completed.completion,
@@ -326,6 +385,14 @@ async fn run_shell_behaviour_sequence(
         if let Some(result) = completed.message.result {
             terminal.accept(&result)?;
             return Ok(result);
+        }
+        // §8 F (slice 3 §4.2): between F1's progress and F2's request.
+        if completed.message.kind == MessageKind::Progress && writes_conflict_after(phase) {
+            let path = terminal
+                .conflict_file
+                .as_deref()
+                .ok_or_else(|| "no conflict file was prepared for §8 F".to_string())?;
+            write_conflicting_change(path)?;
         }
         exchange_id = exchange_id
             .checked_add(1)

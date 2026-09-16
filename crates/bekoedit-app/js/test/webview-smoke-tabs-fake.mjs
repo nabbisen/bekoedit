@@ -73,6 +73,9 @@ export class FakeModeTabs {
     this.activateOnArrow = activateOnArrow;
     this.docLength = docLength;
     this.authorityHeld = false;
+    /** Called on every view.dispatch, so a conflict fake can mark the
+     * document dirty (slice 3 §8 F1). */
+    this.onDispatch = null;
     this.elements = TAB_ORDER.map((launchId) => new FakeTab(this, launchId));
     this.list = new FakeTabList(this);
     this.content = { nodeType: 1, focus: () => this.owner.setFocus(this.content) };
@@ -106,7 +109,7 @@ export class FakeModeTabs {
           return owner.activeElement() === content;
         },
         focus: () => owner.setFocus(content),
-        dispatch() {},
+        dispatch: (patch) => this.onDispatch?.(patch),
       };
       this.owner.setElement('[data-source-focus-launch-region="text"]', this.host);
       this.owner.setEditorView(this.view);

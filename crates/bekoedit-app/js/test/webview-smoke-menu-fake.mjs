@@ -89,6 +89,11 @@ class FakeMenuContainer {
   querySelector(selector) {
     return this.querySelectorAll(selector)[0] ?? null;
   }
+
+  /** Items, plus any element another fake renders inside this menu. */
+  contains(element) {
+    return this.menu.items.includes(element) || this.menu.extraContained.includes(element);
+  }
 }
 
 /**
@@ -130,6 +135,7 @@ export class FakeMenu {
     this.trigger = new FakeMenuTrigger(this);
     this.container = new FakeMenuContainer(this);
     this.items = labels.map((label) => new FakeMenuItem(this, label));
+    this.extraContained = [];
     this.activations = 0;
   }
 
@@ -142,7 +148,12 @@ export class FakeMenu {
   }
 
   contains(element) {
-    return element === this.trigger || element === this.container || this.items.includes(element);
+    return (
+      element === this.trigger ||
+      element === this.container ||
+      this.items.includes(element) ||
+      this.extraContained.includes(element)
+    );
   }
 
   setOpen(open) {

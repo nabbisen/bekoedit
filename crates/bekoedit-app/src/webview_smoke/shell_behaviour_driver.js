@@ -5,6 +5,8 @@ return (async () => {
   const protocolVersion = 2;
   const pinProtocolVersion = 1;
   const phases = [
+    "recovery_entry",
+    "recovery_exit",
     "down_up",
     "expand_enter",
     "collapse_ascend",
@@ -26,6 +28,10 @@ return (async () => {
     "tabs_click_activates",
     "menu_closes_into_editor",
     "authority_released_after_editor_focus",
+    "settings_entry",
+    "settings_exit_restored",
+    "conflict_dirtied",
+    "conflict_banner_focus_kept",
   ];
   const request = await dioxus.recv();
   const requestedPhase = request?.phase;
@@ -149,8 +155,8 @@ return (async () => {
   const createState = () => {
     const state = {
       protocolVersion: 1,
-      phase: "down_up",
-      stage: "down_up",
+      phase: "recovery_entry",
+      stage: "recovery_entry",
       deadline: null,
       step: 0,
       milestones: [],
@@ -462,6 +468,36 @@ return (async () => {
     tab.click();
     return tab;
   };
+  // ---- slice 3 stage 2: Settings and Recovery (§8 E), conflict banner (§8 F)
+
+  const recoveryRegion = () =>
+    document.querySelector('[role="region"][aria-labelledby="recovery-heading"]');
+  const settingsRegion = () =>
+    document.querySelector('[role="region"][aria-labelledby="settings-heading"]');
+  const conflictBanner = () => document.querySelector('.conflict-banner[role="alert"]');
+  const activeId = () => document.activeElement?.id ?? null;
+  const describeScreens = () =>
+    `recovery=${Boolean(recoveryRegion())} settings=${Boolean(settingsRegion())} ` +
+    `treeRows=${rows().length} activeElement=${describeActiveElement()}`;
+  const describeConflict = () => {
+    const banner = conflictBanner();
+    return (
+      `banner=${Boolean(banner)} buttons=${banner ? banner.querySelectorAll("button").length : 0} ` +
+      `dirtyDot=${Boolean(document.querySelector(".dirty-dot"))} ` +
+      `fileName=${document.querySelector(".file-name")?.textContent?.trim() ?? null} ` +
+      `activeElement=${describeActiveElement()}`
+    );
+  };
+  const editorMounted = () => {
+    const view = window.__bk?._view;
+    const host = document.querySelector('[data-source-focus-launch-region="text"]');
+    return Boolean(
+      view && view.dom?.isConnected && host && !host.querySelector(".source-editor-status"),
+    );
+  };
+  /** A screen or restore can take longer than a nav key: it waits on a
+   * render, and on a remounted editor. */
+  const SCREEN_TIMEOUT_MS = 10000;
   const rovingTreeRow = () => {
     const row = rows().find((candidate) => candidate.getAttribute("tabindex") === "0");
     if (!row) throw new Error("no tree row at tabindex=0 to move focus out of the menu");
@@ -536,10 +572,13 @@ return (async () => {
     // dioxus-swdir-tree-core pushes the root as a row before recursing
     // into its children). So the four seeded files are rows 1-4: at
     // least 5 rows total once the root's own scan has merged.
-    await waitFor(
-      () => rows().length >= 5,
-      "the workspace tree to render its rows (root + four seeded entries)",
-    );
+    // The Recovery screen covers the shell (slice 3 §4.1): no tree yet.
+    if (!requestedPhase.startsWith("recovery_")) {
+      await waitFor(
+        () => rows().length >= 5,
+        "the workspace tree to render its rows (root + four seeded entries)",
+      );
+    }
 
     if (requestedPhase === "down_up") {
       // Root(0) -> sub(1) -> a.md(2) -> sub(1) -> root(0): still a full
@@ -898,6 +937,146 @@ return (async () => {
       } else {
         outgoing = { kind: "pending" };
       }
+    } else if (requestedPhase === "recovery_entry") {
+      // §8 E1: the seeded snapshot's Recovery screen, focus on its heading.
+      state.stage = "recovery_entry";
+      await waitFor(
+        () => Boolean(recoveryRegion()) && activeId() === "recovery-heading",
+        () => `E1: the Recovery screen with focus on #recovery-heading (at timeout: ${describeScreens()})`,
+        SCREEN_TIMEOUT_MS,
+      );
+      const status = recoveryRegion().querySelector('[role="status"]');
+      const text = status?.textContent?.trim() ?? null;
+      if (!text?.startsWith("1 ")) {
+        throw new Error(`E1: the Recovery status does not report one snapshot: "${text}" (${describeScreens()})`);
+      }
+      outgoing = advance("recovery_heading_focused", "recovery_exit");
+    } else if (requestedPhase === "recovery_exit") {
+      // §8 E2: Skip all -- never Restore or Discard (§6.2).
+      state.stage = "recovery_exit";
+      const skips = [...document.querySelectorAll(".recovery-skip")];
+      if (skips.length !== 1) {
+        throw new Error(`E2: refusing to click: expected exactly one .recovery-skip, found ${skips.length} (${describeScreens()})`);
+      }
+      const atClick = describeScreens();
+      skips[0].click();
+      await waitFor(
+        () => !recoveryRegion() && rows().length >= 5 && activeId() === "app-bar-logo-trigger",
+        () =>
+          `E2: Skip all to close Recovery and restore focus to #app-bar-logo-trigger ` +
+          `(at click: ${atClick}; at timeout: ${describeScreens()})`,
+        SCREEN_TIMEOUT_MS,
+      );
+      await observeWindow(() =>
+        activeId() === "app-bar-logo-trigger"
+          ? null
+          : `E2: focus did not stay on #app-bar-logo-trigger after Recovery closed (${describeScreens()})`,
+      );
+      outgoing = advance("recovery_exit_restored_logo", "down_up");
+    } else if (requestedPhase === "settings_entry") {
+      // §8 E3: open the app menu by keyboard, then click Settings by its id,
+      // behind §6.1's guard -- its neighbours open native dialogs.
+      state.stage = "settings_entry";
+      await openMenuWith(MENUS.app, "ArrowDown", "first");
+      const menu = document.querySelector(MENUS.app.menu);
+      const found = [...document.querySelectorAll("#app-menu-settings")];
+      const inside = Boolean(menu && found[0] && menu.contains(found[0]));
+      if (found.length !== 1 || !inside || found[0].id !== "app-menu-settings") {
+        throw new Error(
+          `E3: refusing to click: expected exactly one #app-menu-settings inside ${MENUS.app.menu}, ` +
+            `found ${found.length} (inside the menu: ${inside}) (${describeMenu(MENUS.app)})`,
+        );
+      }
+      found[0].click();
+      await waitFor(
+        () => Boolean(settingsRegion()) && activeId() === "settings-heading",
+        () => `E3: Settings with focus on #settings-heading (at timeout: ${describeScreens()})`,
+        SCREEN_TIMEOUT_MS,
+      );
+      outgoing = advance("settings_heading_focused", "settings_exit_restored");
+    } else if (requestedPhase === "settings_exit_restored") {
+      // §8 E4: Close -- never Save (§6.2). The window starts once the
+      // Text-mode editor has remounted, since a claim or focus it made would
+      // land after the restore (handoff §2's correction).
+      state.stage = "settings_exit_restored";
+      const region = settingsRegion();
+      const closes = [...document.querySelectorAll("#settings-close")];
+      if (closes.length !== 1 || !region?.contains(closes[0])) {
+        throw new Error(
+          `E4: refusing to click: expected exactly one #settings-close inside Settings, found ${closes.length} (${describeScreens()})`,
+        );
+      }
+      const atClick = describeScreens();
+      closes[0].click();
+      await waitFor(
+        () => !settingsRegion() && editorMounted() && activeId() === "app-menu-trigger",
+        () =>
+          `E4: Close to leave Settings, remount the editor and restore focus to #app-menu-trigger ` +
+          `(at click: ${atClick}; at timeout: ${describeScreens()} ${editorSummary()})`,
+        SCREEN_TIMEOUT_MS,
+      );
+      await observeWindow(() =>
+        activeId() === "app-menu-trigger"
+          ? null
+          : `E4: focus did not stay on #app-menu-trigger after Settings closed (${describeScreens()} ${editorSummary()})`,
+      );
+      outgoing = advance("settings_exit_restored_trigger", "conflict_dirtied");
+    } else if (requestedPhase === "conflict_dirtied") {
+      // §8 F1: one unsaved insertion, as RFC-041's edit_dispatched does. No
+      // Enter, Space or click anywhere in F (§6.2).
+      state.stage = "conflict_dirtied";
+      const fileName = document.querySelector(".file-name")?.textContent?.trim() ?? null;
+      if (fileName !== "child.md") {
+        throw new Error(`F1: the open document is ${fileName}, not child.md; the Rust write would miss it (${describeConflict()})`);
+      }
+      const view = window.__bk?._view;
+      if (!view) throw new Error(`F1: no editor view to edit (${describeConflict()})`);
+      view.focus();
+      await waitFor(
+        () => view.hasFocus,
+        () => `F1: focus into the editor before the edit (at timeout: ${describeConflict()})`,
+      );
+      view.dispatch({ changes: { from: view.state.doc.length, insert: "\nAn unsaved edit (RFC-044 §8 F).\n" } });
+      await waitFor(
+        () => Boolean(document.querySelector(".dirty-dot")),
+        () => `F1: the header's dirty dot after the edit (at timeout: ${describeConflict()})`,
+        SCREEN_TIMEOUT_MS,
+      );
+      outgoing = advance("conflict_document_dirtied", "conflict_banner_focus_kept");
+    } else if (requestedPhase === "conflict_banner_focus_kept") {
+      // §8 F2: the Rust sequence wrote the file between F1 and this phase.
+      // The banner appears and announces; focus does not move (RFC-042 §7.6).
+      state.stage = "conflict_banner_focus_kept";
+      const view = window.__bk?._view;
+      const recorded = document.activeElement;
+      const inEditor =
+        Boolean(view?.contentDOM) && (recorded === view.contentDOM || view.contentDOM.contains?.(recorded));
+      if (!inEditor) {
+        throw new Error(`F2: focus is not inside the editor before the banner: ${describeActiveElement()} (${describeConflict()})`);
+      }
+      await waitFor(
+        () => Boolean(conflictBanner()),
+        () => `F2: the conflict banner after the on-disk change (at timeout: ${describeConflict()})`,
+        SCREEN_TIMEOUT_MS,
+      );
+      const buttons = conflictBanner().querySelectorAll("button").length;
+      if (buttons !== 3) {
+        throw new Error(`F2: expected the dirty-memory banner's three actions, found ${buttons} (${describeConflict()})`);
+      }
+      await observeWindow(() => {
+        const banner = conflictBanner();
+        const active = document.activeElement;
+        if (banner && (banner === active || banner.contains?.(active))) {
+          return `F2: focus moved into the conflict banner (${describeConflict()})`;
+        }
+        if (active !== recorded) {
+          return `F2: focus left the editor when the banner appeared (${describeConflict()})`;
+        }
+        return null;
+      });
+      if (state.errorToastSeen) throw new Error("an error toast appeared");
+      state.milestones.push("conflict_banner_focus_kept");
+      outgoing = finish(true);
     } else if (requestedPhase === "tabs_arrows_focus_only") {
       // §8 C1: Right, Left, Home, End move focus and nothing else. Checked
       // after every key -- Right then Left starts and ends on Form, so one
@@ -971,9 +1150,7 @@ return (async () => {
           `D2: activating Text to claim the editor again; a refused claim means the menu's ` +
           `close into the editor kept shell authority (at timeout: ${describeTabs()} ${editorSummary()})`,
       );
-      if (state.errorToastSeen) throw new Error("an error toast appeared");
-      state.milestones.push("authority_released_editor_refocused");
-      outgoing = finish(true);
+      outgoing = advance("authority_released_editor_refocused", "settings_entry");
     } else if (MENU_PHASES[requestedPhase]) {
       const { spec, kind, milestone, next } = MENU_PHASES[requestedPhase];
       state.stage = requestedPhase;

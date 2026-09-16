@@ -47,6 +47,13 @@ fn focus_tree_row_script(index: usize) -> String {
     )
 }
 
+/// Stable handles the RFC-044 second run clicks by (slice 3 handoff §6.1).
+/// The Settings item is the first click the harness makes inside the app
+/// menu, whose neighbours open native dialogs that escape xvfb; neither may
+/// be found by position or translated label.
+pub const MENU_ITEM_APP_SETTINGS: &str = "app-menu-settings";
+pub const BUTTON_SETTINGS_CLOSE: &str = "settings-close";
+
 /// The two overflow-menu container ids (RFC-042 slice 3, handoff §5.7).
 pub const MENU_APP_OVERFLOW: &str = "app-overflow-menu";
 pub const MENU_EDITOR_TOOLS: &str = "editor-tools-menu";

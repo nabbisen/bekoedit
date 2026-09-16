@@ -250,6 +250,7 @@ pub fn AppBar() -> Element {
 
                         // Settings
                         button {
+                            id: shell_focus::MENU_ITEM_APP_SETTINGS,
                             class: "dropdown-item",
                             role: "menuitem",
                             tabindex: "-1",

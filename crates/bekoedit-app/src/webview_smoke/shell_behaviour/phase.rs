@@ -4,7 +4,9 @@
 
 use crate::webview_smoke::transport::PhaseKind;
 
-pub(super) const EXPECTED_MILESTONES: [&str; 21] = [
+pub(super) const EXPECTED_MILESTONES: [&str; 27] = [
+    "recovery_heading_focused",
+    "recovery_exit_restored_logo",
     "down_up_moved",
     "expand_entered",
     "collapse_ascended",
@@ -26,13 +28,22 @@ pub(super) const EXPECTED_MILESTONES: [&str; 21] = [
     "tabs_click_focused_editor",
     "menu_closed_into_editor_kept",
     "authority_released_editor_refocused",
+    "settings_heading_focused",
+    "settings_exit_restored_trigger",
+    "conflict_document_dirtied",
+    "conflict_banner_focus_kept",
 ];
 
 /// The phase whose success is the whole run's terminal result.
-pub(super) const TERMINAL_STAGE: &str = "authority_released_after_editor_focus";
+pub(super) const TERMINAL_STAGE: &str = "conflict_banner_focus_kept";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::webview_smoke) enum ShellBehaviourPhase {
+    /// Slice 3, RFC-044 §8 E1: the seeded Recovery screen, focus on its
+    /// heading. First, because Recovery only appears at launch (§4.1).
+    RecoveryEntry,
+    /// §8 E2: Skip all closes Recovery and focus stays on the app-bar logo.
+    RecoveryExit,
     DownUp,
     ExpandEnter,
     CollapseAscend,
@@ -69,13 +80,24 @@ pub(in crate::webview_smoke) enum ShellBehaviourPhase {
     TabsClickActivates,
     /// §8 D1: focus entering the editor closes the menu, and stays.
     MenuClosesIntoEditor,
-    /// §8 D2: that close released shell authority; the terminal phase.
+    /// §8 D2: that close released shell authority.
     AuthorityReleasedAfterEditorFocus,
+    /// §8 E3: Settings entry, focus on its heading.
+    SettingsEntry,
+    /// §8 E4: Settings exit, focus stays on the app-menu trigger.
+    SettingsExitRestored,
+    /// §8 F1: the open document is dirtied. The Rust-side file write that
+    /// makes the conflict follows this phase (§4.2).
+    ConflictDirtied,
+    /// §8 F2: the conflict banner appears and focus does not move; terminal.
+    ConflictBannerFocusKept,
 }
 
 impl ShellBehaviourPhase {
     pub(super) const fn as_str(self) -> &'static str {
         match self {
+            Self::RecoveryEntry => "recovery_entry",
+            Self::RecoveryExit => "recovery_exit",
             Self::DownUp => "down_up",
             Self::ExpandEnter => "expand_enter",
             Self::CollapseAscend => "collapse_ascend",
@@ -96,12 +118,18 @@ impl ShellBehaviourPhase {
             Self::TabsArrowsFocusOnly => "tabs_arrows_focus_only",
             Self::TabsClickActivates => "tabs_click_activates",
             Self::MenuClosesIntoEditor => "menu_closes_into_editor",
-            Self::AuthorityReleasedAfterEditorFocus => TERMINAL_STAGE,
+            Self::AuthorityReleasedAfterEditorFocus => "authority_released_after_editor_focus",
+            Self::SettingsEntry => "settings_entry",
+            Self::SettingsExitRestored => "settings_exit_restored",
+            Self::ConflictDirtied => "conflict_dirtied",
+            Self::ConflictBannerFocusKept => TERMINAL_STAGE,
         }
     }
 
     pub(super) const fn next(self) -> Option<Self> {
         match self {
+            Self::RecoveryEntry => Some(Self::RecoveryExit),
+            Self::RecoveryExit => Some(Self::DownUp),
             Self::DownUp => Some(Self::ExpandEnter),
             Self::ExpandEnter => Some(Self::CollapseAscend),
             Self::CollapseAscend => Some(Self::HomeEnd),
@@ -122,7 +150,11 @@ impl ShellBehaviourPhase {
             Self::TabsArrowsFocusOnly => Some(Self::TabsClickActivates),
             Self::TabsClickActivates => Some(Self::MenuClosesIntoEditor),
             Self::MenuClosesIntoEditor => Some(Self::AuthorityReleasedAfterEditorFocus),
-            Self::AuthorityReleasedAfterEditorFocus => None,
+            Self::AuthorityReleasedAfterEditorFocus => Some(Self::SettingsEntry),
+            Self::SettingsEntry => Some(Self::SettingsExitRestored),
+            Self::SettingsExitRestored => Some(Self::ConflictDirtied),
+            Self::ConflictDirtied => Some(Self::ConflictBannerFocusKept),
+            Self::ConflictBannerFocusKept => None,
         }
     }
 
@@ -131,6 +163,8 @@ impl ShellBehaviourPhase {
     /// milestone via `DriverResult.milestones`.
     pub(super) const fn expected_milestone(self) -> &'static str {
         match self {
+            Self::RecoveryEntry => "recovery_heading_focused",
+            Self::RecoveryExit => "recovery_exit_restored_logo",
             Self::DownUp => "down_up_moved",
             Self::ExpandEnter => "expand_entered",
             Self::CollapseAscend => "collapse_ascended",
@@ -152,6 +186,10 @@ impl ShellBehaviourPhase {
             Self::TabsClickActivates => "tabs_click_focused_editor",
             Self::MenuClosesIntoEditor => "menu_closed_into_editor_kept",
             Self::AuthorityReleasedAfterEditorFocus => "authority_released_editor_refocused",
+            Self::SettingsEntry => "settings_heading_focused",
+            Self::SettingsExitRestored => "settings_exit_restored_trigger",
+            Self::ConflictDirtied => "conflict_document_dirtied",
+            Self::ConflictBannerFocusKept => "conflict_banner_focus_kept",
         }
     }
 }
