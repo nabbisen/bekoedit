@@ -45,6 +45,7 @@ export class FakeRecovery {
     this.owner.setElement('[role="region"][aria-labelledby="recovery-heading"]', this.region);
     this.owner.setElements(".recovery-skip", [this.skip]);
     this.owner.setElement("#app-bar-logo-trigger", this.logo);
+    this.owner.shellReplaced = true;
     if (this.focusHeading) this.owner.setFocus(this.heading);
     return this;
   }
@@ -54,6 +55,7 @@ export class FakeRecovery {
     this.skipped += 1;
     this.owner.setElement('[role="region"][aria-labelledby="recovery-heading"]', null);
     this.owner.setElements(".recovery-skip", []);
+    this.owner.shellReplaced = false;
     if (this.restoreToLogo) this.owner.setFocus(this.logo);
     if (this.stealFocusNextFrame) {
       requestAnimationFrame(() => this.owner.setFocus(this.elsewhere));
@@ -106,6 +108,7 @@ export class FakeSettings {
     this.owner.setEditorView(undefined);
     this.owner.setElement('[role="region"][aria-labelledby="settings-heading"]', this.region);
     this.owner.setElements("#settings-close", [this.close]);
+    this.owner.shellReplaced = true;
     this.owner.setFocus(this.heading);
   }
 
@@ -116,6 +119,7 @@ export class FakeSettings {
     this.closed += 1;
     this.owner.setElement('[role="region"][aria-labelledby="settings-heading"]', null);
     this.owner.setElements("#settings-close", []);
+    this.owner.shellReplaced = false;
     if (this.restoreToTrigger) this.owner.setFocus(this.menu.trigger);
     this.tabs.renderMode();
     if (this.editorTakesFocusNextFrame) {

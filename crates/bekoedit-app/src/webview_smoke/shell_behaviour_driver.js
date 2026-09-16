@@ -4,6 +4,7 @@ return (async () => {
   const pinKey = "__bkWebViewSmokeEvalPin";
   const protocolVersion = 2;
   const pinProtocolVersion = 1;
+  const SHELL_REPLACED_AT_START = new Set(["recovery_entry", "recovery_exit", "settings_exit_restored"]);
   const phases = [
     "recovery_entry",
     "recovery_exit",
@@ -572,8 +573,13 @@ return (async () => {
     // dioxus-swdir-tree-core pushes the root as a row before recursing
     // into its children). So the four seeded files are rows 1-4: at
     // least 5 rows total once the root's own scan has merged.
-    // The Recovery screen covers the shell (slice 3 §4.1): no tree yet.
-    if (!requestedPhase.startsWith("recovery_")) {
+    // Named before the preamble, so a preamble failure names the phase that
+    // hit it rather than the one before (each branch still sets its own).
+    state.stage = requestedPhase;
+    // Phases that start while a screen replacement covers MainShell, so no
+    // tree renders: Recovery at launch (slice 3 §4.1), and Settings between
+    // E3 and E4.
+    if (!SHELL_REPLACED_AT_START.has(requestedPhase)) {
       await waitFor(
         () => rows().length >= 5,
         "the workspace tree to render its rows (root + four seeded entries)",

@@ -94,6 +94,9 @@ export class FakeTree {
     // location, as the real document does.
     this.externalFocus = null;
     this.focusWatchers = [];
+    // A screen replacement (Recovery, Settings) unmounts MainShell, so no
+    // tree rows render while it is open (slice 3 stage 2).
+    this.shellReplaced = false;
     // `tabindexLagMs` models the render that moves tabindex=0 arriving after
     // focus does (review §4.2): for that long after a move, rows still report
     // the previous active row.
@@ -282,7 +285,11 @@ export class FakeTree {
         return this.elementsBySelector?.[selector] ?? null;
       },
       querySelectorAll: (selector) =>
-        selector === "[data-tree-row]" ? tree.elements() : (this.elementListsBySelector?.[selector] ?? []),
+        selector === "[data-tree-row]"
+          ? tree.shellReplaced
+            ? []
+            : tree.elements()
+          : (this.elementListsBySelector?.[selector] ?? []),
       get activeElement() {
         return tree.activeElement();
       },
