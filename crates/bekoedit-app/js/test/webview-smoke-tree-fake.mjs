@@ -30,7 +30,7 @@ class FakeTreeRowElement {
 
   getAttribute(name) {
     const { node, depth } = this.tree.visibleRows()[this.index];
-    if (name === "tabindex") return this.index === this.tree.activeIndex ? "0" : "-1";
+    if (name === "tabindex") return this.index === this.tree.renderedActiveIndex() ? "0" : "-1";
     if (name === "aria-expanded") return node.isDir ? String(node.isExpanded) : "false";
     if (name === "aria-disabled") return String(!(node.isDir || node.isOpenable));
     if (name === "data-depth") return String(depth);
@@ -94,6 +94,25 @@ export class FakeTree {
     // location, as the real document does.
     this.externalFocus = null;
     this.focusWatchers = [];
+    // `tabindexLagMs` models the render that moves tabindex=0 arriving after
+    // focus does (review §4.2): for that long after a move, rows still report
+    // the previous active row.
+    this.tabindexLagMs = 0;
+    this.previousActiveIndex = 0;
+    this.lagUntil = -Infinity;
+  }
+
+  /** The row index `tabindex="0"` is currently rendered on. */
+  renderedActiveIndex() {
+    return performance.now() < this.lagUntil ? this.previousActiveIndex : this.activeIndex;
+  }
+
+  /** Moves the active row, remembering the previous one for `tabindexLagMs`. */
+  moveActive(index) {
+    if (index === this.activeIndex) return;
+    this.previousActiveIndex = this.activeIndex;
+    this.lagUntil = performance.now() + this.tabindexLagMs;
+    this.activeIndex = index;
   }
 
   /** Moves focus to `element`: a tree row moves the roving index, anything
@@ -102,7 +121,7 @@ export class FakeTree {
   setFocus(element) {
     if (this.elements().includes(element)) {
       this.externalFocus = null;
-      this.activeIndex = element.index;
+      this.moveActive(element.index);
     } else {
       this.externalFocus = element;
     }
@@ -165,10 +184,10 @@ export class FakeTree {
     const row = visible[index];
     switch (key) {
       case "ArrowDown":
-        if (index + 1 < visible.length) this.activeIndex = index + 1;
+        if (index + 1 < visible.length) this.moveActive(index + 1);
         break;
       case "ArrowUp":
-        if (index > 0) this.activeIndex = index - 1;
+        if (index > 0) this.moveActive(index - 1);
         break;
       case "Home":
         if (index !== 0) this.activeIndex = 0;

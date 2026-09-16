@@ -41,8 +41,10 @@
 //! default: in Form, a search result claims no editor focus, so it is not a
 //! handoff -- explicit dismissal restores focus to the search trigger.
 //!
-//! Slice 2 appends RFC-044 §8 B's menu-button contracts, three phases per
-//! overflow menu: the trigger and in-menu keys (contracts 1-5), Escape
+//! Slice 2 appends a mouse-open phase for the app menu (task 017 §2: a mouse
+//! open leaves focus on the trigger, alone and after a keyboard open and
+//! close, so no keyboard entry intent is left behind), then RFC-044 §8 B's
+//! menu-button contracts, three phases per overflow menu: the trigger and in-menu keys (contracts 1-5), Escape
 //! restoring focus to the trigger (6), and focus leaving the wrap closing it
 //! without restoring (7). Contract 7 moves focus with a script `focus()`
 //! rather than a synthetic Tab, per the slice-2 handoff §4.
@@ -66,7 +68,7 @@ use super::transport::{
 };
 
 const MARKER: &str = "RFC044_SHELL_BEHAVIOUR_MARKER";
-const EXPECTED_MILESTONES: [&str; 16] = [
+const EXPECTED_MILESTONES: [&str; 17] = [
     "down_up_moved",
     "expand_entered",
     "collapse_ascended",
@@ -77,6 +79,7 @@ const EXPECTED_MILESTONES: [&str; 16] = [
     "new_file_editor_focused",
     "tree_enter_refocused_after_new_file",
     "form_search_restored_to_trigger",
+    "app_menu_mouse_open_kept_focus",
     "app_menu_keys_verified",
     "app_menu_escape_restored",
     "app_menu_focus_leave_kept",
@@ -108,6 +111,8 @@ pub(super) enum ShellBehaviourPhase {
     /// Task 016 re-review §2: a Form-mode search result restores to the
     /// search trigger.
     FormSearchRestores,
+    /// Task 017 §2's mouse rows, app menu.
+    AppMenuMouseOpen,
     /// Slice 2, RFC-044 §8 B contracts 1-5, app menu.
     AppMenuKeys,
     /// Contract 6, app menu.
@@ -135,6 +140,7 @@ impl ShellBehaviourPhase {
             Self::NewFileFocuses => "new_file_focuses",
             Self::TreeEnterAfterNewFile => "tree_enter_after_new_file",
             Self::FormSearchRestores => "form_search_restores",
+            Self::AppMenuMouseOpen => "app_menu_mouse_open",
             Self::AppMenuKeys => "app_menu_keys",
             Self::AppMenuEscape => "app_menu_escape",
             Self::AppMenuFocusLeave => "app_menu_focus_leave",
@@ -155,7 +161,8 @@ impl ShellBehaviourPhase {
             Self::SearchResultOpens => Some(Self::NewFileFocuses),
             Self::NewFileFocuses => Some(Self::TreeEnterAfterNewFile),
             Self::TreeEnterAfterNewFile => Some(Self::FormSearchRestores),
-            Self::FormSearchRestores => Some(Self::AppMenuKeys),
+            Self::FormSearchRestores => Some(Self::AppMenuMouseOpen),
+            Self::AppMenuMouseOpen => Some(Self::AppMenuKeys),
             Self::AppMenuKeys => Some(Self::AppMenuEscape),
             Self::AppMenuEscape => Some(Self::AppMenuFocusLeave),
             Self::AppMenuFocusLeave => Some(Self::ToolsMenuKeys),
@@ -180,6 +187,7 @@ impl ShellBehaviourPhase {
             Self::NewFileFocuses => "new_file_editor_focused",
             Self::TreeEnterAfterNewFile => "tree_enter_refocused_after_new_file",
             Self::FormSearchRestores => "form_search_restored_to_trigger",
+            Self::AppMenuMouseOpen => "app_menu_mouse_open_kept_focus",
             Self::AppMenuKeys => "app_menu_keys_verified",
             Self::AppMenuEscape => "app_menu_escape_restored",
             Self::AppMenuFocusLeave => "app_menu_focus_leave_kept",

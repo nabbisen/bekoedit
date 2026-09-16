@@ -80,6 +80,11 @@ fn machine_advances_through_every_transition_ending_at_tools_menu_focus_leave() 
         (
             ShellBehaviourPhase::FormSearchRestores,
             "form_search_restored_to_trigger",
+            ShellBehaviourPhase::AppMenuMouseOpen,
+        ),
+        (
+            ShellBehaviourPhase::AppMenuMouseOpen,
+            "app_menu_mouse_open_kept_focus",
             ShellBehaviourPhase::AppMenuKeys,
         ),
         (

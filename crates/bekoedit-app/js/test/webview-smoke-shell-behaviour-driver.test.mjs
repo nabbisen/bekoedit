@@ -556,11 +556,15 @@ test(
 
     assert.equal(formSearched.kind, "progress");
     assert.equal(formSearched.milestone, "form_search_restored_to_trigger");
-    assert.equal(window.__bkWebViewShellBehaviourState.phase, "app_menu_keys");
+    assert.equal(window.__bkWebViewShellBehaviourState.phase, "app_menu_mouse_open");
 
-    // Slice 2: both overflow menus, three phases each, ending terminal.
+    // Slice 2: the app menu's mouse-open phase, then both overflow menus,
+    // three phases each, ending terminal.
     restoreTreeFocus(tree);
     const menus = installMenus(tree);
+    const mouse = await step("app_menu_mouse_open", cursor);
+    assert.equal(mouse.kind, "progress");
+    assert.equal(mouse.milestone, "app_menu_mouse_open_kept_focus");
     const report = await driveMenus(cursor);
 
     assert.equal(report.kind, "terminal");
@@ -578,6 +582,7 @@ test(
       "new_file_editor_focused",
       "tree_enter_refocused_after_new_file",
       "form_search_restored_to_trigger",
+      "app_menu_mouse_open_kept_focus",
       "app_menu_keys_verified",
       "app_menu_escape_restored",
       "app_menu_focus_leave_kept",
@@ -808,6 +813,10 @@ async function driveToMenus(tree, menuOptions) {
   assert.equal(searched.kind, "progress");
   restoreTreeFocus(tree);
   const menus = installMenus(tree, menuOptions);
+  if (!menuOptions?.stopBeforeMouseOpen) {
+    const mouse = await step("app_menu_mouse_open", cursor);
+    assert.equal(mouse.kind, "progress", "the mouse-open phase precedes the key phases");
+  }
   return { cursor, menus };
 }
 
@@ -818,6 +827,7 @@ test(
     const tree = new FakeTree();
     tree.install();
     const { cursor, menus } = await driveToMenus(tree);
+    const before = menus.app.trigger.dispatchedEvents.length;
 
     const report = await step("app_menu_keys", cursor);
 
@@ -826,7 +836,7 @@ test(
     assert.equal(menus.app.open, false, "the phase leaves the menu closed");
     assert.equal(document.activeElement, menus.app.trigger);
     assert.equal(menus.app.activations, 0);
-    const keys = menus.app.trigger.dispatchedEvents.map((event) => event.key);
+    const keys = menus.app.trigger.dispatchedEvents.slice(before).map((event) => event.key);
     assert.deepEqual(keys, ["ArrowDown", "ArrowUp", "Enter", " "], "contracts 1-3, on the trigger");
   },
 );
@@ -883,7 +893,7 @@ test(
     assert.equal(report.result.stage, "app_menu_keys");
     assert.match(
       report.result.error,
-      /app_menu: ArrowDown to reach the first item \(menu=true expanded=true items=3/,
+      /app_menu: ArrowDown to reach the first item \(at dispatch: menu=true expanded=true items=3 .*; at timeout: menu=true expanded=true items=3 activeElement=/,
     );
   },
 );
@@ -894,7 +904,10 @@ test(
   async () => {
     const tree = new FakeTree();
     tree.install();
-    const { cursor } = await driveToMenus(tree, { app: { restoreOnEscape: false } });
+    const { cursor, menus } = await driveToMenus(tree);
+    // Only after the mouse-open phase, which itself closes with Escape: this
+    // test targets contract 6 in the key phase.
+    menus.app.restoreOnEscape = false;
 
     const report = await step("app_menu_keys", cursor);
 
@@ -945,5 +958,85 @@ test(
       ["ArrowDown", "ArrowUp", "Enter", " ", "ArrowDown", "ArrowDown"],
       "contracts 1-3 in the keys phase, then one open each for escape and focus-leave",
     );
+  },
+);
+
+test(
+  "app_menu_mouse_open: a mouse open leaves focus on the trigger, alone and after a keyboard open and close",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, menus } = await driveToMenus(tree, { stopBeforeMouseOpen: true });
+
+    const report = await step("app_menu_mouse_open", cursor);
+
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "app_menu_mouse_open_kept_focus");
+    assert.equal(menus.app.trigger.clicks, 2, "one mouse open alone, one after the keyboard round trip");
+    assert.equal(menus.app.open, false);
+    assert.equal(document.activeElement, menus.app.trigger);
+    assert.equal(menus.app.activations, 0);
+  },
+);
+
+test(
+  "app_menu_mouse_open: a leftover entry intent that moves focus into the menu fails, naming the phase",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor } = await driveToMenus(tree, {
+      stopBeforeMouseOpen: true,
+      app: { leftoverIntent: true },
+    });
+
+    const report = await step("app_menu_mouse_open", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.equal(report.result.stage, "app_menu_mouse_open");
+    assert.match(report.result.error, /app_menu: a mouse open \(alone\) moved focus into the menu/);
+  },
+);
+
+test(
+  "§4.1: a menu timeout describes the state at the timeout, not only at dispatch",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, menus } = await driveToMenus(tree, { app: { wraps: false } });
+    // Make the menu close itself after the key: the dispatch-time snapshot
+    // still shows it open; only the timeout-time one can show it gone.
+    const realItemKey = menus.app.handleItemKey.bind(menus.app);
+    menus.app.handleItemKey = (item, key) => {
+      realItemKey(item, key);
+      if (key === "ArrowDown") queueMicrotask(() => menus.app.setOpen(false));
+    };
+
+    const report = await step("app_menu_keys", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.match(
+      report.result.error,
+      /at dispatch: menu=true expanded=true items=3 .*; at timeout: menu=false expanded=false items=0/,
+    );
+  },
+);
+
+test(
+  "§4.2: a tabindex that follows focus by a few frames settles and passes",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    // Longer than one frame (16 ms), far shorter than the 2 s deadline.
+    tree.tabindexLagMs = 50;
+
+    const report = await exchange("down_up", 1);
+
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "down_up_moved");
   },
 );

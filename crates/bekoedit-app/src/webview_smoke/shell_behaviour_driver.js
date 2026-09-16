@@ -15,6 +15,7 @@ return (async () => {
     "new_file_focuses",
     "tree_enter_after_new_file",
     "form_search_restores",
+    "app_menu_mouse_open",
     "app_menu_keys",
     "app_menu_escape",
     "app_menu_focus_leave",
@@ -93,7 +94,10 @@ return (async () => {
     const deadline = performance.now() + timeoutMs;
     while (!predicate()) {
       if (performance.now() >= deadline) {
-        throw new Error(`timed out waiting for: ${description}`);
+        // A function is called here, at the timeout, so a state report
+        // describes the moment of failure rather than the moment of the call.
+        const text = typeof description === "function" ? description() : description;
+        throw new Error(`timed out waiting for: ${text}`);
       }
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
@@ -102,22 +106,35 @@ return (async () => {
    * focus (untrusted events get no browser default action), so contract 1
    * is this invariant, asserted live after each app-intercepted nav key
    * instead -- exactly one row at tabindex=0, it is the row that just
-   * became active, and it is document.activeElement. */
-  const checkTabStopInvariant = (expectedIndex) => {
+   * became active, and it is document.activeElement.
+   *
+   * The row's tabindex and DOM focus arrive by separate routes -- a Dioxus
+   * render, and focus_tree_row's script on its next frame -- and nothing
+   * orders them. So the invariant is awaited until it settles, and a
+   * violation that is still there at the deadline fails with its own named
+   * message. A difference lasting a frame is invisible to a keyboard user;
+   * one that persists is not. */
+  const tabStopViolation = (expectedIndex) => {
     const all = rows();
     const zeroed = all.filter((row) => row.getAttribute("tabindex") === "0");
     if (zeroed.length !== 1) {
-      throw new Error(
-        `roving-tabindex invariant: expected exactly one row at tabindex=0, found ${zeroed.length}`,
-      );
+      return `roving-tabindex invariant: expected exactly one row at tabindex=0, found ${zeroed.length}`;
     }
     if (all[expectedIndex] !== zeroed[0]) {
-      throw new Error(
-        "roving-tabindex invariant: the tabindex=0 row is not the row that just became active",
-      );
+      return "roving-tabindex invariant: the tabindex=0 row is not the row that just became active";
     }
     if (document.activeElement !== zeroed[0]) {
-      throw new Error("roving-tabindex invariant: the tabindex=0 row is not document.activeElement");
+      return "roving-tabindex invariant: the tabindex=0 row is not document.activeElement";
+    }
+    return null;
+  };
+  const checkTabStopInvariant = async (expectedIndex, timeoutMs = 2000) => {
+    const deadline = performance.now() + timeoutMs;
+    let violation = tabStopViolation(expectedIndex);
+    while (violation !== null) {
+      if (performance.now() >= deadline) throw new Error(violation);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      violation = tabStopViolation(expectedIndex);
     }
   };
 
@@ -251,9 +268,11 @@ return (async () => {
     const trigger = menuTrigger(spec);
     if (!trigger) throw new Error(`${spec.name}: no ${spec.trigger}`);
     trigger.focus();
+    const atCall = describeMenu(spec);
     await waitFor(
       () => document.activeElement === trigger,
-      `${spec.name}: focus onto its own trigger (${describeMenu(spec)})`,
+      () =>
+        `${spec.name}: focus onto its own trigger (at call: ${atCall}; at timeout: ${describeMenu(spec)})`,
     );
     return trigger;
   };
@@ -277,25 +296,34 @@ return (async () => {
     // events no handler is attached to any more.
     const target = menuTrigger(spec) ?? trigger;
     dispatchKey(target, key);
+    const atDispatch = describeMenu(spec, target);
     await waitFor(
       () => atMenuEdge(spec, which),
-      `${spec.name}: ${key} on the trigger to open and focus the ${which} item (${describeMenu(spec, target)})`,
+      () =>
+        `${spec.name}: ${key} on the trigger to open and focus the ${which} item ` +
+        `(at dispatch: ${atDispatch}; at timeout: ${describeMenu(spec, target)})`,
     );
     expectExpanded(spec, "true", `${key} on the trigger`);
   };
   const moveWithinMenu = async (spec, key, which) => {
     dispatchKey(document.activeElement, key);
+    const atDispatch = describeMenu(spec);
     await waitFor(
       () => atMenuEdge(spec, which),
-      `${spec.name}: ${key} to reach the ${which} item (${describeMenu(spec)})`,
+      () =>
+        `${spec.name}: ${key} to reach the ${which} item ` +
+        `(at dispatch: ${atDispatch}; at timeout: ${describeMenu(spec)})`,
     );
   };
   /** Contract 6: Escape closes and restores focus to the trigger. */
   const escapeMenu = async (spec) => {
     dispatchKey(document.activeElement ?? menuTrigger(spec), "Escape");
+    const atDispatch = describeMenu(spec);
     await waitFor(
       () => !document.querySelector(spec.menu) && document.activeElement === menuTrigger(spec),
-      `${spec.name}: Escape to close and restore focus to the trigger (${describeMenu(spec)})`,
+      () =>
+        `${spec.name}: Escape to close and restore focus to the trigger ` +
+        `(at dispatch: ${atDispatch}; at timeout: ${describeMenu(spec)})`,
     );
     expectExpanded(spec, "false", "Escape");
   };
@@ -304,9 +332,12 @@ return (async () => {
    * which is bekoedit's half of the close. Shared with slice 3 (§8 D). */
   const focusLeavesMenu = async (spec, outside, label) => {
     outside.focus();
+    const atFocus = describeMenu(spec);
     await waitFor(
       () => !document.querySelector(spec.menu) && document.activeElement === outside,
-      `${spec.name}: focus leaving to ${label} to close the menu (${describeMenu(spec)})`,
+      () =>
+        `${spec.name}: focus leaving to ${label} to close the menu ` +
+        `(at focus: ${atFocus}; at timeout: ${describeMenu(spec)})`,
     );
     expectExpanded(spec, "false", "focus leaving the menu");
     if (document.activeElement === menuTrigger(spec)) {
@@ -315,12 +346,43 @@ return (async () => {
       );
     }
   };
+  /** Task 017 §2's mouse rows: a mouse open leaves focus on the trigger. A
+   * keyboard entry intent left behind would move it into the menu instead. */
+  const mouseOpenLeavesFocus = async (spec, label) => {
+    await focusMenuTrigger(spec);
+    menuTrigger(spec).click();
+    await waitFor(
+      () => Boolean(document.querySelector(spec.menu)),
+      () => `${spec.name}: a mouse open (${label}) to show the menu (at timeout: ${describeMenu(spec)})`,
+    );
+    // Long enough for the container's onmounted entry and its frame to run.
+    for (let frame = 0; frame < 30; frame += 1) {
+      if (menuItems(spec).includes(document.activeElement)) {
+        throw new Error(
+          `${spec.name}: a mouse open (${label}) moved focus into the menu (${describeMenu(spec)})`,
+        );
+      }
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    if (document.activeElement !== menuTrigger(spec)) {
+      throw new Error(
+        `${spec.name}: a mouse open (${label}) left focus on ${describeActiveElement()}, not the trigger`,
+      );
+    }
+    await escapeMenu(spec);
+  };
   const rovingTreeRow = () => {
     const row = rows().find((candidate) => candidate.getAttribute("tabindex") === "0");
     if (!row) throw new Error("no tree row at tabindex=0 to move focus out of the menu");
     return row;
   };
   const MENU_PHASES = {
+    app_menu_mouse_open: {
+      spec: MENUS.app,
+      kind: "mouseOpen",
+      milestone: "app_menu_mouse_open_kept_focus",
+      next: "app_menu_keys",
+    },
     app_menu_keys: {
       spec: MENUS.app,
       kind: "keys",
@@ -400,16 +462,16 @@ return (async () => {
       }
       dispatchKey(rows()[0], "ArrowDown");
       await waitFor(() => document.activeElement === rows()[1], "ArrowDown to reach the second row");
-      checkTabStopInvariant(1);
+      await checkTabStopInvariant(1);
       dispatchKey(rows()[1], "ArrowDown");
       await waitFor(() => document.activeElement === rows()[2], "ArrowDown to reach the third row");
-      checkTabStopInvariant(2);
+      await checkTabStopInvariant(2);
       dispatchKey(rows()[2], "ArrowUp");
       await waitFor(() => document.activeElement === rows()[1], "ArrowUp to return to the second row");
-      checkTabStopInvariant(1);
+      await checkTabStopInvariant(1);
       dispatchKey(rows()[1], "ArrowUp");
       await waitFor(() => document.activeElement === rows()[0], "ArrowUp to return to the first row");
-      checkTabStopInvariant(0);
+      await checkTabStopInvariant(0);
       state.milestones.push("down_up_moved");
       state.phase = "expand_enter";
       outgoing = { kind: "progress", milestone: "down_up_moved" };
@@ -440,7 +502,7 @@ return (async () => {
         if (document.activeElement !== rows()[1]) {
           outgoing = { kind: "pending" };
         } else {
-          checkTabStopInvariant(1);
+          await checkTabStopInvariant(1);
           state.expandBeforeCount = rows().length;
           dispatchKey(rows()[1], "ArrowRight");
           state.expandDispatched = true;
@@ -456,7 +518,7 @@ return (async () => {
           if (document.activeElement !== rows()[1]) {
             throw new Error("expanding must not move focus off the directory row");
           }
-          checkTabStopInvariant(1);
+          await checkTabStopInvariant(1);
           state.expandConfirmed = true;
           dispatchKey(rows()[1], "ArrowRight");
           outgoing = { kind: "pending" };
@@ -464,7 +526,7 @@ return (async () => {
       } else if (document.activeElement !== rows()[2]) {
         outgoing = { kind: "pending" };
       } else {
-        checkTabStopInvariant(2);
+        await checkTabStopInvariant(2);
         state.milestones.push("expand_entered");
         state.phase = "collapse_ascend";
         outgoing = { kind: "progress", milestone: "expand_entered" };
@@ -479,7 +541,7 @@ return (async () => {
         () => document.activeElement === rows()[1],
         "ArrowLeft to ascend from the child row to its parent directory",
       );
-      checkTabStopInvariant(1);
+      await checkTabStopInvariant(1);
       const before = rows().length;
       dispatchKey(rows()[1], "ArrowLeft");
       await waitFor(
@@ -492,7 +554,7 @@ return (async () => {
       if (document.activeElement !== rows()[1]) {
         throw new Error("collapsing must not move focus off the directory row");
       }
-      checkTabStopInvariant(1);
+      await checkTabStopInvariant(1);
       state.milestones.push("collapse_ascended");
       state.phase = "home_end";
       outgoing = { kind: "progress", milestone: "collapse_ascended" };
@@ -501,10 +563,10 @@ return (async () => {
       const last = rows().length - 1;
       dispatchKey(rows()[1], "End");
       await waitFor(() => document.activeElement === rows()[last], "End to reach the last row");
-      checkTabStopInvariant(last);
+      await checkTabStopInvariant(last);
       dispatchKey(rows()[last], "Home");
       await waitFor(() => document.activeElement === rows()[0], "Home to reach the first row");
-      checkTabStopInvariant(0);
+      await checkTabStopInvariant(0);
       state.milestones.push("home_end_reached");
       state.phase = "non_openable";
       outgoing = { kind: "progress", milestone: "home_end_reached" };
@@ -519,7 +581,7 @@ return (async () => {
         () => document.activeElement === rows()[3],
         "ArrowDown to reach the non-openable row (it must not be skipped)",
       );
-      checkTabStopInvariant(3);
+      await checkTabStopInvariant(3);
       const target = rows()[3];
       if (target.getAttribute("aria-disabled") !== "true") {
         throw new Error("the reached row is not actually non-openable (aria-disabled != true)");
@@ -564,7 +626,7 @@ return (async () => {
           () => document.activeElement === rows()[2],
           "ArrowUp to return to the markdown row",
         );
-        checkTabStopInvariant(2);
+        await checkTabStopInvariant(2);
         dispatchKey(rows()[2], "Enter");
         state.enterDispatched = true;
         state.deadline = performance.now() + 15000;
@@ -741,14 +803,19 @@ return (async () => {
         }
         outgoing = { kind: "pending" };
       } else if (fileName() === "child.md" && trigger && document.activeElement === trigger) {
-        outgoing = advance("form_search_restored_to_trigger", "app_menu_keys");
+        outgoing = advance("form_search_restored_to_trigger", "app_menu_mouse_open");
       } else {
         outgoing = { kind: "pending" };
       }
     } else if (MENU_PHASES[requestedPhase]) {
       const { spec, kind, milestone, next } = MENU_PHASES[requestedPhase];
       state.stage = requestedPhase;
-      if (kind === "keys") {
+      if (kind === "mouseOpen") {
+        await mouseOpenLeavesFocus(spec, "alone");
+        await openMenuWith(spec, "ArrowDown", "first");
+        await escapeMenu(spec);
+        await mouseOpenLeavesFocus(spec, "after a keyboard open and close");
+      } else if (kind === "keys") {
         await openMenuWith(spec, "ArrowDown", "first"); // contract 1
         await escapeMenu(spec);
         await openMenuWith(spec, "ArrowUp", "last"); // contract 2

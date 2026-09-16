@@ -58,6 +58,12 @@ class FakeMenuTrigger {
     this.menu.owner.setFocus(this);
   }
 
+  /** The trigger's onclick: toggles the menu and moves no focus. */
+  click() {
+    this.clicks = (this.clicks ?? 0) + 1;
+    this.menu.handleClick();
+  }
+
   dispatchEvent(event) {
     this.dispatchedEvents.push(event);
     this.menu.handleTriggerKey(event.key);
@@ -93,6 +99,8 @@ class FakeMenuContainer {
  * `restoreOnEscape: false` models the mutation where Escape releases without
  * restoring, and `restoreOnFocusLeave: true` models the app frame restoring
  * on focusin -- the C3 defect's shape (slice-2 handoff §10.4).
+ * `leftoverIntent: true` models a keyboard entry intent that was never
+ * cleared, so a mouse open moves focus into the menu (task 017 §2).
  */
 export class FakeMenu {
   constructor(
@@ -104,6 +112,7 @@ export class FakeMenu {
       wraps = true,
       restoreOnEscape = true,
       restoreOnFocusLeave = false,
+      leftoverIntent = false,
     },
   ) {
     this.owner = owner;
@@ -113,6 +122,7 @@ export class FakeMenu {
     this.wraps = wraps;
     this.restoreOnEscape = restoreOnEscape;
     this.restoreOnFocusLeave = restoreOnFocusLeave;
+    this.leftoverIntent = leftoverIntent;
     this.open = false;
     this.trigger = new FakeMenuTrigger(this);
     this.container = new FakeMenuContainer(this);
@@ -135,6 +145,17 @@ export class FakeMenu {
   setOpen(open) {
     this.open = open;
     this.owner.setElement(this.menuSelector, open ? this.container : null);
+  }
+
+  /** A mouse open or close. It records no entry, so focus stays put --
+   * unless `leftoverIntent` models an intent that was never cleared. */
+  handleClick() {
+    if (this.open) {
+      this.close({ restore: true });
+      return;
+    }
+    this.setOpen(true);
+    if (this.leftoverIntent) this.owner.setFocus(this.items[0]);
   }
 
   /** shell_focus::trigger_key_intent, then focus_menu_item. */
