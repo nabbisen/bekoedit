@@ -282,8 +282,19 @@ pub fn App() -> Element {
                 open_menu.set(OpenMenu::None);
             },
             onfocusin: move |_| {
-                release_menu_focus(source_sync, *open_menu.read());
+                // TEMP slice 3 §9.4 mutation: still close the menu, but skip
+                // the release when focus landed inside the source editor.
+                let menu = *open_menu.read();
                 open_menu.set(OpenMenu::None);
+                spawn(async move {
+                    let mut probe = document::eval(
+                        "dioxus.send(Boolean(document.activeElement?.closest('[data-source-focus-launch-region]')))",
+                    );
+                    let in_editor = probe.recv::<bool>().await.unwrap_or(false);
+                    if !in_editor {
+                        release_menu_focus(source_sync, menu);
+                    }
+                });
             },
             AppBar {}
             if settings_open {
