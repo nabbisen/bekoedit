@@ -306,6 +306,73 @@ fn rfc_042_slice_3_menu_and_tab_keyboard_contracts() {
 }
 
 #[test]
+fn task_017_menu_keyboard_entry_is_driven_by_the_menu_mounting() {
+    let app_bar = include_str!("../components/app_bar.rs");
+    let header = include_str!("../components/editor_header.rs");
+    let entry = include_str!("../menu_entry.rs");
+    let app = include_str!("../app.rs");
+
+    for (name, source, menu) in [
+        ("app_bar", app_bar, "MENU_APP_OVERFLOW"),
+        ("editor_header", header, "MENU_EDITOR_TOOLS"),
+    ] {
+        // The container consumes the entry intent once it is mounted.
+        let mount =
+            format!("onmounted: move |_| consume_menu_entry(menu_entry, shell_focus::{menu})");
+        assert!(
+            source.contains(&mount),
+            "{name}: menu container has no onmounted entry"
+        );
+        // The trigger enters through the shared helper...
+        assert!(
+            source.contains("enter_menu_by_key("),
+            "{name}: trigger bypasses menu_entry"
+        );
+        // ...so the only direct focus call left is the wrap's in-menu move.
+        let direct = format!("focus_menu_item(shell_focus::{menu}");
+        assert_eq!(
+            source.matches(&direct).count(),
+            1,
+            "{name}: direct entry focus"
+        );
+    }
+
+    // Consumed once: the mount path clears the intent before it focuses.
+    let consume = entry
+        .split("pub fn consume_menu_entry(")
+        .nth(1)
+        .expect("consume_menu_entry");
+    let cleared = consume
+        .find("intent.set(None)")
+        .expect("mount clears intent");
+    let focused = consume.find("focus_menu_item(").expect("mount focuses");
+    assert!(cleared < focused);
+
+    // A closed menu records its intent and opens; an open one focuses now.
+    let enter = entry
+        .split("pub fn enter_menu_by_key(")
+        .nth(1)
+        .and_then(|rest| rest.split("pub fn consume_menu_entry(").next())
+        .expect("enter_menu_by_key");
+    assert!(enter.contains("intent.set(Some(target))"));
+    assert!(enter.contains("if already_open"));
+
+    // No time-based entry anywhere in the mechanism (task 017 §3).
+    for forbidden in ["requestAnimationFrame", "setTimeout", "Duration", "sleep("] {
+        assert!(!entry.contains(forbidden), "menu_entry.rs uses {forbidden}");
+    }
+
+    // Every close path clears the intent: one effect on `open_menu` = None.
+    let reset = app
+        .split("MenuEntryIntent(Signal::new(None))")
+        .nth(1)
+        .and_then(|rest| rest.split("});").next())
+        .expect("intent provided at the app root");
+    assert!(reset.contains("*open_menu.read() == OpenMenu::None"));
+    assert!(reset.contains("menu_entry.set(None)"));
+}
+
+#[test]
 fn rfc_042_slice_4_conflict_recovery_and_settings_metadata() {
     let banner = include_str!("../components/conflict_banner.rs");
     let recovery = include_str!("../components/recovery_screen.rs");
