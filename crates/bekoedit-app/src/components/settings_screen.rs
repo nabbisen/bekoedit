@@ -31,7 +31,7 @@ pub fn SettingsScreen() -> Element {
     // through this closure — do not add a second, uncoordinated exit.
     let mut close_settings = move || {
         source_sync.write().release_shell_focus();
-        shell_focus::focus_element(shell_focus::TRIGGER_APP_MENU);
+        // TEMP slice 3 §9.4 mutation: no restore to the app-menu trigger.
         settings_open.set(false);
     };
 
