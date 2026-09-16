@@ -40,7 +40,7 @@ pub fn RecoveryScreen(mut dismissed: Signal<bool>) -> Element {
     use_drop(move || {
         let mut sync = source_sync;
         sync.write().release_shell_focus();
-        shell_focus::focus_element(shell_focus::TRIGGER_APP_LOGO);
+        // TEMP slice 3 §9.4 mutation: no restore to the logo.
     });
 
     let snapshots: Vec<RecoverySnapshot> = state.read().recovery.list();
