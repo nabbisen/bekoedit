@@ -285,8 +285,13 @@ fn submit_interaction(
 /// Whether `command` claims editor focus in `current_mode` -- the test that
 /// separates a handoff activation from explicit dismissal (RFC-042 §6.2 rule
 /// 3, as clarified for task 016).
+///
+/// It must predict `submit_interaction` exactly, so it mirrors **both** of
+/// that function's early-return conditions: no target, or a `SwitchMode` into
+/// the mode already current. Otherwise a handoff would release authority for a
+/// claim that is never made, and nothing would restore focus.
 pub(super) fn claims_focus(command: &SourceCommand, current_mode: EditorMode) -> bool {
-    focus_target(command, current_mode).is_some()
+    focus_target(command, current_mode).is_some() && !same_source_mode(command, current_mode)
 }
 
 /// The editor a command claims focus for. `OpenDocument` carries no mode and

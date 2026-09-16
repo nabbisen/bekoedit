@@ -116,6 +116,13 @@ mod tests {
         assert!(sync.shell_focus_held());
     }
 
+    const ALL_MODES: [EditorMode; 4] = [
+        EditorMode::Text,
+        EditorMode::Split,
+        EditorMode::Preview,
+        EditorMode::Form,
+    ];
+
     #[test]
     fn open_document_is_a_handoff_only_in_the_modes_that_claim_focus() {
         // Re-review §2: Form is the default mode, and there a search result
@@ -131,25 +138,64 @@ mod tests {
     }
 
     #[test]
-    fn new_file_and_split_are_handoffs_from_every_mode() {
-        // Their no-claim path is unreachable today; the helper stays general.
-        for current in [
-            EditorMode::Text,
-            EditorMode::Split,
-            EditorMode::Preview,
-            EditorMode::Form,
-        ] {
-            for command in [
-                SourceCommand::NewUntitled,
-                SourceCommand::SwitchMode(EditorMode::Split),
-                SourceCommand::SwitchMode(EditorMode::Text),
-            ] {
-                assert_eq!(
-                    dismissal_for(&command, current),
-                    Dismissal::Handoff,
-                    "{command:?} from {current:?}"
-                );
-            }
+    fn new_file_is_a_handoff_from_every_mode() {
+        // Its no-claim path is unreachable today; the helper stays general.
+        for current in ALL_MODES {
+            assert_eq!(
+                dismissal_for(&SourceCommand::NewUntitled, current),
+                Dismissal::Handoff,
+                "from {current:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn switch_mode_into_the_mode_already_current_is_not_a_handoff() {
+        // Re-review §3: `submit_interaction` also returns early on
+        // `same_source_mode`, so no claim is made. Releasing without
+        // restoring there would strand focus on the body, as in §2.
+        assert_eq!(
+            dismissal_for(
+                &SourceCommand::SwitchMode(EditorMode::Text),
+                EditorMode::Text
+            ),
+            Dismissal::Explicit
+        );
+        assert_eq!(
+            dismissal_for(
+                &SourceCommand::SwitchMode(EditorMode::Split),
+                EditorMode::Split
+            ),
+            Dismissal::Explicit
+        );
+
+        // Switching to a different source mode still hands off.
+        assert_eq!(
+            dismissal_for(
+                &SourceCommand::SwitchMode(EditorMode::Split),
+                EditorMode::Text
+            ),
+            Dismissal::Handoff
+        );
+        assert_eq!(
+            dismissal_for(
+                &SourceCommand::SwitchMode(EditorMode::Text),
+                EditorMode::Split
+            ),
+            Dismissal::Handoff
+        );
+        // The editor-tools item toggles, so it never submits its own mode.
+        for current in ALL_MODES {
+            let target = if current == EditorMode::Split {
+                EditorMode::Text
+            } else {
+                EditorMode::Split
+            };
+            assert_eq!(
+                dismissal_for(&SourceCommand::SwitchMode(target), current),
+                Dismissal::Handoff,
+                "split item from {current:?}"
+            );
         }
     }
 
