@@ -13,7 +13,8 @@ use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
 use crate::shell_focus;
 use crate::source_sync::{
-    SourceCommand, SourceInteractionOrigin, SourceSyncState, submit_source_interaction,
+    SourceCommand, SourceInteractionOrigin, SourceSyncState, submit_source_command,
+    submit_source_interaction,
 };
 
 #[derive(Props, Clone, PartialEq)]
@@ -54,6 +55,22 @@ pub(super) fn ModeTabs(props: ModeTabsProps) -> Element {
                 if let Some(target) = shell_focus::tab_key_intent(&event.key()) {
                     event.prevent_default();
                     shell_focus::focus_tab(target);
+                    // TEMP slice 3 §9.4 mutation: automatic activation.
+                    let order = [EditorMode::Text, EditorMode::Preview, EditorMode::Form];
+                    let current = order.iter().position(|m| *m == mode).unwrap_or(0);
+                    let next = match target {
+                        shell_focus::FocusMove::First => 0,
+                        shell_focus::FocusMove::Last => order.len() - 1,
+                        shell_focus::FocusMove::Next => (current + 1) % order.len(),
+                        shell_focus::FocusMove::Previous => (current + order.len() - 1) % order.len(),
+                    };
+                    submit_source_command(
+                        source_sync,
+                        state,
+                        mode_sig,
+                        toasts,
+                        SourceCommand::SwitchMode(order[next]),
+                    );
                 }
             },
             for (m, key) in [
