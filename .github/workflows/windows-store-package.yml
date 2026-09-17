@@ -1,0 +1,172 @@
+name: Windows Store package
+
+# Task 019: build and validate the Microsoft Store package (MSIX) from
+# packaging/windows/. makeappx validates the manifest against its schema while
+# packing, which cannot be done on Linux. The .msix is a workflow artifact
+# only: this workflow never publishes, never signs (Partner Center signs Store
+# submissions), and never touches release assets.
+on:
+  pull_request:
+    paths:
+      - "packaging/windows/**"
+      - ".github/workflows/windows-store-package.yml"
+      - "crates/bekoedit-app/src/main.rs"
+  push:
+    tags: ["[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  TARGET: x86_64-pc-windows-msvc
+  MANIFEST: packaging/windows/AppxManifest.xml
+
+jobs:
+  committed-manifest-version:
+    # Fast, before the slow Windows build: the committed manifest must keep
+    # Version="0.0.0.0". The real version is stamped into the staged copy
+    # only, so a committed version could only ever be stale.
+    name: Committed manifest keeps Version 0.0.0.0
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Check the Identity version
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$MANIFEST" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          ns = {"f": "http://schemas.microsoft.com/appx/manifest/foundation/windows10"}
+          identity = ET.parse(sys.argv[1]).getroot().find("f:Identity", ns)
+          if identity is None:
+              raise SystemExit(f"{sys.argv[1]}: no <Identity> element")
+          version = identity.get("Version")
+          if version != "0.0.0.0":
+              raise SystemExit(
+                  f"{sys.argv[1]}: Identity Version is {version!r}; the committed manifest must "
+                  "keep 0.0.0.0 -- the package version is stamped into the staged copy only"
+              )
+          print(f"{sys.argv[1]}: Identity Version is 0.0.0.0")
+          PY
+
+  package:
+    name: Build MSIX (x64)
+    needs: committed-manifest-version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable action snapshot
+        with:
+          toolchain: 1.88.0
+          targets: ${{ env.TARGET }}
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2, peeled commit
+        with:
+          key: msix-${{ env.TARGET }}
+      - name: Resolve package version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            # Validated exactly as release.yml validates its tag.
+            $version = $env:GITHUB_REF_NAME
+            if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "invalid bare SemVer tag: $version" }
+            $source = "tag"
+          } else {
+            $metadata = cargo +1.88.0 metadata --locked --no-deps --format-version 1 | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw "cargo metadata failed" }
+            $package = $metadata.packages | Where-Object { $_.name -eq "bekoedit" }
+            if (@($package).Count -ne 1) { throw "expected exactly one bekoedit package in the workspace" }
+            $version = $package.version
+            if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "workspace version is not bare SemVer: $version" }
+            $source = "workspace Cargo.toml"
+          }
+          # The Store rejects a non-zero fourth field.
+          $msixVersion = "$version.0"
+          Write-Output "package version $msixVersion (from $source)"
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "MSIX_VERSION=$msixVersion" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Build release binary
+        run: cargo +1.88.0 build -p bekoedit --release --locked --target ${{ env.TARGET }}
+      - name: Stage package contents and stamp the version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $stage = "msix-stage"
+          New-Item -ItemType Directory -Path "$stage/Assets" -Force | Out-Null
+          Copy-Item -LiteralPath "target/$env:TARGET/release/bekoedit.exe" -Destination "$stage/bekoedit.exe"
+          foreach ($asset in "Square44x44Logo.png", "StoreLogo.png", "Square150x150Logo.png", "Wide310x150Logo.png") {
+            Copy-Item -LiteralPath "packaging/windows/Assets/$asset" -Destination "$stage/Assets/$asset"
+          }
+          # Stamp the staged copy only; the committed manifest keeps 0.0.0.0.
+          $manifest = Get-Content -LiteralPath $env:MANIFEST -Raw
+          $pattern = '(<Identity\b[^>]*?\bVersion=")0\.0\.0\.0(")'
+          $matches = [regex]::Matches($manifest, $pattern)
+          if ($matches.Count -ne 1) { throw "expected exactly one Identity Version=`"0.0.0.0`" to stamp, found $($matches.Count)" }
+          $stamped = [regex]::Replace($manifest, $pattern, "`${1}$env:MSIX_VERSION`${2}")
+          [System.IO.File]::WriteAllText((Join-Path (Resolve-Path $stage) "AppxManifest.xml"), $stamped, (New-Object System.Text.UTF8Encoding $false))
+          Get-ChildItem -Recurse $stage | Format-Table -AutoSize FullName, Length
+      - name: Locate makeappx.exe in the Windows SDK
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $kits = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin"
+          $found = @(Get-ChildItem -LiteralPath $kits -Recurse -Filter makeappx.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.Directory.Name -eq "x64" -and $_.Directory.Parent.Name -match '^\d+\.\d+\.\d+\.\d+$' } |
+            Sort-Object { [version]$_.Directory.Parent.Name } -Descending)
+          if ($found.Count -eq 0) {
+            $present = if (Test-Path -LiteralPath $kits) { (Get-ChildItem -LiteralPath $kits | ForEach-Object Name) -join ", " } else { "(no $kits)" }
+            throw "makeappx.exe not found under $kits; present: $present. Not installing an SDK silently (task 019 §2.4)."
+          }
+          $found | ForEach-Object { Write-Output "found: $($_.FullName)" }
+          Write-Output "using: $($found[0].FullName)"
+          "MAKEAPPX=$($found[0].FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Pack with makeappx (validates the manifest)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $package = "bekoedit-$env:VERSION-x64.msix"
+          $output = & $env:MAKEAPPX pack /d msix-stage /p $package /o 2>&1
+          $code = $LASTEXITCODE
+          $output | ForEach-Object { Write-Output "makeappx: $_" }
+          if ($code -ne 0) { throw "makeappx pack failed with exit code $code" }
+          "PACKAGE=$package" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: List package contents and check the stamped version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $env:PACKAGE))
+          try {
+            $entries = @($zip.Entries | ForEach-Object FullName | Sort-Object)
+            $entries | ForEach-Object { Write-Output "entry: $_" }
+            # makeappx adds the block map and content types to what was staged.
+            $expected = @(
+              "AppxBlockMap.xml", "AppxManifest.xml", "Assets/Square150x150Logo.png", "Assets/Square44x44Logo.png",
+              "Assets/StoreLogo.png", "Assets/Wide310x150Logo.png", "[Content_Types].xml", "bekoedit.exe"
+            ) | Sort-Object
+            $unexpected = Compare-Object -ReferenceObject $expected -DifferenceObject $entries
+            if ($unexpected) {
+              $unexpected | Format-Table -AutoSize | Out-String | Write-Output
+              throw "the package contents differ from the expected set"
+            }
+            $reader = New-Object System.IO.StreamReader(($zip.Entries | Where-Object FullName -eq "AppxManifest.xml").Open())
+            $packed = $reader.ReadToEnd()
+            $reader.Dispose()
+            if ($packed -notmatch "<Identity\b[^>]*?\bVersion=`"$([regex]::Escape($env:MSIX_VERSION))`"") {
+              throw "the packed manifest does not carry Version=$env:MSIX_VERSION"
+            }
+            Write-Output "packed manifest Identity Version: $env:MSIX_VERSION"
+          } finally {
+            $zip.Dispose()
+          }
+      - name: Upload MSIX (workflow artifact only)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: msix-x64
+          path: ${{ env.PACKAGE }}
+          if-no-files-found: error
+          retention-days: 7
