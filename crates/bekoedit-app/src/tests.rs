@@ -185,6 +185,10 @@ mod app_tests {
         // vocabulary leaking through.
         ("status.islands_hint", "island"),
         ("status.islands_hint", "アイランド"),
+        // "Microsoft Edge WebView2 Runtime" is the product the user must
+        // install, named as Microsoft names it on its download page -- the
+        // one thing the message exists to tell them (task 020 §2).
+        ("webview2.missing.body", "WebView"),
     ];
 
     #[test]

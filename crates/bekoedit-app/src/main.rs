@@ -20,6 +20,7 @@ mod shell_focus;
 mod smoke_test;
 pub mod source_sync;
 mod state;
+mod webview2_runtime;
 mod webview_smoke;
 
 fn dioxus_config(smoke_run: Option<webview_smoke::SmokeRun>) -> dioxus::desktop::Config {
@@ -54,6 +55,14 @@ fn main() {
     if run_mode == webview_smoke::RunMode::HeadlessSmoke {
         smoke_test::run();
         return;
+    }
+    // Task 020: without the WebView2 runtime, Dioxus panics after its window
+    // appears. Check first, and show a message instead. The normal launch
+    // only: the WebView smoke modes are unattended harnesses (run on Linux in
+    // CI) and must never wait on a dialog.
+    #[cfg(windows)]
+    if run_mode == webview_smoke::RunMode::Normal {
+        webview2_runtime::ensure_runtime_or_exit();
     }
     let smoke_run = webview_smoke::prepare_launch(run_mode).unwrap_or_else(|error| {
         eprintln!("bekoedit: {error}");

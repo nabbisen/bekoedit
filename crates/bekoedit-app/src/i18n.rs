@@ -152,6 +152,10 @@ fn tr_en(key: &str) -> &'static str {
         "recovery.restore" => "Restore",
         "recovery.discard" => "Discard",
         "recovery.skip_all" => "Discard all",
+        "webview2.missing.title" => "bekoedit cannot start",
+        "webview2.missing.body" => {
+            "bekoedit needs the Microsoft Edge WebView2 Runtime, and it is not installed on this computer. Install it from Microsoft's download page, then start bekoedit again:"
+        }
         "recovery.restored" => "Recovery restored",
         "recovery.recoverable_suffix" => "recoverable documents",
         "toast.dismiss" => "Dismiss notification",
@@ -286,6 +290,10 @@ fn tr_ja(key: &str) -> &'static str {
         "recovery.restore" => "復元",
         "recovery.discard" => "破棄",
         "recovery.skip_all" => "すべて破棄",
+        "webview2.missing.title" => "bekoedit を起動できません",
+        "webview2.missing.body" => {
+            "bekoedit の実行には Microsoft Edge WebView2 Runtime が必要ですが、このコンピューターにはインストールされていません。Microsoft のダウンロードページからインストールしてから、bekoedit をもう一度起動してください:"
+        }
         "recovery.restored" => "復元しました",
         "recovery.recoverable_suffix" => "件の復元可能なドキュメントがあります",
         "toast.dismiss" => "通知を閉じる",
