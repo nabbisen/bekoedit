@@ -6,7 +6,7 @@
 // the console for development output. The attribute is ignored on Linux and
 // macOS. A release binary started from a terminal prints nothing to it; output
 // redirected to a file or pipe still arrives, and exit codes are unchanged.
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// TEMP task 018 gate probe: attribute removed.
 
 mod app;
 mod bridge;
