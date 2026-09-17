@@ -8,11 +8,11 @@
             Publisher="CN=C4BA37E8-8670-4C82-8365-5ECB57373921"
             Version="0.0.0.0"
             ProcessorArchitecture="x64" />
-  <Properties>
+  <Propertiez>
     <DisplayName>bekoedit</DisplayName>
     <PublisherDisplayName>nabbisen</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
-  </Properties>
+  </Propertiez>
   <Resources>
     <Resource Language="en-US" />
   </Resources>
