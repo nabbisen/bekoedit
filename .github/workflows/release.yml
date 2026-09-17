@@ -123,6 +123,10 @@ jobs:
           if (($headers -join "`n") -notmatch '(?m)^\s*Machine:\s*IMAGE_FILE_MACHINE_AMD64\s*\(0x8664\)\s*$') {
             throw "unexpected PE/COFF machine for $env:BINARY_PATH"
           }
+          # Task 018: the published binary opens no console window.
+          if (($headers -join "`n") -notmatch '(?m)^\s*Subsystem:\s*IMAGE_SUBSYSTEM_WINDOWS_GUI\b') {
+            throw "the release binary is not a Windows GUI program: $env:BINARY_PATH"
+          }
       - name: Package (Unix)
         if: runner.os != 'Windows'
         shell: bash
