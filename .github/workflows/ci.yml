@@ -153,6 +153,43 @@ jobs:
       - name: Build desktop application at MSRV
         if: runner.os == 'macOS' || runner.os == 'Windows'
         run: cargo +1.88.0 build -p bekoedit --locked
+      - name: Windows subsystem -- release is GUI, debug stays console (task 018)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          function Get-Subsystem([string]$Path) {
+            if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "missing binary: $Path" }
+            $headers = & llvm-readobj --file-headers $Path 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "llvm-readobj failed for ${Path}: $headers" }
+            $line = $headers | Select-String -Pattern '^\s*Subsystem:' | Select-Object -First 1
+            if (-not $line) { throw "no Subsystem field in the PE headers of $Path" }
+            return $line.Line.Trim()
+          }
+          # Debug keeps the console, for development output.
+          $debug = Get-Subsystem "target/debug/bekoedit.exe"
+          Write-Output "debug   bekoedit.exe  $debug"
+          if ($debug -notmatch 'IMAGE_SUBSYSTEM_WINDOWS_CUI') {
+            throw "the debug build must stay a console (CUI) program; got: $debug"
+          }
+          # Release must be a GUI program: no console window beside the app.
+          cargo +1.88.0 build -p bekoedit --release --locked
+          if ($LASTEXITCODE -ne 0) { throw "release build failed" }
+          $release = Get-Subsystem "target/release/bekoedit.exe"
+          Write-Output "release bekoedit.exe  $release"
+          if ($release -notmatch 'IMAGE_SUBSYSTEM_WINDOWS_GUI') {
+            throw "the release build must be a Windows GUI program (subsystem 2), not a console one; got: $release. Is main.rs's cfg_attr(not(debug_assertions), windows_subsystem = `"windows`") still in place?"
+          }
+          # Exit codes and redirected output survive the GUI subsystem.
+          $stderr = Join-Path $env:RUNNER_TEMP "bekoedit-bad-argument.txt"
+          $process = Start-Process -FilePath "target/release/bekoedit.exe" -ArgumentList "--webview-smoke" `
+            -RedirectStandardError $stderr -NoNewWindow -Wait -PassThru
+          $text = Get-Content -LiteralPath $stderr -Raw
+          Write-Output "invalid argument: exit code $($process.ExitCode), redirected stderr: $text"
+          if ($process.ExitCode -ne 2) { throw "expected exit code 2 for an invalid argument, got $($process.ExitCode)" }
+          if ($text -notmatch '--webview-smoke requires exactly one profile-root argument') {
+            throw "the redirected stderr did not carry the argument error"
+          }
       - run: git diff --exit-code -- Cargo.lock
 
   audit:

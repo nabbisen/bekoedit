@@ -1,5 +1,13 @@
 //! bekoedit: a source-preserving Markdown editor.
 
+// Release builds on Windows link as a GUI program, so launching bekoedit.exe
+// from Explorer, the Start menu or a Store install opens no console window
+// beside the app, and closing one cannot kill it (task 018). Debug builds keep
+// the console for development output. The attribute is ignored on Linux and
+// macOS. A release binary started from a terminal prints nothing to it; output
+// redirected to a file or pipe still arrives, and exit codes are unchanged.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod app;
 mod bridge;
 mod components;
