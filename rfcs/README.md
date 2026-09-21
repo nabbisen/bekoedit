@@ -93,6 +93,7 @@ to `done/` when the work ships.
 |-----|-------|-------|
 | RFC-045 | [Release artifact portability and completeness](accepted/RFC-045-release-artifact-portability-and-completeness.md) | Accepted 2026-08-17. Slices 1–2 shipped to `main`: the platform scripts now ship in every archive, and a cross-distribution `ldd` check gates both pull requests and the publish job. Slice 3 (Linux portability) is open — see its §10 Q1. Handoffs: [`handoffs/045-release-artifact-portability-and-completeness/`](handoffs/045-release-artifact-portability-and-completeness/) |
 | RFC-046 | [Paste HTML as Markdown](accepted/RFC-046-paste-html-as-markdown.md) | Accepted 2026-09-16, the day it was drafted. Converts pasted HTML with `mdka`, falling back to plain text where conversion would lose content. Implementation was scheduled **after RFC-044's remaining slices**; that condition was met 2026-09-17, when RFC-044 slice 3 merged, so it is now startable, but the owner has not yet ordered it started. All six §10 questions are answered in-file (2026-09-16). Two **preconditions** on slice 2, both pre-existing defects recorded under `.git-exclude/governance/`: the Preview link-scheme filter and the bridge payload encoding |
+| RFC-047 | [User commands during source-editor transitions](accepted/RFC-047-user-commands-during-editor-transitions.md) | Accepted 2026-09-22, the day it was drafted. A command issued while the editor is mid-transition is dropped today with nothing a user can see — a mode switch, opening a document, or an explicit `Ctrl+S`. It is accepted into a bounded queue instead, and the cases the queue cannot honour are reported. Found by RFC-044 slice 3; task 021 worked around it in the harness only. §10 answers its own four questions |
 
 ## Implemented — merged to `main`, not yet released (`done/`)
 
@@ -118,7 +119,6 @@ superseded).
 | RFC-032 | [Performance optimization and incremental parsing](proposed/RFC-032-performance-optimization-and-incremental-parsing.md) | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | [Plugin system evaluation](proposed/RFC-039-plugin-system-evaluation.md) | Future evaluation only |
 | RFC-040 | [Sync and collaboration evaluation](proposed/RFC-040-sync-and-collaboration-evaluation.md) | Future evaluation only |
-| RFC-047 | [User commands during source-editor transitions](proposed/RFC-047-user-commands-during-editor-transitions.md) | Drafted 2026-09-22 at the owner's request; not yet approved. A command issued while the editor is mid-transition is dropped today with no sign to the user — a mode switch, an open, or an explicit `Ctrl+S`. Accepts it into a bounded queue, and reports the cases it cannot honour. Found by RFC-044 slice 3; task 021 worked around it in the harness only |
 
 ## Implemented — v0.3.0 (`done/`)
 

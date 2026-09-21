@@ -1,9 +1,10 @@
 # RFC-047: User commands during source-editor transitions
 
 **Project:** bekoedit
-**Status:** Proposed — drafted 2026-09-22 at the project owner's request, after
-RFC-044 slice 3 found the behaviour and task 021 worked around it in the harness.
-Not yet approved for implementation.
+**Status:** Accepted — approved for implementation by the project owner on
+2026-09-22, the day it was drafted, after RFC-044 slice 3 found the behaviour and
+task 021 worked around it in the harness. Slice 1 (the queue) is startable;
+slice 2 (the reporting) follows it.
 **Track:** Editor lifecycle
 **Priority:** Medium — no data is lost today, but a user action can vanish with no
 trace a user can see
