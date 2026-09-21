@@ -118,6 +118,7 @@ superseded).
 | RFC-032 | [Performance optimization and incremental parsing](proposed/RFC-032-performance-optimization-and-incremental-parsing.md) | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | [Plugin system evaluation](proposed/RFC-039-plugin-system-evaluation.md) | Future evaluation only |
 | RFC-040 | [Sync and collaboration evaluation](proposed/RFC-040-sync-and-collaboration-evaluation.md) | Future evaluation only |
+| RFC-047 | [User commands during source-editor transitions](proposed/RFC-047-user-commands-during-editor-transitions.md) | Drafted 2026-09-22 at the owner's request; not yet approved. A command issued while the editor is mid-transition is dropped today with no sign to the user — a mode switch, an open, or an explicit `Ctrl+S`. Accepts it into a bounded queue, and reports the cases it cannot honour. Found by RFC-044 slice 3; task 021 worked around it in the harness only |
 
 ## Implemented — v0.3.0 (`done/`)
 
