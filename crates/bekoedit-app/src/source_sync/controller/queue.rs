@@ -183,6 +183,10 @@ impl SourceSyncState {
     /// accept now, and settles everything that cannot run. Called after every
     /// handled event, on `tick`, and by `submit`: nothing else drives it.
     pub(super) fn drain_queue(&mut self, current_document_id: Option<u64>, now_ms: u64) {
+        // Runs after every handled event, including each keystroke's.
+        if self.queue.is_empty() {
+            return;
+        }
         self.expire_queue(now_ms);
         while let Some(front) = self.queue.front().cloned() {
             match self.gate(current_document_id) {
