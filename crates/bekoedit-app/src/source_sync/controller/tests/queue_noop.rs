@@ -2,7 +2,7 @@
 //! the app is already heading for -- a queued switch, else one in flight, else
 //! the mounted editor -- not merely the mounted editor.
 
-use super::queue::{DOCUMENT, deliver_destroyed, unmounting_sync};
+use super::queue::{DOCUMENT, unmounting_sync};
 use super::types::{QueueScope, QueuedCommand};
 use super::*;
 
