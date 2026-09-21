@@ -197,19 +197,75 @@ impl SourceSyncState {
         })
     }
 
+    /// Whether `command` switches to the mode the app is already heading for,
+    /// so that submitting it is a silent no-op (RFC-047 §5.6).
+    ///
+    /// "Heading for" is the newest mode switch still to take effect: one waiting
+    /// in the queue, else one in flight (`SnapshotPending` and `BarrierHeld`
+    /// carry their command), else the mounted editor. Comparing only with the
+    /// mounted editor called "Text again" a no-op while Preview was on its way,
+    /// and Preview then won: the user's last click lost, with nothing shown.
+    ///
+    /// Preview and Form are not source editors, so they are never a no-op.
     pub(super) fn is_same_source_mode(&self, command: &SourceCommand) -> bool {
-        let SourceCommand::SwitchMode(target) = command else {
-            return false;
+        let heading_for = match self.pending_mode_switch() {
+            Some(mode) => source_editor_named(mode),
+            None => self.mounted_source_editor(),
         };
-        let current = self
-            .current_physical_identity()
-            .map(|identity| identity.editor_id);
-        matches!(
-            (current, target),
-            (Some(SourceEditorId::Text), EditorMode::Text)
-                | (Some(SourceEditorId::Split), EditorMode::Split)
-        )
+        names_source_editor(command, heading_for)
     }
+
+    /// The same test against the mounted editor alone. The drain uses it: when
+    /// it runs an entry, nothing else is in flight, and the entry is itself the
+    /// queued switch that `is_same_source_mode` would compare it with.
+    pub(super) fn is_mounted_source_mode(&self, command: &SourceCommand) -> bool {
+        names_source_editor(command, self.mounted_source_editor())
+    }
+
+    fn mounted_source_editor(&self) -> Option<SourceEditorId> {
+        self.current_physical_identity()
+            .map(|identity| identity.editor_id)
+    }
+
+    /// The mode of the newest mode switch that has been accepted and has not
+    /// taken effect yet.
+    fn pending_mode_switch(&self) -> Option<EditorMode> {
+        let queued = self
+            .queue
+            .iter()
+            .rev()
+            .find_map(|queued| switch_target(&queued.command));
+        let in_flight = match &self.lifecycle.state {
+            LifecycleState::SnapshotPending { command, .. }
+            | LifecycleState::BarrierHeld { command, .. } => switch_target(command),
+            _ => None,
+        };
+        queued.or(in_flight)
+    }
+}
+
+fn switch_target(command: &SourceCommand) -> Option<EditorMode> {
+    match command {
+        SourceCommand::SwitchMode(mode) => Some(*mode),
+        _ => None,
+    }
+}
+
+/// Exhaustive: a new `EditorMode` must say whether it is a source editor.
+fn source_editor_named(mode: EditorMode) -> Option<SourceEditorId> {
+    match mode {
+        EditorMode::Text => Some(SourceEditorId::Text),
+        EditorMode::Split => Some(SourceEditorId::Split),
+        EditorMode::Preview | EditorMode::Form => None,
+    }
+}
+
+/// Whether `command` names exactly the source editor `heading_for`.
+fn names_source_editor(command: &SourceCommand, heading_for: Option<SourceEditorId>) -> bool {
+    let Some(named) = switch_target(command).and_then(source_editor_named) else {
+        return false;
+    };
+    heading_for == Some(named)
 }
 
 impl From<TransitionError> for SourceSyncError {

@@ -211,7 +211,7 @@ impl SourceSyncState {
                     continue;
                 }
             }
-            if self.is_same_source_mode(&front.command) {
+            if self.is_mounted_source_mode(&front.command) {
                 // Became a no-op while it waited: nothing to run, nothing to say.
                 self.queue.pop_front();
                 continue;
