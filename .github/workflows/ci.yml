@@ -297,8 +297,9 @@ jobs:
         # authority_released_after_editor_focus, settings_entry,
         # settings_exit_restored, conflict_dirtied and
         # conflict_banner_focus_kept last) changed this step's phase set.
-        # Count stands at 1 of 10: run 35168677703 (push at 25253cf), outcome
-        # line `success`, read from the log, never from a conclusion.
+        # Count stands at 4 of 10, each read from its outcome line, never from
+        # a conclusion: 35168677703 (25253cf), 35169930195 (b963bf3),
+        # 35171045314 (73b64d1) and 35658660098 (5d44a5b, task 021's merge).
         # RESET 2026-09-17 by a failure, not a phase-set change: the count had
         # reached 3 (35161575247 at 0978ff5, 35162153146 at 35ae3e8,
         # 35164021251 at fa8f2a1), then run 35168125047 at 00ff47c logged
