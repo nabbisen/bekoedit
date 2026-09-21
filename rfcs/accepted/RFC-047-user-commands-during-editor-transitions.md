@@ -202,6 +202,10 @@ product defect.
 
 1. **The queue**, in the controller: §5.1–§5.4, §5.6, and §7's reducer tests.
    Headless; no UI change.
+   Handoff:
+   [`handoffs/047-user-commands-during-editor-transitions/slice-1-the-queue.md`](../handoffs/047-user-commands-during-editor-transitions/slice-1-the-queue.md).
+   It also unifies the existing depth-1 `waiting_command` slot into this queue,
+   so one mechanism remains rather than two.
 2. **The reporting**: §5.5's toast, its i18n keys, and §7's WebView phase.
 
 ## 10. Questions, answered
