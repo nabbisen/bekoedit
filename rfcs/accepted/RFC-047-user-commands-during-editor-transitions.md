@@ -108,6 +108,14 @@ wait forever there.
 
 On expiry the entry is discarded and reported (§5.5).
 
+**Unmounting the editor does not empty the queue** *(corrected 2026-09-22, at the
+slice 1 review; the handoff had said otherwise)*. Executing a mode switch is
+precisely what unmounts the editor: the host's `TextMode` drop calls
+`force_unmount`. A queue emptied there would lose "Preview, then Form" the moment
+Preview executed, which is the case this RFC exists for. Entries survive the
+teardown and run when it ends. Shutdown, relay loss and an editor that has become
+`Unavailable` do empty it, and each records what it emptied.
+
 ### 5.4 The queue never runs a command whose meaning changed · **[Binding]**
 
 Each entry records the session fingerprint at the moment it was accepted. Before
