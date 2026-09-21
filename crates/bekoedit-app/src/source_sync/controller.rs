@@ -4,10 +4,9 @@ use super::lifecycle::{
 };
 use super::{SourceCommand, SourceSyncError};
 
-use types::PendingCommand;
 pub use types::{
-    ControllerAction, EditorMountHandle, EventOutcome, FocusClaim, FocusResolution, MountOutcome,
-    SourceSyncState, SubmitOutcome, TickOutcome,
+    ControllerAction, DiscardReason, EditorMountHandle, EventOutcome, FocusClaim, FocusResolution,
+    MountOutcome, SourceSyncState, SubmitOutcome, TickOutcome,
 };
 
 impl SourceSyncState {
@@ -58,8 +57,10 @@ impl SourceSyncState {
         self.force_unmount(now_ms);
     }
 
+    /// Unmounting is what executing a mode switch does to the editor, so it
+    /// keeps the queue: the commands waiting behind that switch run once the
+    /// teardown ends (RFC-047 §5.1).
     pub fn force_unmount(&mut self, now_ms: u64) {
-        self.waiting_command = None;
         self.protected_focus_token = None;
         if let Ok(Some(effect)) = self.lifecycle.begin_unmount(now_ms) {
             self.push_effect(effect);
@@ -67,7 +68,7 @@ impl SourceSyncState {
     }
 
     pub fn shutdown(&mut self, now_ms: u64) -> Option<LifecycleEffect> {
-        self.waiting_command = None;
+        self.discard_queue(DiscardReason::Shutdown);
         self.protected_focus_token = None;
         self.provisional_focus = None;
         self.pending_focus = None;
@@ -115,48 +116,7 @@ impl SourceSyncState {
         if self.is_same_source_mode(&command) {
             return SubmitOutcome::NoOp;
         }
-        match self.lifecycle.state.clone() {
-            LifecycleState::Unmounted => {
-                self.actions.push(ControllerAction::Execute {
-                    command,
-                    protected: false,
-                    focus_token,
-                });
-                SubmitOutcome::ExecuteQueued
-            }
-            LifecycleState::Ready(editor)
-                if current_document_id == Some(editor.identity.document_id) =>
-            {
-                match self.lifecycle.begin_snapshot(command, now_ms) {
-                    Ok(effect @ LifecycleEffect::RequestSnapshot(_, operation_id)) => {
-                        self.protected_focus_token = focus_token;
-                        self.push_effect(effect);
-                        SubmitOutcome::SnapshotRequested(operation_id)
-                    }
-                    _ => SubmitOutcome::Busy,
-                }
-            }
-            LifecycleState::Mounting { ref intent, .. }
-                if current_document_id == Some(intent.document_id) =>
-            {
-                self.queue_for_mount(command, focus_token)
-            }
-            LifecycleState::Initializing { identity, .. }
-                if current_document_id == Some(identity.document_id) =>
-            {
-                self.queue_for_mount(command, focus_token)
-            }
-            LifecycleState::Unavailable { retired: None } => {
-                self.actions.push(ControllerAction::Execute {
-                    command,
-                    protected: false,
-                    focus_token,
-                });
-                SubmitOutcome::ExecuteQueued
-            }
-            LifecycleState::Unavailable { retired: Some(_) } => SubmitOutcome::Unavailable,
-            _ => SubmitOutcome::Busy,
-        }
+        self.submit_or_queue(command, current_document_id, now_ms, focus_token)
     }
 
     pub fn command_completed(
@@ -169,10 +129,24 @@ impl SourceSyncState {
         if let Some(effect) = effect {
             self.push_effect(effect);
         }
+        self.drain_queue(after.document_id, now_ms);
         Ok(disposition)
     }
 
-    pub fn tick(&mut self, now_ms: u64) -> Result<TickOutcome, SourceSyncError> {
+    /// Advances the lifecycle's own deadlines, then the queue's: the entry
+    /// deadlines, and a drain of whatever the controller would now accept.
+    /// `current_document_id` is the open document, for the queue's checks.
+    pub fn tick(
+        &mut self,
+        current_document_id: Option<u64>,
+        now_ms: u64,
+    ) -> Result<TickOutcome, SourceSyncError> {
+        let outcome = self.tick_lifecycle(now_ms);
+        self.drain_queue(current_document_id, now_ms);
+        outcome
+    }
+
+    fn tick_lifecycle(&mut self, now_ms: u64) -> Result<TickOutcome, SourceSyncError> {
         if self.transport_is_holding_lifecycle_action() {
             return Ok(TickOutcome::Idle);
         }
@@ -193,7 +167,6 @@ impl SourceSyncState {
             self.push_effect(effect);
         }
         if matches!(self.lifecycle.state, LifecycleState::Unavailable { .. }) {
-            self.waiting_command = None;
             self.protected_focus_token = None;
         }
         Ok(if takeover {
@@ -201,36 +174,6 @@ impl SourceSyncState {
         } else {
             TickOutcome::TimedOut
         })
-    }
-
-    fn queue_for_mount(
-        &mut self,
-        command: SourceCommand,
-        focus_token: Option<u64>,
-    ) -> SubmitOutcome {
-        if self.waiting_command.is_some() {
-            SubmitOutcome::Busy
-        } else {
-            self.waiting_command = Some(PendingCommand {
-                command,
-                focus_token,
-            });
-            SubmitOutcome::WaitingForReady
-        }
-    }
-
-    fn start_waiting_command(&mut self, now_ms: u64) {
-        if !matches!(self.lifecycle.state, LifecycleState::Ready(_)) {
-            self.waiting_command = None;
-            return;
-        }
-        let Some(pending) = self.waiting_command.take() else {
-            return;
-        };
-        if let Ok(effect) = self.lifecycle.begin_snapshot(pending.command, now_ms) {
-            self.protected_focus_token = pending.focus_token;
-            self.push_effect(effect);
-        }
     }
 
     fn push_effect(&mut self, effect: LifecycleEffect) {
@@ -246,6 +189,8 @@ impl SourceSyncState {
 }
 
 mod interaction;
+
+mod queue;
 
 mod support;
 pub use support::fingerprint;

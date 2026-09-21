@@ -89,10 +89,13 @@ impl SourceSyncState {
     }
 
     pub fn active_command_focus_token(&self) -> Option<u64> {
+        // The newest queued token: focus keeps one interaction, and a newer
+        // allocation supersedes an older one.
         self.protected_focus_token.or_else(|| {
-            self.waiting_command
-                .as_ref()
-                .and_then(|pending| pending.focus_token)
+            self.queue
+                .iter()
+                .rev()
+                .find_map(|queued| queued.focus_token)
         })
     }
 

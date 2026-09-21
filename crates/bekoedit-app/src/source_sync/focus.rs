@@ -274,7 +274,7 @@ fn submit_interaction(
         crate::bridge::trace("source.focus.command.queued", format!("{outcome:?}"));
         if matches!(
             outcome,
-            SubmitOutcome::NoOp | SubmitOutcome::Busy | SubmitOutcome::Unavailable
+            SubmitOutcome::NoOp | SubmitOutcome::QueueFull | SubmitOutcome::Unavailable
         ) {
             sync.write().cancel_focus_token(token);
             cancel_focus_guards_through(token);

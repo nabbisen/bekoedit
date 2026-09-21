@@ -6,6 +6,10 @@ use super::super::lifecycle::{LifecycleState, TransitionError};
 use super::support::fingerprint;
 use super::types::{EventOutcome, SourceSyncState};
 
+fn current_document_id(app: &AppState) -> Option<u64> {
+    app.session.as_ref().map(|session| session.document_id)
+}
+
 impl SourceSyncState {
     pub fn handle_event(
         &mut self,
@@ -41,13 +45,13 @@ impl SourceSyncState {
             event @ SourceEditorEvent::EditorReady { identity, .. } => {
                 let ready_identity = identity;
                 self.lifecycle.handle_init_event(&event)?;
-                self.start_waiting_command(now_ms);
+                self.drain_queue(current_document_id(app), now_ms);
                 self.queue_ready_focus(ready_identity);
                 Ok(())
             }
             event @ SourceEditorEvent::InitFailed { reason, .. } => {
                 self.lifecycle.handle_init_event(&event)?;
-                self.start_waiting_command(now_ms);
+                self.drain_queue(current_document_id(app), now_ms);
                 Err(reason.into())
             }
             event @ SourceEditorEvent::Change { .. } => self.accept_change(&event, app, now_ms),
@@ -89,9 +93,9 @@ impl SourceSyncState {
             SourceEditorEvent::Trace { .. } => Ok(()),
         })();
         if matches!(self.lifecycle.state, LifecycleState::Unavailable { .. }) {
-            self.waiting_command = None;
             self.protected_focus_token = None;
         }
+        self.drain_queue(current_document_id(app), now_ms);
         match result {
             Ok(()) => Ok(EventOutcome::Applied),
             Err(SourceSyncError::Transition(

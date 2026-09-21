@@ -173,7 +173,7 @@ fn repeated_relay_loss_then_retry_reaches_typed_install_and_fresh_ready() {
         ));
         assert!(sync.drain_dispatchable_actions().is_empty());
     }
-    assert_eq!(sync.tick(20_000).unwrap(), TickOutcome::Idle);
+    assert_eq!(sync.tick(None, 20_000).unwrap(), TickOutcome::Idle);
     assert!(sync.has_actions());
 
     sync.relay_generation_started(41);
@@ -181,7 +181,7 @@ fn repeated_relay_loss_then_retry_reaches_typed_install_and_fresh_ready() {
     assert!(!sync.has_dispatchable_actions());
     assert!(sync.relay_generation_ready(41, 20_000));
     assert!(sync.has_dispatchable_actions());
-    assert_eq!(sync.tick(20_999).unwrap(), TickOutcome::Idle);
+    assert_eq!(sync.tick(None, 20_999).unwrap(), TickOutcome::Idle);
     let actions = sync.drain_dispatchable_actions();
     assert_eq!(actions.len(), 1);
     let ControllerAction::Lifecycle(LifecycleEffect::Destroy(identity, destroy_operation)) =
@@ -253,7 +253,7 @@ fn unacknowledged_attempt_preserves_retry_state_and_single_action() {
     sync.relay_generation_started(2);
     assert!(!sync.relay_disconnected(2));
     assert_eq!(sync.lifecycle.state, retry_state);
-    assert_eq!(sync.tick(10_000).unwrap(), TickOutcome::Idle);
+    assert_eq!(sync.tick(None, 10_000).unwrap(), TickOutcome::Idle);
     assert!(sync.drain_dispatchable_actions().is_empty());
 
     sync.relay_generation_started(3);

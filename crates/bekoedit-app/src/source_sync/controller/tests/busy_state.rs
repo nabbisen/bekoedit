@@ -1,5 +1,7 @@
-//! Task 021: `busy_lifecycle_state` is exactly the states `submit` answers
-//! `Busy` to, for a command that names the current document.
+//! `busy_lifecycle_state` and `submit`, for a command that names the current
+//! document, in every lifecycle state (task 021, extended by RFC-047 slice 1).
+//! Nothing is answered `Busy` and dropped any more: a state the accessor
+//! reports holds the command in the queue.
 
 use std::collections::BTreeSet;
 
@@ -7,6 +9,7 @@ use bekoedit_ui_contract::source_editor::{
     EditorIdentity, EditorInstanceId, OperationId, SourceEpoch,
 };
 
+use super::types::{QueueScope, QueuedCommand};
 use super::*;
 use crate::source_sync::lifecycle::{
     HeldEditor, HoldCertainty, PendingOperation, ReadyEditor, SessionFingerprint,
@@ -71,19 +74,47 @@ fn variant_name(state: &LifecycleState) -> &'static str {
     }
 }
 
+/// `waiting`: a command is already queued, as `Mounting` and `Initializing`
+/// report themselves only then.
 fn in_state(state: LifecycleState, waiting: bool) -> SourceSyncState {
     let mut sync = SourceSyncState::default();
     sync.lifecycle.state = state;
     if waiting {
-        sync.waiting_command = Some(PendingCommand {
-            command: SourceCommand::SaveNow,
+        sync.queue.push_back(QueuedCommand {
+            command: SourceCommand::OpenSettings,
             focus_token: None,
+            deadline_ms: u64::MAX,
+            scope: QueueScope::Anywhere,
         });
     }
     sync
 }
 
-fn cases() -> Vec<(&'static str, SourceSyncState)> {
+/// What `submit` must answer in that state. There is no `Busy`: a command is
+/// run, or held, or answered as unavailable.
+#[derive(Debug, Clone, Copy)]
+enum Expect {
+    Execute,
+    Snapshot,
+    WaitingForReady,
+    Queued,
+    Unavailable,
+}
+
+impl Expect {
+    fn holds(self, outcome: &SubmitOutcome) -> bool {
+        matches!(
+            (self, outcome),
+            (Expect::Execute, SubmitOutcome::ExecuteQueued)
+                | (Expect::Snapshot, SubmitOutcome::SnapshotRequested(_))
+                | (Expect::WaitingForReady, SubmitOutcome::WaitingForReady)
+                | (Expect::Queued, SubmitOutcome::Queued)
+                | (Expect::Unavailable, SubmitOutcome::Unavailable)
+        )
+    }
+}
+
+fn cases() -> Vec<(&'static str, SourceSyncState, Expect)> {
     let mounting = || LifecycleState::Mounting {
         intent: intent(),
         identity: identity(),
@@ -102,99 +133,160 @@ fn cases() -> Vec<(&'static str, SourceSyncState)> {
         operation: operation(),
         waiting,
     };
+    let held_editor = |state| in_state(state, false);
     vec![
-        ("unmounted", in_state(LifecycleState::Unmounted, false)),
-        ("mounting, slot free", in_state(mounting(), false)),
-        ("mounting, slot taken", in_state(mounting(), true)),
-        ("initializing, slot free", in_state(initializing(), false)),
-        ("initializing, slot taken", in_state(initializing(), true)),
-        ("ready", in_state(LifecycleState::Ready(ready()), false)),
+        (
+            "unmounted",
+            in_state(LifecycleState::Unmounted, false),
+            Expect::Execute,
+        ),
+        (
+            "mounting, nothing waiting",
+            in_state(mounting(), false),
+            Expect::WaitingForReady,
+        ),
+        (
+            "mounting, a command waiting",
+            in_state(mounting(), true),
+            Expect::WaitingForReady,
+        ),
+        (
+            "initializing, nothing waiting",
+            in_state(initializing(), false),
+            Expect::WaitingForReady,
+        ),
+        (
+            "initializing, a command waiting",
+            in_state(initializing(), true),
+            Expect::WaitingForReady,
+        ),
+        (
+            "ready",
+            in_state(LifecycleState::Ready(ready()), false),
+            Expect::Snapshot,
+        ),
         (
             "snapshot pending",
-            in_state(
-                LifecycleState::SnapshotPending {
-                    editor: ready(),
-                    command: SourceCommand::SaveNow,
-                    operation: operation(),
-                },
-                false,
-            ),
+            held_editor(LifecycleState::SnapshotPending {
+                editor: ready(),
+                command: SourceCommand::SaveNow,
+                operation: operation(),
+            }),
+            Expect::Queued,
         ),
         (
             "barrier held",
-            in_state(
-                LifecycleState::BarrierHeld {
-                    editor: held(),
-                    command: SourceCommand::SaveNow,
-                    before: SessionFingerprint {
-                        document_id: Some(DOCUMENT),
-                        revision: Some(1),
-                        source_token: DOCUMENT,
-                    },
+            held_editor(LifecycleState::BarrierHeld {
+                editor: held(),
+                command: SourceCommand::SaveNow,
+                before: SessionFingerprint {
+                    document_id: Some(DOCUMENT),
+                    revision: Some(1),
+                    source_token: DOCUMENT,
                 },
-                false,
-            ),
+            }),
+            Expect::Queued,
         ),
         (
             "resume pending",
-            in_state(
-                LifecycleState::ResumePending {
-                    editor: held(),
-                    operation: operation(),
-                },
-                false,
-            ),
+            held_editor(LifecycleState::ResumePending {
+                editor: held(),
+                operation: operation(),
+            }),
+            Expect::Queued,
         ),
         (
             "refresh pending",
-            in_state(
-                LifecycleState::RefreshPending {
-                    editor: held(),
-                    new_epoch: SourceEpoch::new(2),
-                    revision: 2,
-                    operation: operation(),
-                },
-                false,
-            ),
+            held_editor(LifecycleState::RefreshPending {
+                editor: held(),
+                new_epoch: SourceEpoch::new(2),
+                revision: 2,
+                operation: operation(),
+            }),
+            Expect::Queued,
         ),
-        ("unmounting", in_state(unmounting(None), false)),
+        ("unmounting", held_editor(unmounting(None)), Expect::Queued),
         (
             "unmounting, a mount waiting",
-            in_state(unmounting(Some(intent())), false),
+            held_editor(unmounting(Some(intent()))),
+            Expect::Queued,
         ),
         (
             "unavailable, nothing retired",
-            in_state(LifecycleState::Unavailable { retired: None }, false),
+            held_editor(LifecycleState::Unavailable { retired: None }),
+            Expect::Execute,
         ),
         (
             "unavailable, retired",
-            in_state(
-                LifecycleState::Unavailable {
-                    retired: Some(identity()),
-                },
-                false,
-            ),
+            held_editor(LifecycleState::Unavailable {
+                retired: Some(identity()),
+            }),
+            Expect::Unavailable,
         ),
     ]
 }
 
 #[test]
-fn busy_lifecycle_state_is_exactly_what_submit_answers_busy_to() {
-    for (label, mut sync) in cases() {
+fn submit_holds_a_command_exactly_where_the_accessor_reports_a_busy_state() {
+    for (label, mut sync, expect) in cases() {
         let reported = sync.busy_lifecycle_state();
         // A command that is neither a same-mode no-op nor otherwise special.
         let outcome = sync.submit(SourceCommand::SaveNow, Some(DOCUMENT), 10);
-        assert_eq!(
-            reported.is_some(),
-            outcome == SubmitOutcome::Busy,
-            "{label}: busy_lifecycle_state() = {reported:?}, submit answered {outcome:?}"
+        assert!(
+            expect.holds(&outcome),
+            "{label}: submit answered {outcome:?}, expected {expect:?}"
         );
+        if reported.is_some() {
+            assert!(
+                matches!(
+                    outcome,
+                    SubmitOutcome::Queued | SubmitOutcome::WaitingForReady
+                ),
+                "{label}: a state the accessor reports holds the command in the queue"
+            );
+            assert_eq!(
+                sync.queue.len(),
+                1 + usize::from(label.contains("a command waiting"))
+            );
+        }
+        assert!(
+            !sync.has_discards(),
+            "{label}: nothing is dropped on the way in"
+        );
+    }
+}
+
+/// Every state the accessor reports accepts a command; none drops one.
+#[test]
+fn no_state_answers_busy_and_drops() {
+    for (label, mut sync, _) in cases() {
+        let before = sync.queue.len();
+        let outcome = sync.submit(SourceCommand::SaveNow, Some(DOCUMENT), 10);
+        let accepted = matches!(
+            outcome,
+            SubmitOutcome::ExecuteQueued
+                | SubmitOutcome::SnapshotRequested(_)
+                | SubmitOutcome::WaitingForReady
+                | SubmitOutcome::Queued
+                | SubmitOutcome::Unavailable
+        );
+        assert!(accepted, "{label}: {outcome:?}");
+        if matches!(
+            outcome,
+            SubmitOutcome::Queued | SubmitOutcome::WaitingForReady
+        ) {
+            assert_eq!(
+                sync.queue.len(),
+                before + 1,
+                "{label}: the command is in the queue"
+            );
+        }
     }
 }
 
 #[test]
 fn busy_lifecycle_state_names_the_state_it_reports() {
-    for (label, sync) in cases() {
+    for (label, sync, _) in cases() {
         if let Some(name) = sync.busy_lifecycle_state() {
             assert_eq!(
                 name,
@@ -209,18 +301,18 @@ fn busy_lifecycle_state_names_the_state_it_reports() {
 fn the_truth_table_covers_every_lifecycle_variant() {
     let covered: BTreeSet<_> = cases()
         .iter()
-        .map(|(_, sync)| variant_name(&sync.lifecycle.state))
+        .map(|(_, sync, _)| variant_name(&sync.lifecycle.state))
         .collect();
     assert_eq!(covered.len(), 10, "covered: {covered:?}");
 }
 
 #[test]
 fn the_accessor_changes_nothing() {
-    for (label, sync) in cases() {
+    for (label, sync, _) in cases() {
         let before = format!("{:?}", sync.lifecycle.state);
-        let waiting = sync.waiting_command.clone();
+        let waiting = sync.queue.clone();
         let _ = sync.busy_lifecycle_state();
         assert_eq!(before, format!("{:?}", sync.lifecycle.state), "{label}");
-        assert_eq!(waiting, sync.waiting_command, "{label}");
+        assert_eq!(waiting, sync.queue, "{label}");
     }
 }

@@ -122,6 +122,7 @@ pub fn SourceEditorControllerHost() -> Element {
     });
 
     use_effect(move || {
+        trace_discards(sync);
         if !sync.read().has_dispatchable_actions() {
             return;
         }
@@ -196,7 +197,12 @@ pub fn SourceEditorControllerHost() -> Element {
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             let active_focus_token = sync.read().active_command_focus_token();
-            let tick = { sync.write().tick(now_ms()) };
+            let document_id = state
+                .read()
+                .session
+                .as_ref()
+                .map(|session| session.document_id);
+            let tick = { sync.write().tick(document_id, now_ms()) };
             match tick {
                 Ok(TickOutcome::TimedOut) => {
                     if let Some(token) =
@@ -224,6 +230,7 @@ pub fn SourceEditorControllerHost() -> Element {
             super::focus::cancel_focus_guards_through(token);
         }
         let effect = { sync.write().shutdown(now_ms()) };
+        trace_discards(sync);
         let generation = sync.read().relay_generation();
         if let (Some(effect), Some(generation)) = (effect, generation) {
             dispatch_lifecycle_effect(sync, state, toasts, effect, generation);
@@ -231,6 +238,17 @@ pub fn SourceEditorControllerHost() -> Element {
     });
 
     rsx! { document::Script { "{EDITOR_BUNDLE}" } }
+}
+
+/// Slice 1 of RFC-047: a queued command that will not run is only traced
+/// here. The user-facing message is slice 2's.
+fn trace_discards(mut sync: Signal<SourceSyncState>) {
+    if !sync.read().has_discards() {
+        return;
+    }
+    for discard in sync.write().drain_discards() {
+        bridge::trace("source.queue.discarded", format!("{discard:?}"));
+    }
 }
 
 fn dispatch_lifecycle_effect(

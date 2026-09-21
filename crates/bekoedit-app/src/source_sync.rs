@@ -89,9 +89,11 @@ fn submit_source_command_preserving_focus(
         SubmitOutcome::NoOp
         | SubmitOutcome::ExecuteQueued
         | SubmitOutcome::SnapshotRequested(_)
-        | SubmitOutcome::WaitingForReady => {}
-        SubmitOutcome::Busy => {
-            crate::bridge::trace("source.controller.busy", "");
+        | SubmitOutcome::WaitingForReady
+        | SubmitOutcome::Queued => {}
+        // The refused command is in `drain_discards`, which the host reports.
+        SubmitOutcome::QueueFull => {
+            crate::bridge::trace("source.controller.queue.full", "");
         }
         SubmitOutcome::Unavailable => push_toast(
             &mut toasts,

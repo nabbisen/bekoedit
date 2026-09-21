@@ -24,9 +24,11 @@ fn immediate_preview_waits_for_ready_then_requests_snapshot() {
         ),
         SubmitOutcome::WaitingForReady
     );
+    // Depth 2 (RFC-047): a second command waits behind the first instead of
+    // being answered Busy and dropped.
     assert_eq!(
         sync.submit(SourceCommand::SaveNow, Some(intent(&app).document_id), 3),
-        SubmitOutcome::Busy
+        SubmitOutcome::WaitingForReady
     );
     sync.handle_event(
         SourceEditorEvent::RelayReady {

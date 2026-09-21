@@ -4,7 +4,7 @@ use bekoedit_ui_contract::{
     source_editor::{BridgeFailureReason, EditorIdentity, SourceEditorId},
 };
 
-use super::{EditorMountHandle, SourceCommand, SourceSyncState};
+use super::{DiscardReason, EditorMountHandle, SourceCommand, SourceSyncState};
 use super::{SessionFingerprint, SourceSyncError, TransitionError};
 use crate::source_sync::lifecycle::{LifecycleState, MountIntent, ReadyEditor};
 
@@ -28,23 +28,26 @@ impl SourceSyncState {
         matches!(self.lifecycle.state, LifecycleState::Unavailable { .. })
     }
 
-    /// The lifecycle state that makes `submit` answer `Busy` to a command for
-    /// the current document, or `None` when the command would be accepted.
-    /// Read-only: it mirrors `submit_with_focus`'s match arms and changes
-    /// nothing (task 021, for the shell-behaviour harness's settle gate).
+    /// The lifecycle state that holds a command in the queue rather than
+    /// running it, for a command that names the current document; `None` when
+    /// the controller would act on it at once. Read-only: it mirrors `gate` in
+    /// `queue.rs` and changes nothing (task 021's settle gate reads it).
+    ///
+    /// `Mounting` and `Initializing` are reported only while a command is
+    /// already waiting in them, as before the queue existed, so the harness's
+    /// gate does not start waiting out every mount. `Unavailable` is not
+    /// reported: it is answered at once, and waiting does not resolve it.
     ///
     /// Exhaustive on purpose: a new `LifecycleState` must be classified here
-    /// before it compiles. A state that answers `Unavailable` rather than
-    /// `Busy` is not reported, since waiting does not resolve it.
+    /// before it compiles.
     pub fn busy_lifecycle_state(&self) -> Option<&'static str> {
         match &self.lifecycle.state {
             LifecycleState::Unmounted
             | LifecycleState::Ready(_)
             | LifecycleState::Unavailable { .. } => None,
-            // `queue_for_mount` answers Busy only when its one slot is taken.
-            LifecycleState::Mounting { .. } => self.waiting_command.is_some().then_some("Mounting"),
+            LifecycleState::Mounting { .. } => (!self.queue.is_empty()).then_some("Mounting"),
             LifecycleState::Initializing { .. } => {
-                self.waiting_command.is_some().then_some("Initializing")
+                (!self.queue.is_empty()).then_some("Initializing")
             }
             LifecycleState::SnapshotPending { .. } => Some("SnapshotPending"),
             LifecycleState::BarrierHeld { .. } => Some("BarrierHeld"),
@@ -105,7 +108,7 @@ impl SourceSyncState {
             return false;
         }
         self.relay_generation = None;
-        self.waiting_command = None;
+        self.discard_queue(DiscardReason::RelayLost);
         self.protected_focus_token = None;
         self.actions.clear();
         if self.lifecycle.abandon_bundle_probe() {
