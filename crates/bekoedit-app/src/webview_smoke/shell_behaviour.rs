@@ -72,6 +72,7 @@ use bekoedit_fs::{RecentWorkspaces, RecoverySnapshot, RecoveryStore, UserSetting
 
 use crate::persistence::AppPersistence;
 use crate::settings::AppSettings;
+use crate::source_sync::SourceSyncState;
 
 use super::SmokeProfile;
 use super::transport::{
@@ -364,15 +365,74 @@ async fn run_shell_behaviour_phase(
     .await
 }
 
-async fn run_shell_behaviour_sequence(
+/// Task 021: how the settle gate waits. `deadline` outlasts every deadline the
+/// controller itself enforces (`source_sync::lifecycle`, at most 5 s for a
+/// mount), so a state that is still busy at the end of it is not a slow
+/// transition but a controller that is stuck.
+#[derive(Debug, Clone, Copy)]
+struct SettleGate {
+    deadline: Duration,
+    poll: Duration,
+}
+
+const SETTLE_GATE: SettleGate = SettleGate {
+    deadline: Duration::from_secs(10),
+    poll: Duration::from_millis(20),
+};
+
+/// Task 021: no exchange is requested while the source controller would answer
+/// `Busy` to a command (`SourceSyncState::busy_lifecycle_state`).
+///
+/// D2 clicks Preview and then Text. Preview renders at once, but the Text
+/// editor's teardown finishes only when the page's `destroyed` event reaches
+/// Rust, and no DOM observable reports that (task 021's finding). A Text click
+/// inside that window is dropped as `Busy`, so D2 timed out naming held
+/// authority. The gate is here, on the Rust side, and applies to every phase,
+/// so nothing acts inside a transition. No phase relies on doing so: each one
+/// either starts from a settled shell or waits for its own async work.
+///
+/// A controller that never settles fails the run, naming the phase and the
+/// state, instead of hanging or falling through to a wrong-cause timeout.
+async fn wait_until_settled(
+    phase: ShellBehaviourPhase,
+    gate: SettleGate,
+    mut busy_state: impl FnMut() -> Option<String>,
+) -> Result<(), String> {
+    let started = tokio::time::Instant::now();
+    loop {
+        let Some(state) = busy_state() else {
+            return Ok(());
+        };
+        if started.elapsed() >= gate.deadline {
+            return Err(format!(
+                "the source controller did not settle before the {} exchange: \
+                 still {state} after {:?}",
+                phase.as_str(),
+                gate.deadline
+            ));
+        }
+        tokio::time::sleep(gate.poll).await;
+    }
+}
+
+async fn run_shell_behaviour_sequence<RunPhase, PhaseFuture>(
     terminal: &ShellBehaviourTerminal,
-) -> Result<DriverResult, String> {
+    gate: SettleGate,
+    mut busy_state: impl FnMut() -> Option<String>,
+    mut run_phase: RunPhase,
+) -> Result<DriverResult, String>
+where
+    RunPhase:
+        FnMut(ShellBehaviourPhase, u64, Option<PinnedExchange<ShellBehaviourPhase>>) -> PhaseFuture,
+    PhaseFuture: Future<Output = Result<CompletedProbe<ShellBehaviourPhase>, String>>,
+{
     let mut machine = ShellBehaviourMachine::new();
     let mut exchange_id = 1_u64;
     let mut release = None;
     loop {
         let phase = machine.current();
-        let completed = run_shell_behaviour_phase(phase, exchange_id, release).await?;
+        wait_until_settled(phase, gate, &mut busy_state).await?;
+        let completed = run_phase(phase, exchange_id, release).await?;
         machine.validate(&completed.message, exchange_id, release)?;
         transport::validate_completion(
             &completed.completion,
@@ -404,6 +464,7 @@ async fn run_shell_behaviour_sequence(
 #[component]
 pub fn WebViewShellBehaviourDriver() -> Element {
     let desktop: DesktopContext = consume_context();
+    let sync = use_context::<Signal<SourceSyncState>>();
     let terminal = super::launch_config()
         .shell_behaviour
         .clone()
@@ -413,7 +474,20 @@ pub fn WebViewShellBehaviourDriver() -> Element {
         let desktop = desktop.clone();
         async move {
             println!("bekoedit RFC-044 shell-behaviour run: tree navigation (§8 A)");
-            match run_shell_behaviour_sequence(&terminal).await {
+            // A peek, not a read: the gate must not subscribe this component
+            // to the controller. A borrow held elsewhere counts as not settled.
+            let busy_state = move || match sync.try_peek() {
+                Ok(state) => state.busy_lifecycle_state().map(str::to_string),
+                Err(_) => Some("borrowed elsewhere".to_string()),
+            };
+            match run_shell_behaviour_sequence(
+                &terminal,
+                SETTLE_GATE,
+                busy_state,
+                run_shell_behaviour_phase,
+            )
+            .await
+            {
                 Ok(result) => {
                     for milestone in &result.milestones {
                         println!("  ✓ {milestone}");

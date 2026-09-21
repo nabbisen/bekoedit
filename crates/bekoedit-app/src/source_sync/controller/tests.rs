@@ -503,3 +503,5 @@ fn shell_focus_held_is_false_after_controller_shutdown() {
 mod protocol;
 
 mod instance_drop;
+
+mod busy_state;

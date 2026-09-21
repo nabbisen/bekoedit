@@ -1198,19 +1198,31 @@ return (async () => {
       // §8 D2: a close that kept shell authority looks right to D1 and refuses
       // every later claim. Prove the release by making one.
       state.stage = "authority_released_after_editor_focus";
-      uniqueTab("mode-preview").click(); // Preview claims nothing, so no focus is needed.
-      await waitFor(
-        () => selectionViolation("mode-preview") === null,
-        () => `D2: clicking the Preview tab to select it (at timeout: ${describeTabs()})`,
-      );
-      await activateTab("mode-text", "D2");
-      await waitFor(
-        () => selectionViolation("mode-text") === null && editorFocusedWithDoc(docLengths.child),
-        () =>
-          `D2: activating Text to claim the editor again; a refused claim means the menu's ` +
-          `close into the editor kept shell authority (at timeout: ${describeTabs()} ${editorSummary()})`,
-      );
-      outgoing = advance("authority_released_editor_refocused", "settings_entry");
+      if (state.step === 0) {
+        uniqueTab("mode-preview").click(); // Preview claims nothing, so no focus is needed.
+        await waitFor(
+          () => selectionViolation("mode-preview") === null,
+          () => `D2: clicking the Preview tab to select it (at timeout: ${describeTabs()})`,
+        );
+        // Task 021: Preview is selected, but the Text editor's teardown is not
+        // over -- the controller answers Busy until the page's destroyed event
+        // reaches Rust, and a Text click inside that window is dropped. No DOM
+        // observable reports the end of it, so Text is activated in a later
+        // exchange, which the Rust sequence requests only once the controller
+        // is settled (shell_behaviour.rs `wait_until_settled`). Do not merge
+        // the two steps back together, and do not retry the click.
+        state.step = 1;
+        outgoing = { kind: "pending" };
+      } else {
+        await activateTab("mode-text", "D2");
+        await waitFor(
+          () => selectionViolation("mode-text") === null && editorFocusedWithDoc(docLengths.child),
+          () =>
+            `D2: activating Text to claim the editor again; a refused claim means the menu's ` +
+            `close into the editor kept shell authority (at timeout: ${describeTabs()} ${editorSummary()})`,
+        );
+        outgoing = advance("authority_released_editor_refocused", "settings_entry");
+      }
     } else if (MENU_PHASES[requestedPhase]) {
       const { spec, kind, milestone, next } = MENU_PHASES[requestedPhase];
       state.stage = requestedPhase;

@@ -65,13 +65,26 @@ class FakeTabList {
  *   the focus move (C1's absence).
  * - `authorityHeld` (settable) -- shell authority still held, so the Text
  *   tab's claim is refused and the editor never takes focus (D2).
+ * - `teardownLag: true` -- task 021's race. Leaving Text renders the new mode
+ *   at once, but the controller stays in `Unmounting` until `finishTeardown()`
+ *   (the page's `destroyed` event reaching Rust); a Text activation inside
+ *   that window is dropped as `Busy`, so the mode stays where it was. The
+ *   Rust sequence's settle gate is what waits for `finishTeardown()`'s real
+ *   counterpart; a test stands in for it by calling it between exchanges.
  */
 export class FakeModeTabs {
-  constructor(owner, { selected = "mode-form", activateOnArrow = null, docLength = 8 } = {}) {
+  constructor(
+    owner,
+    { selected = "mode-form", activateOnArrow = null, docLength = 8, teardownLag = false } = {},
+  ) {
     this.owner = owner;
     this.selected = selected;
     this.activateOnArrow = activateOnArrow;
     this.docLength = docLength;
+    this.teardownLag = teardownLag;
+    this.tearingDown = false;
+    /** Activations dropped as Busy inside the teardown window. */
+    this.droppedActivations = 0;
     this.authorityHeld = false;
     /** Called on every view.dispatch, so a conflict fake can mark the
      * document dirty (slice 3 §8 F1). */
@@ -137,11 +150,22 @@ export class FakeModeTabs {
   }
 
   select(launchId) {
+    const leavingText = this.selected === "mode-text" && launchId !== "mode-text";
     this.selected = launchId;
     this.renderMode();
+    if (this.teardownLag && leavingText) this.tearingDown = true;
+  }
+
+  /** The `destroyed` event reaching Rust: the controller leaves Unmounting. */
+  finishTeardown() {
+    this.tearingDown = false;
   }
 
   activate(tab) {
+    if (this.tearingDown && tab.launchId === "mode-text") {
+      this.droppedActivations += 1;
+      return;
+    }
     const focusedOnTab = this.owner.activeElement() === tab;
     this.select(tab.launchId);
     if (tab.launchId === "mode-text" && focusedOnTab && !this.authorityHeld) {

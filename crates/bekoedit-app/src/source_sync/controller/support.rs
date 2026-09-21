@@ -28,6 +28,32 @@ impl SourceSyncState {
         matches!(self.lifecycle.state, LifecycleState::Unavailable { .. })
     }
 
+    /// The lifecycle state that makes `submit` answer `Busy` to a command for
+    /// the current document, or `None` when the command would be accepted.
+    /// Read-only: it mirrors `submit_with_focus`'s match arms and changes
+    /// nothing (task 021, for the shell-behaviour harness's settle gate).
+    ///
+    /// Exhaustive on purpose: a new `LifecycleState` must be classified here
+    /// before it compiles. A state that answers `Unavailable` rather than
+    /// `Busy` is not reported, since waiting does not resolve it.
+    pub fn busy_lifecycle_state(&self) -> Option<&'static str> {
+        match &self.lifecycle.state {
+            LifecycleState::Unmounted
+            | LifecycleState::Ready(_)
+            | LifecycleState::Unavailable { .. } => None,
+            // `queue_for_mount` answers Busy only when its one slot is taken.
+            LifecycleState::Mounting { .. } => self.waiting_command.is_some().then_some("Mounting"),
+            LifecycleState::Initializing { .. } => {
+                self.waiting_command.is_some().then_some("Initializing")
+            }
+            LifecycleState::SnapshotPending { .. } => Some("SnapshotPending"),
+            LifecycleState::BarrierHeld { .. } => Some("BarrierHeld"),
+            LifecycleState::ResumePending { .. } => Some("ResumePending"),
+            LifecycleState::RefreshPending { .. } => Some("RefreshPending"),
+            LifecycleState::Unmounting { .. } => Some("Unmounting"),
+        }
+    }
+
     pub fn mount_handle(
         &self,
         editor_id: SourceEditorId,

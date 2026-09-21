@@ -1142,11 +1142,12 @@ const STAGE_1_PHASES = [
   "authority_released_after_editor_focus",
 ];
 
-/** Runs stage 1's phases in order, stopping early on a terminal report. */
+/** Runs stage 1's phases in order, stopping early on a terminal report. D2
+ * takes two exchanges (task 021), so each phase is stepped to its result. */
 async function driveTabsAndAuthority(cursor, upTo = STAGE_1_PHASES.length) {
   let report;
   for (const phase of STAGE_1_PHASES.slice(0, upTo)) {
-    report = await step(phase, cursor);
+    report = await stepToResult(phase, cursor);
     if (report.kind === "terminal") return report;
   }
   return report;
@@ -1292,7 +1293,7 @@ test(
     const { cursor, tabs } = await driveToTabs(tree);
     await driveTabsAndAuthority(cursor, 3);
 
-    const report = await step("authority_released_after_editor_focus", cursor);
+    const report = await stepToResult("authority_released_after_editor_focus", cursor);
 
     assert.equal(report.kind, "progress");
     assert.equal(report.milestone, "authority_released_editor_refocused");
@@ -1313,7 +1314,7 @@ test(
     // The defect D1 cannot see: the menu closed, but authority stayed held.
     tabs.authorityHeld = true;
 
-    const report = await step("authority_released_after_editor_focus", cursor);
+    const report = await stepToResult("authority_released_after_editor_focus", cursor);
 
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, false);
@@ -1321,6 +1322,66 @@ test(
     assert.match(
       report.result.error,
       /D2: activating Text to claim the editor again; a refused claim means the menu's close into the editor kept shell authority/,
+    );
+  },
+);
+
+// ---- task 021: D2 takes two exchanges, so the Rust gate can sit between them
+
+test(
+  "D2 shape: Preview and Text are never clicked in the same exchange",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, tabs } = await driveToTabs(tree, { tabs: { teardownLag: true } });
+    await driveTabsAndAuthority(cursor, 3);
+    const textClicksBefore = tabs.tab("mode-text").clicks;
+
+    const first = await step("authority_released_after_editor_focus", cursor);
+
+    assert.equal(first.kind, "pending", "the Preview exchange returns pending");
+    assert.equal(tabs.tab("mode-preview").clicks, 1, "Preview was clicked");
+    assert.equal(tabs.selected, "mode-preview");
+    assert.equal(
+      tabs.tab("mode-text").clicks,
+      textClicksBefore,
+      "Text was not clicked in the Preview exchange",
+    );
+
+    // The Rust sequence requests the next exchange only once the controller
+    // has settled; the fake's counterpart is the destroyed event.
+    tabs.finishTeardown();
+    const second = await step("authority_released_after_editor_focus", cursor);
+
+    assert.equal(second.kind, "progress");
+    assert.equal(second.milestone, "authority_released_editor_refocused");
+    assert.equal(tabs.tab("mode-text").clicks, textClicksBefore + 1, "Text in the later exchange");
+    assert.equal(tabs.droppedActivations, 0);
+    assert.equal(document.activeElement, tabs.content);
+  },
+);
+
+test(
+  "D2 reproduction: a Text activation inside the teardown window is dropped, and D2 fails as CI did",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, tabs } = await driveToTabs(tree, { tabs: { teardownLag: true } });
+    await driveTabsAndAuthority(cursor, 3);
+
+    await step("authority_released_after_editor_focus", cursor);
+    // No finishTeardown(): what the driver alone would do without the gate.
+    const report = await step("authority_released_after_editor_focus", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.equal(tabs.droppedActivations, 1, "the click reached Busy and was dropped");
+    assert.match(
+      report.result.error,
+      /D2: activating Text to claim the editor again.*mode-text:selected=false.*mode-preview:selected=true/,
+      "the failure names Preview still selected, as run 35168125047 did",
     );
   },
 );
