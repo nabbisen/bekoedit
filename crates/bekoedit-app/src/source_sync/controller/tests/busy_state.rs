@@ -226,10 +226,32 @@ fn cases() -> Vec<(&'static str, SourceSyncState, Expect)> {
     ]
 }
 
+/// What the accessor must report for each case: a state that holds a command,
+/// with `Mounting` and `Initializing` only while a command is already waiting.
+fn expected_busy(label: &str) -> Option<&'static str> {
+    match label {
+        "unmounted"
+        | "mounting, nothing waiting"
+        | "initializing, nothing waiting"
+        | "ready"
+        | "unavailable, nothing retired"
+        | "unavailable, retired" => None,
+        "mounting, a command waiting" => Some("Mounting"),
+        "initializing, a command waiting" => Some("Initializing"),
+        "snapshot pending" => Some("SnapshotPending"),
+        "barrier held" => Some("BarrierHeld"),
+        "resume pending" => Some("ResumePending"),
+        "refresh pending" => Some("RefreshPending"),
+        "unmounting" | "unmounting, a mount waiting" => Some("Unmounting"),
+        other => panic!("unclassified case: {other}"),
+    }
+}
+
 #[test]
 fn submit_holds_a_command_exactly_where_the_accessor_reports_a_busy_state() {
     for (label, mut sync, expect) in cases() {
         let reported = sync.busy_lifecycle_state();
+        assert_eq!(reported, expected_busy(label), "{label}");
         // A command that is neither a same-mode no-op nor otherwise special.
         let outcome = sync.submit(SourceCommand::SaveNow, Some(DOCUMENT), 10);
         assert!(

@@ -45,13 +45,11 @@ impl SourceSyncState {
             event @ SourceEditorEvent::EditorReady { identity, .. } => {
                 let ready_identity = identity;
                 self.lifecycle.handle_init_event(&event)?;
-                self.drain_queue(current_document_id(app), now_ms);
                 self.queue_ready_focus(ready_identity);
                 Ok(())
             }
             event @ SourceEditorEvent::InitFailed { reason, .. } => {
                 self.lifecycle.handle_init_event(&event)?;
-                self.drain_queue(current_document_id(app), now_ms);
                 Err(reason.into())
             }
             event @ SourceEditorEvent::Change { .. } => self.accept_change(&event, app, now_ms),
