@@ -1225,24 +1225,25 @@ return (async () => {
         outgoing = advance("authority_released_editor_refocused", "queued_switch_claims_focus");
       }
     } else if (requestedPhase === "queued_switch_claims_focus") {
-      // RFC-047 §7: click Preview, then Text, in the *same* exchange -- D2's
-      // old shape, task 021 split it into two exchanges so the settle gate
-      // could intervene between them. Here nothing waits between the two
-      // clicks, so the gate never gets the chance: only the queue (RFC-047
-      // slice 1) and the effective-target fix (task 022) can make Text win
-      // and take focus.
+      // RFC-047 §7: click Preview, then Text, with nothing awaited between the
+      // two clicks -- not even for Preview's own selection. `activateTab`'s
+      // own wait (inside `focusTab`) costs no frame: `waitFor` tests its
+      // predicate before ever awaiting, and a native `focus()` call updates
+      // `document.activeElement` synchronously. So the two clicks reach Rust
+      // back to back, in order, over the same channel -- before Preview's own
+      // switch has even finished its snapshot round trip. The Text click
+      // therefore lands while the controller is still `SnapshotPending` (a
+      // `Held` gate state), deterministically, not as a race: only the queue
+      // (RFC-047 slice 1) and the effective-target fix (task 022) can make
+      // Text win and take focus from there.
       state.stage = "queued_switch_claims_focus";
       uniqueTab("mode-preview").click();
-      await waitFor(
-        () => selectionViolation("mode-preview") === null,
-        () => `G1: clicking the Preview tab to select it (at timeout: ${describeTabs()})`,
-      );
       await activateTab("mode-text", "G1");
       await waitFor(
         () => selectionViolation("mode-text") === null && editorFocusedWithDoc(docLengths.child),
         () =>
           `G1: Text must win and the editor must take focus after Preview and Text were ` +
-          `clicked with nothing waiting between them (at timeout: ${describeTabs()} ${editorSummary()})`,
+          `clicked with nothing awaited between them (at timeout: ${describeTabs()} ${editorSummary()})`,
         3000,
       );
       outgoing = advance("queued_switch_focused_editor", "settings_entry");
