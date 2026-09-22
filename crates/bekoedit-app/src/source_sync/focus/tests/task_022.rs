@@ -110,14 +110,23 @@ fn the_uis_mode_signal_is_not_consulted_for_a_switchs_no_op_decision() {
 }
 
 #[test]
-fn commands_without_an_editor_destination_claim_nothing() {
-    for current in ALL_MODES {
-        for command in [
-            SourceCommand::OpenSettings,
-            SourceCommand::SaveNow,
-            SourceCommand::CloseWorkspace,
-        ] {
-            assert_eq!(focus_target(&command, current), None, "{command:?}");
-        }
-    }
+fn submit_interaction_asks_the_controller_not_a_local_mode_comparison() {
+    // `submit_interaction`'s own no-op check is async and Dioxus-signal based
+    // (it spawns a guard round trip), so it cannot be driven headlessly the
+    // way `claims_focus` above can. This pins its wiring the same way
+    // `handoff.rs`'s own untestable paths are pinned: by reading the source.
+    let source = include_str!("../../focus.rs");
+    let body = source
+        .split("fn submit_interaction(")
+        .nth(1)
+        .and_then(|rest| rest.split("let target = target.expect").next())
+        .expect("submit_interaction's early-return body");
+    assert!(
+        body.contains("sync.read().is_same_source_mode(&command)"),
+        "the no-op check must ask the controller, not a local mode comparison"
+    );
+    assert!(
+        !body.contains("current_mode == "),
+        "no direct comparison against the UI mode signal remains"
+    );
 }

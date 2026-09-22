@@ -62,6 +62,19 @@ fn switch_mode_claims_its_target_regardless_of_the_current_mode() {
 mod task_022;
 
 #[test]
+fn commands_without_an_editor_destination_claim_nothing() {
+    for current in ALL_MODES {
+        for command in [
+            SourceCommand::OpenSettings,
+            SourceCommand::SaveNow,
+            SourceCommand::CloseWorkspace,
+        ] {
+            assert_eq!(focus_target(&command, current), None, "{command:?}");
+        }
+    }
+}
+
+#[test]
 fn document_link_launch_ids_are_namespaced_and_position_unique() {
     let tree = SourceInteractionOrigin::tree_row(Path::new("notes/a.md"));
     assert_eq!(tree.launch_id(), Some("tree:notes/a.md"));
