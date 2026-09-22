@@ -2,7 +2,7 @@
 //! the app is already heading for -- a queued switch, else one in flight, else
 //! the mounted editor -- not merely the mounted editor.
 
-use super::queue::{DOCUMENT, unmounting_sync};
+use super::queue::{DOCUMENT, deliver_destroyed, unmounting_sync};
 use super::types::{QueueScope, QueuedCommand};
 use super::*;
 
@@ -206,19 +206,43 @@ fn text_clicked_while_a_switch_to_text_is_in_flight_stays_a_silent_no_op() {
 }
 
 #[test]
-fn text_clicked_while_a_switch_to_text_is_queued_stays_a_silent_no_op() {
+fn text_clicked_again_while_a_switch_to_text_is_queued_replaces_it_and_keeps_the_newer_token() {
+    // Task 022 case B: this used to be a silent no-op, but `focus.rs` had
+    // already allocated a fresh claim for the second click and cancelled it
+    // on NoOp -- so the switch ran, but with no claim at all. Coalescing
+    // instead, exactly as a different target already did, keeps the newer
+    // click's token.
+    let mut app = app();
     let mut sync = unmounting_sync(DOCUMENT);
     assert_eq!(
-        sync.submit(switch(EditorMode::Text), Some(DOCUMENT), 10),
+        sync.submit_with_focus(switch(EditorMode::Text), Some(DOCUMENT), 10, Some(1)),
         SubmitOutcome::Queued
     );
 
+    let outcome = sync.submit_with_focus(switch(EditorMode::Text), Some(DOCUMENT), 11, Some(2));
+
     assert_eq!(
-        sync.submit(switch(EditorMode::Text), Some(DOCUMENT), 11),
-        SubmitOutcome::NoOp
+        outcome,
+        SubmitOutcome::Queued,
+        "not a no-op: the claim would otherwise be lost"
     );
+    assert_eq!(sync.queue.len(), 1, "coalesced into one entry");
     assert_eq!(queued_commands(&sync), vec![switch(EditorMode::Text)]);
     assert!(!sync.has_discards());
+
+    deliver_destroyed(&mut sync, &mut app, 20);
+
+    assert!(
+        matches!(
+            sync.drain_actions().as_slice(),
+            [ControllerAction::Execute {
+                command: SourceCommand::SwitchMode(EditorMode::Text),
+                focus_token: Some(2),
+                ..
+            }]
+        ),
+        "exactly one switch runs, carrying the newer token"
+    );
 }
 
 #[test]
@@ -233,7 +257,12 @@ fn text_clicked_with_text_mounted_and_nothing_in_flight_stays_a_no_op() {
             SubmitOutcome::NoOp,
             "{mode:?}"
         );
-        assert!(sync.drain_actions().is_empty());
+        assert!(
+            sync.drain_actions().is_empty(),
+            "{mode:?}: no claim to act on"
+        );
+        assert!(sync.queue.is_empty(), "{mode:?}: no queue entry");
+        assert!(!sync.has_discards(), "{mode:?}: no discard");
     }
 }
 
@@ -268,12 +297,15 @@ fn the_newest_switch_is_the_one_the_app_is_heading_for() {
         scope: QueueScope::Anywhere,
     });
 
-    // Preview is in flight, but Text is queued after it: Text is where it ends.
+    // Preview is in flight, and Text is already queued after it -- so a
+    // repeat Text click still reaches the queue (task 022: a queued switch is
+    // never a no-op), coalescing with itself rather than being dropped.
     assert_eq!(
         sync.submit(switch(EditorMode::Text), Some(document_id), 11),
-        SubmitOutcome::NoOp
+        SubmitOutcome::Queued
     );
-    // Form is not: it replaces the queued Text.
+    assert_eq!(queued_commands(&sync), vec![switch(EditorMode::Text)]);
+    // Form is where it ends instead: it replaces the queued Text.
     assert_eq!(
         sync.submit(switch(EditorMode::Form), Some(document_id), 12),
         SubmitOutcome::Queued

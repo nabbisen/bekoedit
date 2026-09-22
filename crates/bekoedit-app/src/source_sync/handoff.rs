@@ -41,8 +41,12 @@ enum Dismissal {
     Explicit,
 }
 
-fn dismissal_for(command: &SourceCommand, current_mode: EditorMode) -> Dismissal {
-    if claims_focus(command, current_mode) {
+fn dismissal_for(
+    command: &SourceCommand,
+    current_mode: EditorMode,
+    sync: &SourceSyncState,
+) -> Dismissal {
+    if claims_focus(command, current_mode, sync) {
         Dismissal::Handoff
     } else {
         Dismissal::Explicit
@@ -70,7 +74,8 @@ pub fn submit_handoff_activation(
     explicit_close: impl FnOnce(),
 ) {
     let current_mode = *mode.read();
-    match dismissal_for(&command, current_mode) {
+    let dismissal = dismissal_for(&command, current_mode, &sync.read());
+    match dismissal {
         Dismissal::Handoff => {
             release_for_handoff(&mut sync.write());
             submit_source_interaction(sync, state, mode, toasts, command, origin, close_surface);
@@ -123,18 +128,60 @@ mod tests {
         EditorMode::Form,
     ];
 
+    /// A controller with `editor_id` mounted and nothing pending -- the
+    /// ordinary case these tests encode, where the controller and the UI mode
+    /// signal agree. Task 022's own tests cover the case where they do not.
+    fn ready_editor(editor_id: SourceEditorId) -> crate::source_sync::lifecycle::ReadyEditor {
+        use bekoedit_ui_contract::source_editor::{EditorIdentity, EditorInstanceId, SourceEpoch};
+        crate::source_sync::lifecycle::ReadyEditor {
+            identity: EditorIdentity {
+                instance_id: EditorInstanceId::new(1),
+                editor_id,
+                document_id: 1,
+                epoch: SourceEpoch::new(1),
+            },
+            revision: 1,
+            last_seq: 0,
+        }
+    }
+
+    /// A controller whose mounted editor matches `mode`, or nothing mounted
+    /// for Preview and Form, which are not source editors.
+    fn synced_to(mode: EditorMode) -> SourceSyncState {
+        let mut sync = SourceSyncState::default();
+        let editor_id = match mode {
+            EditorMode::Text => Some(SourceEditorId::Text),
+            EditorMode::Split => Some(SourceEditorId::Split),
+            EditorMode::Preview | EditorMode::Form => None,
+        };
+        if let Some(editor_id) = editor_id {
+            sync.lifecycle.state =
+                crate::source_sync::lifecycle::LifecycleState::Ready(ready_editor(editor_id));
+        }
+        sync
+    }
+
     #[test]
     fn open_document_is_a_handoff_only_in_the_modes_that_claim_focus() {
         // Re-review §2: Form is the default mode, and there a search result
         // claims nothing, so it must restore rather than hand off.
         let open = SourceCommand::OpenDocument("sub/child.md".into());
-        assert_eq!(dismissal_for(&open, EditorMode::Text), Dismissal::Handoff);
-        assert_eq!(dismissal_for(&open, EditorMode::Split), Dismissal::Handoff);
         assert_eq!(
-            dismissal_for(&open, EditorMode::Preview),
+            dismissal_for(&open, EditorMode::Text, &synced_to(EditorMode::Text)),
+            Dismissal::Handoff
+        );
+        assert_eq!(
+            dismissal_for(&open, EditorMode::Split, &synced_to(EditorMode::Split)),
+            Dismissal::Handoff
+        );
+        assert_eq!(
+            dismissal_for(&open, EditorMode::Preview, &synced_to(EditorMode::Preview)),
             Dismissal::Explicit
         );
-        assert_eq!(dismissal_for(&open, EditorMode::Form), Dismissal::Explicit);
+        assert_eq!(
+            dismissal_for(&open, EditorMode::Form, &synced_to(EditorMode::Form)),
+            Dismissal::Explicit
+        );
     }
 
     #[test]
@@ -142,7 +189,7 @@ mod tests {
         // Its no-claim path is unreachable today; the helper stays general.
         for current in ALL_MODES {
             assert_eq!(
-                dismissal_for(&SourceCommand::NewUntitled, current),
+                dismissal_for(&SourceCommand::NewUntitled, current, &synced_to(current)),
                 Dismissal::Handoff,
                 "from {current:?}"
             );
@@ -152,19 +199,21 @@ mod tests {
     #[test]
     fn switch_mode_into_the_mode_already_current_is_not_a_handoff() {
         // Re-review §3: `submit_interaction` also returns early on
-        // `same_source_mode`, so no claim is made. Releasing without
+        // `is_same_source_mode`, so no claim is made. Releasing without
         // restoring there would strand focus on the body, as in §2.
         assert_eq!(
             dismissal_for(
                 &SourceCommand::SwitchMode(EditorMode::Text),
-                EditorMode::Text
+                EditorMode::Text,
+                &synced_to(EditorMode::Text)
             ),
             Dismissal::Explicit
         );
         assert_eq!(
             dismissal_for(
                 &SourceCommand::SwitchMode(EditorMode::Split),
-                EditorMode::Split
+                EditorMode::Split,
+                &synced_to(EditorMode::Split)
             ),
             Dismissal::Explicit
         );
@@ -173,14 +222,16 @@ mod tests {
         assert_eq!(
             dismissal_for(
                 &SourceCommand::SwitchMode(EditorMode::Split),
-                EditorMode::Text
+                EditorMode::Text,
+                &synced_to(EditorMode::Text)
             ),
             Dismissal::Handoff
         );
         assert_eq!(
             dismissal_for(
                 &SourceCommand::SwitchMode(EditorMode::Text),
-                EditorMode::Split
+                EditorMode::Split,
+                &synced_to(EditorMode::Split)
             ),
             Dismissal::Handoff
         );
@@ -192,11 +243,40 @@ mod tests {
                 EditorMode::Split
             };
             assert_eq!(
-                dismissal_for(&SourceCommand::SwitchMode(target), current),
+                dismissal_for(
+                    &SourceCommand::SwitchMode(target),
+                    current,
+                    &synced_to(current)
+                ),
                 Dismissal::Handoff,
                 "split item from {current:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_switch_in_flight_to_a_different_target_still_hands_off_regardless_of_the_ui_mode() {
+        // Task 022 case A, reached through the Split menu item: the UI mode
+        // signal still says Text while a switch to Preview is in flight, but
+        // the controller is heading to Preview, so this Split activation must
+        // still claim focus rather than being read as already-current.
+        let mut sync = SourceSyncState::default();
+        sync.lifecycle.state = crate::source_sync::lifecycle::LifecycleState::SnapshotPending {
+            editor: ready_editor(SourceEditorId::Text),
+            command: SourceCommand::SwitchMode(EditorMode::Preview),
+            operation: crate::source_sync::lifecycle::PendingOperation {
+                operation_id: bekoedit_ui_contract::source_editor::OperationId::new(9),
+                deadline_ms: u64::MAX,
+            },
+        };
+        assert_eq!(
+            dismissal_for(
+                &SourceCommand::SwitchMode(EditorMode::Split),
+                EditorMode::Text,
+                &sync
+            ),
+            Dismissal::Handoff
+        );
     }
 
     #[test]

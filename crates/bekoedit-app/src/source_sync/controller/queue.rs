@@ -188,10 +188,20 @@ impl SourceSyncState {
             return;
         }
         self.expire_queue(now_ms);
-        while let Some(front) = self.queue.front().cloned() {
+        // Popped before it is judged, not merely peeked: `is_same_source_mode`
+        // reads a *queued* switch as reason enough to never be a no-op (task
+        // 022), and the front entry is itself queued until it is popped. Left
+        // in place, a `SwitchMode` front would always count as its own queued
+        // switch and could never be recognised as having become a no-op.
+        // Every early exit below puts it straight back, so nothing is lost.
+        while let Some(front) = self.queue.pop_front() {
             match self.gate(current_document_id) {
-                Gate::Held => break,
+                Gate::Held => {
+                    self.queue.push_front(front);
+                    break;
+                }
                 Gate::Unavailable => {
+                    self.record_discard(front, DiscardReason::EditorUnavailable);
                     self.discard_queue(DiscardReason::EditorUnavailable);
                     break;
                 }
@@ -203,24 +213,38 @@ impl SourceSyncState {
                 // document-scoped entry behind it cannot be judged yet
                 // (RFC-047 §5.4). Entries that name no document run in order.
                 if self.has_pending_execute() {
+                    self.queue.push_front(front);
                     break;
                 }
                 if recorded != current_document_id {
-                    self.queue.pop_front();
                     self.record_discard(front, DiscardReason::DocumentChanged);
                     continue;
                 }
             }
-            if self.is_mounted_source_mode(&front.command) {
-                // Became a no-op while it waited: nothing to run, nothing to say.
-                self.queue.pop_front();
+            if self.is_same_source_mode(&front.command) {
+                // Became a no-op while it waited, and nothing else queued
+                // asks for a mode switch either: a genuine no-op, not merely
+                // a stand-in coalescing would have replaced anyway (task
+                // 022). Nothing to run, nothing to say.
                 continue;
             }
-            match self.run_now(front.command, now_ms, front.focus_token) {
-                Ok(_) => {
-                    self.queue.pop_front();
+            let QueuedCommand {
+                command,
+                focus_token,
+                deadline_ms,
+                scope,
+            } = front;
+            match self.run_now(command, now_ms, focus_token) {
+                Ok(_) => {}
+                Err(command) => {
+                    self.queue.push_front(QueuedCommand {
+                        command,
+                        focus_token,
+                        deadline_ms,
+                        scope,
+                    });
+                    break;
                 }
-                Err(_) => break,
             }
         }
     }
