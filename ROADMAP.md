@@ -5,13 +5,21 @@ Authoritative sequencing lives in `rfcs/`. This file is the orientation view.
 
 ## Current proposed / deferred RFCs
 
-- **RFC-043** — proposed, approved for implementation; reopen the last
-  workspace on launch, wiring the existing `reopen_last_workspace` setting.
-- **RFC-044** — proposed; a second, independent WebView smoke run giving the
-  shell's keyboard and focus contracts (including RFC-042) reproducible
-  automated regression coverage. Depends on RFC-043.
+- **RFC-045** — accepted; release-archive portability and completeness.
+  Slices 1–2 shipped: platform helper scripts inside every release archive,
+  and a cross-distribution portability check before publishing. Slice 3
+  (bundling the runtime's own dependencies) is deferred to Dioxus 0.8 stable,
+  with no date.
+- **RFC-046** — accepted; paste HTML as Markdown. Not yet implemented.
 - **RFC-032** — deferred until profiling shows need
 - **RFC-039/040** — future evaluation only
+
+RFC-043 (reopen the last workspace on launch), RFC-044 (a second, independent
+WebView smoke run giving the shell's keyboard and focus contracts, including
+RFC-042, reproducible automated regression coverage — its CI step now blocks)
+and RFC-047 (a user command that arrives while the editor is mid-transition is
+queued instead of dropped, and reported if it cannot run) all shipped in full
+and now live in `rfcs/done/`.
 
 RFC-042 (shell interaction, focus, and accessibility conformance) shipped in
 full across v0.14.0 and v0.15.0 and now lives in `rfcs/done/`.
@@ -39,6 +47,11 @@ Full-text search, backlinks, export profiles, Git awareness, workspace
 templates, extension policy, plugin system, sync/collaboration.
 
 **1.0.0 requires explicit maintainer sign-off on the acceptance checklist.**
+
+## Shipped — v0.16.0 (2026-09-22)
+RFC-043: the "reopen last workspace on launch" setting now works. RFC-045
+slices 1–2: platform helper scripts ship inside every release archive, and a
+cross-distribution portability check runs before publishing.
 
 ## Shipped — v0.15.0 (2026-08-17)
 RFC-042 slice 5 completes the RFC: every Form Mode block is a named

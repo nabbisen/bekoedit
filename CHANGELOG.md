@@ -6,6 +6,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-09-22
+
+### Added
+- **Reopen last workspace on launch.** The Settings checkbox of that name now
+  works: when enabled, bekoedit opens your most recent workspace before the
+  first frame, with no Start Screen flash. It opens a workspace, never a
+  document, so unsaved-change recovery still takes precedence. If the most
+  recent workspace cannot be opened — an unmounted volume, a deleted folder —
+  bekoedit shows the Start Screen with a notice naming it, and never silently
+  opens a different project instead. The setting has existed since v0.2.0 and
+  did nothing until now (RFC-043).
+- **Platform helper scripts now ship inside the release archives.** Each
+  archive contains its own platform's script at the root, beside the binary:
+  `run-linux.sh`, `run-macos.sh` or `run-windows.ps1`. The first-run
+  instructions in `README.md` have referenced these since v0.8.0, but no
+  archive contained them — most sharply on macOS, where `run-macos.sh` clears
+  the quarantine attribute and is the entire first-run path for an unsigned
+  binary (RFC-045).
+
+### Fixed
+- Opening a document from the workspace tree or a backlink now moves focus to
+  the editor.
+- Opening a search result in Text or Split mode, and choosing "New File" or
+  "Split" from a menu, now move focus to the editor. The two menu items no
+  longer leave later focus requests refused.
+- Opening the application menu or the editor tools menu from the keyboard
+  (Down, Up, Enter or Space on its button) now moves focus into the menu.
+  Before this fix, focus stayed on the button, so the arrow keys could not
+  reach the items. 0.14.0 and 0.15.0 both listed this as working.
+- On Windows, starting bekoedit no longer opens a console window next to the
+  app.
+- On Windows, if the Microsoft Edge WebView2 Runtime is missing, bekoedit now
+  says so and links to the download, instead of closing immediately.
+- Clicking a mode tab while the editor is still switching now moves focus into
+  the editor, as an ordinary click does.
+- A click or keystroke that arrives while the editor is still switching is no
+  longer ignored. It runs as soon as the editor is ready, or, if it cannot, a
+  message says which action did not happen and why. Saving is never applied to
+  a different document than the one that was open when you asked.
+
+### Security
+- Updated `rustls` to 0.23.45, resolving RUSTSEC-2026-0285.
+
 ## [0.15.0] - 2026-08-17
 
 ### Added
