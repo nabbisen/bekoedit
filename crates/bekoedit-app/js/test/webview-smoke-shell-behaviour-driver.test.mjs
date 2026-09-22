@@ -615,6 +615,11 @@ test(
     assert.equal(d2.kind, "progress");
     assert.equal(d2.milestone, "authority_released_editor_refocused");
 
+    // RFC-047 §7: Preview and Text, one exchange.
+    const queued = await step("queued_switch_claims_focus", cursor);
+    assert.equal(queued.kind, "progress");
+    assert.equal(queued.milestone, "queued_switch_focused_editor");
+
     // Slice 3 stage 2: Settings, then the conflict banner, ending terminal.
     const settings = new FakeSettings(tree, { menu: menus.app, tabs }).install();
     const conflict = new FakeConflict(tree, { tabs }).install();
@@ -655,6 +660,7 @@ test(
       "tabs_click_focused_editor",
       "menu_closed_into_editor_kept",
       "authority_released_editor_refocused",
+      "queued_switch_focused_editor",
       "settings_heading_focused",
       "settings_exit_restored_trigger",
       "conflict_document_dirtied",
@@ -1285,7 +1291,7 @@ test(
 );
 
 test(
-  "D2 authority_released_after_editor_focus: a later claim succeeds, then hands over to Settings",
+  "D2 authority_released_after_editor_focus: a later claim succeeds, then hands over to the queued-switch phase",
   { concurrency: false },
   async () => {
     const tree = new FakeTree();
@@ -1297,7 +1303,7 @@ test(
 
     assert.equal(report.kind, "progress");
     assert.equal(report.milestone, "authority_released_editor_refocused");
-    assert.equal(window.__bkWebViewShellBehaviourState.phase, "settings_entry");
+    assert.equal(window.__bkWebViewShellBehaviourState.phase, "queued_switch_claims_focus");
     assert.equal(tabs.tab("mode-preview").clicks, 1);
     assert.equal(document.activeElement, tabs.content);
   },
@@ -1382,6 +1388,65 @@ test(
       report.result.error,
       /D2: activating Text to claim the editor again.*mode-text:selected=false.*mode-preview:selected=true/,
       "the failure names Preview still selected, as run 35168125047 did",
+    );
+  },
+);
+
+// ---- RFC-047 §7: Preview and Text clicked with nothing waiting between them
+
+test(
+  "G1 queued_switch_claims_focus: Text wins and takes focus when clicked right after Preview, one exchange",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    // No lag through D2: it must complete normally, as every other test
+    // reaching this point does. The lag is switched on only for this
+    // phase's own exchange, not retroactively for D2's.
+    const { cursor, tabs } = await driveToTabs(tree);
+    await driveTabsAndAuthority(cursor);
+    tabs.teardownLag = true;
+    tabs.queueDuringTeardown = true;
+    // The teardown ends partway through the phase's own waitFor loop, exactly
+    // as the real destroyed event can arrive mid-poll -- not between exchanges,
+    // since this phase is deliberately one exchange only. `setImmediate`, not
+    // a real timer: the fake clock's `requestAnimationFrame` (tree-fake.mjs)
+    // is itself `setImmediate`-driven, so this interleaves with its polling
+    // deterministically instead of racing a real wall-clock delay against it.
+    setImmediate(() => tabs.finishTeardown());
+
+    const report = await step("queued_switch_claims_focus", cursor);
+
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "queued_switch_focused_editor");
+    assert.equal(tabs.selected, "mode-text");
+    assert.equal(tabs.droppedActivations, 0, "nothing was dropped: it was queued");
+    assert.equal(document.activeElement, tabs.content);
+  },
+);
+
+test(
+  "G1 mutation: reverting to the pre-RFC-047 drop fails the phase, naming itself",
+  { concurrency: false },
+  async () => {
+    const tree = new FakeTree();
+    tree.install();
+    const { cursor, tabs } = await driveToTabs(tree);
+    await driveTabsAndAuthority(cursor);
+    // `queueDuringTeardown` left at its default (false): the old Busy-drop
+    // shape, switched on only for this phase's own exchange.
+    tabs.teardownLag = true;
+
+    const report = await step("queued_switch_claims_focus", cursor);
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.equal(report.result.stage, "queued_switch_claims_focus");
+    assert.equal(tabs.droppedActivations, 1, "the click reached Busy and was dropped, as before RFC-047");
+    assert.match(
+      report.result.error,
+      /G1: Text must win and the editor must take focus/,
+      "the phase fails naming itself, not a generic timeout",
     );
   },
 );
@@ -1501,6 +1566,10 @@ async function driveToSettings(tree, { settings: settingsOptions, conflict: conf
   const { cursor, menus, tabs } = await driveToTabs(tree);
   const d2 = await driveTabsAndAuthority(cursor);
   assert.equal(d2.kind, "progress", "stage 1 hands over to stage 2");
+  // RFC-047 §7: Preview and Text, one exchange, no lag configured here, so it
+  // resolves within this one step and hands straight to Settings.
+  const queued = await step("queued_switch_claims_focus", cursor);
+  assert.equal(queued.kind, "progress", "the queued-switch phase hands over to Settings");
   const settings = new FakeSettings(tree, { menu: menus.app, tabs, ...settingsOptions }).install();
   const conflict = new FakeConflict(tree, { tabs, ...conflictOptions }).install();
   return { cursor, menus, tabs, settings, conflict };
@@ -1655,7 +1724,7 @@ test(
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, true);
     assert.equal(report.result.stage, "conflict_banner_focus_kept");
-    assert.equal(report.result.milestones.length, 27);
+    assert.equal(report.result.milestones.length, 28);
     assert.equal(document.activeElement, tabs.content);
     assert.equal(conflict.actions.reduce((sum, action) => sum + action.clicks, 0), 0);
   },

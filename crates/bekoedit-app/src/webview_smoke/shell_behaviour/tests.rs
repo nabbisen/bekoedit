@@ -145,6 +145,11 @@ fn machine_advances_through_every_transition_ending_at_conflict_banner() {
         (
             ShellBehaviourPhase::AuthorityReleasedAfterEditorFocus,
             "authority_released_editor_refocused",
+            ShellBehaviourPhase::QueuedSwitchClaimsFocus,
+        ),
+        (
+            ShellBehaviourPhase::QueuedSwitchClaimsFocus,
+            "queued_switch_focused_editor",
             ShellBehaviourPhase::SettingsEntry,
         ),
         (

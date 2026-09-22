@@ -67,24 +67,43 @@ class FakeTabList {
  *   tab's claim is refused and the editor never takes focus (D2).
  * - `teardownLag: true` -- task 021's race. Leaving Text renders the new mode
  *   at once, but the controller stays in `Unmounting` until `finishTeardown()`
- *   (the page's `destroyed` event reaching Rust); a Text activation inside
- *   that window is dropped as `Busy`, so the mode stays where it was. The
- *   Rust sequence's settle gate is what waits for `finishTeardown()`'s real
- *   counterpart; a test stands in for it by calling it between exchanges.
+ *   (the page's `destroyed` event reaching Rust). What a Text activation
+ *   inside that window does next is `queueDuringTeardown`'s call:
+ *   - `false` (default) -- dropped as `Busy`, the pre-RFC-047 behaviour, so
+ *     the mode stays where it was. Task 021's settle gate is what waits for
+ *     `finishTeardown()`'s real counterpart instead of acting into this
+ *     window; a test stands in for it by calling `finishTeardown()` between
+ *     exchanges.
+ *   - `true` -- queued instead (RFC-047 slice 1), and replayed by
+ *     `finishTeardown()` once the window ends, with no exchange boundary
+ *     required in between. RFC-047 §7's phase exercises this: it clicks
+ *     Preview and Text with nothing waiting between them, in one exchange,
+ *     so only the queue -- not the gate -- can make Text win.
  */
 export class FakeModeTabs {
   constructor(
     owner,
-    { selected = "mode-form", activateOnArrow = null, docLength = 8, teardownLag = false } = {},
+    {
+      selected = "mode-form",
+      activateOnArrow = null,
+      docLength = 8,
+      teardownLag = false,
+      queueDuringTeardown = false,
+    } = {},
   ) {
     this.owner = owner;
     this.selected = selected;
     this.activateOnArrow = activateOnArrow;
     this.docLength = docLength;
     this.teardownLag = teardownLag;
+    this.queueDuringTeardown = queueDuringTeardown;
     this.tearingDown = false;
-    /** Activations dropped as Busy inside the teardown window. */
+    /** Activations dropped as Busy inside the teardown window
+     * (`queueDuringTeardown: false`, the pre-RFC-047 shape). */
     this.droppedActivations = 0;
+    /** The one activation queued inside the teardown window
+     * (`queueDuringTeardown: true`), replayed by `finishTeardown()`. */
+    this.queuedActivation = null;
     this.authorityHeld = false;
     /** Called on every view.dispatch, so a conflict fake can mark the
      * document dirty (slice 3 §8 F1). */
@@ -156,14 +175,24 @@ export class FakeModeTabs {
     if (this.teardownLag && leavingText) this.tearingDown = true;
   }
 
-  /** The `destroyed` event reaching Rust: the controller leaves Unmounting. */
+  /** The `destroyed` event reaching Rust: the controller leaves Unmounting,
+   * and the queue (if anything is in it) drains. */
   finishTeardown() {
     this.tearingDown = false;
+    if (this.queuedActivation) {
+      const tab = this.queuedActivation;
+      this.queuedActivation = null;
+      this.activate(tab);
+    }
   }
 
   activate(tab) {
     if (this.tearingDown && tab.launchId === "mode-text") {
-      this.droppedActivations += 1;
+      if (this.queueDuringTeardown) {
+        this.queuedActivation = tab;
+      } else {
+        this.droppedActivations += 1;
+      }
       return;
     }
     const focusedOnTab = this.owner.activeElement() === tab;

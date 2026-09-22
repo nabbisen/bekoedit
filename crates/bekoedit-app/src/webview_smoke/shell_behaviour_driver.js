@@ -39,6 +39,7 @@ return (async () => {
     "tabs_click_activates",
     "menu_closes_into_editor",
     "authority_released_after_editor_focus",
+    "queued_switch_claims_focus",
     "settings_entry",
     "settings_exit_restored",
     "conflict_dirtied",
@@ -1221,8 +1222,30 @@ return (async () => {
             `D2: activating Text to claim the editor again; a refused claim means the menu's ` +
             `close into the editor kept shell authority (at timeout: ${describeTabs()} ${editorSummary()})`,
         );
-        outgoing = advance("authority_released_editor_refocused", "settings_entry");
+        outgoing = advance("authority_released_editor_refocused", "queued_switch_claims_focus");
       }
+    } else if (requestedPhase === "queued_switch_claims_focus") {
+      // RFC-047 §7: click Preview, then Text, in the *same* exchange -- D2's
+      // old shape, task 021 split it into two exchanges so the settle gate
+      // could intervene between them. Here nothing waits between the two
+      // clicks, so the gate never gets the chance: only the queue (RFC-047
+      // slice 1) and the effective-target fix (task 022) can make Text win
+      // and take focus.
+      state.stage = "queued_switch_claims_focus";
+      uniqueTab("mode-preview").click();
+      await waitFor(
+        () => selectionViolation("mode-preview") === null,
+        () => `G1: clicking the Preview tab to select it (at timeout: ${describeTabs()})`,
+      );
+      await activateTab("mode-text", "G1");
+      await waitFor(
+        () => selectionViolation("mode-text") === null && editorFocusedWithDoc(docLengths.child),
+        () =>
+          `G1: Text must win and the editor must take focus after Preview and Text were ` +
+          `clicked with nothing waiting between them (at timeout: ${describeTabs()} ${editorSummary()})`,
+        3000,
+      );
+      outgoing = advance("queued_switch_focused_editor", "settings_entry");
     } else if (MENU_PHASES[requestedPhase]) {
       const { spec, kind, milestone, next } = MENU_PHASES[requestedPhase];
       state.stage = requestedPhase;

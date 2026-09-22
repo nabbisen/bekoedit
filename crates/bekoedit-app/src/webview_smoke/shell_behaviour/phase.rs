@@ -4,7 +4,7 @@
 
 use crate::webview_smoke::transport::PhaseKind;
 
-pub(super) const EXPECTED_MILESTONES: [&str; 27] = [
+pub(super) const EXPECTED_MILESTONES: [&str; 28] = [
     "recovery_heading_focused",
     "recovery_exit_restored_logo",
     "down_up_moved",
@@ -28,6 +28,7 @@ pub(super) const EXPECTED_MILESTONES: [&str; 27] = [
     "tabs_click_focused_editor",
     "menu_closed_into_editor_kept",
     "authority_released_editor_refocused",
+    "queued_switch_focused_editor",
     "settings_heading_focused",
     "settings_exit_restored_trigger",
     "conflict_document_dirtied",
@@ -82,6 +83,12 @@ pub(in crate::webview_smoke) enum ShellBehaviourPhase {
     MenuClosesIntoEditor,
     /// §8 D2: that close released shell authority.
     AuthorityReleasedAfterEditorFocus,
+    /// RFC-047 §7: Preview and Text are clicked in the *same* exchange --
+    /// the shape that raced before task 021's settle gate existed. The
+    /// queue, not the gate, must make Text win and take focus here: nothing
+    /// in this phase waits between the two clicks, so a harness fix alone
+    /// cannot save it (RFC-047 slice 2 handoff §7).
+    QueuedSwitchClaimsFocus,
     /// §8 E3: Settings entry, focus on its heading.
     SettingsEntry,
     /// §8 E4: Settings exit, focus stays on the app-menu trigger.
@@ -119,6 +126,7 @@ impl ShellBehaviourPhase {
             Self::TabsClickActivates => "tabs_click_activates",
             Self::MenuClosesIntoEditor => "menu_closes_into_editor",
             Self::AuthorityReleasedAfterEditorFocus => "authority_released_after_editor_focus",
+            Self::QueuedSwitchClaimsFocus => "queued_switch_claims_focus",
             Self::SettingsEntry => "settings_entry",
             Self::SettingsExitRestored => "settings_exit_restored",
             Self::ConflictDirtied => "conflict_dirtied",
@@ -150,7 +158,8 @@ impl ShellBehaviourPhase {
             Self::TabsArrowsFocusOnly => Some(Self::TabsClickActivates),
             Self::TabsClickActivates => Some(Self::MenuClosesIntoEditor),
             Self::MenuClosesIntoEditor => Some(Self::AuthorityReleasedAfterEditorFocus),
-            Self::AuthorityReleasedAfterEditorFocus => Some(Self::SettingsEntry),
+            Self::AuthorityReleasedAfterEditorFocus => Some(Self::QueuedSwitchClaimsFocus),
+            Self::QueuedSwitchClaimsFocus => Some(Self::SettingsEntry),
             Self::SettingsEntry => Some(Self::SettingsExitRestored),
             Self::SettingsExitRestored => Some(Self::ConflictDirtied),
             Self::ConflictDirtied => Some(Self::ConflictBannerFocusKept),
@@ -186,6 +195,7 @@ impl ShellBehaviourPhase {
             Self::TabsClickActivates => "tabs_click_focused_editor",
             Self::MenuClosesIntoEditor => "menu_closed_into_editor_kept",
             Self::AuthorityReleasedAfterEditorFocus => "authority_released_editor_refocused",
+            Self::QueuedSwitchClaimsFocus => "queued_switch_focused_editor",
             Self::SettingsEntry => "settings_heading_focused",
             Self::SettingsExitRestored => "settings_exit_restored_trigger",
             Self::ConflictDirtied => "conflict_document_dirtied",
