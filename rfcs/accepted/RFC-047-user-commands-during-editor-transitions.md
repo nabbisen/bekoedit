@@ -138,10 +138,23 @@ milliseconds. A toast or a spinner for every queued command would turn an
 invisible success into visible noise, and would train users to ignore toasts.
 
 **A message, when it does not.** One `Warning` toast, naming the action in the
-user's words, for exactly three cases: overflow (§5.2), expiry (§5.3), and a
-changed document (§5.4). For example, "Could not switch to Form — the editor was
-busy", not a lifecycle state name. New i18n keys carry both EN and JA arms, and
-the existing parity and plain-language guards apply.
+user's words — "Could not switch to Form — the editor was busy", never a lifecycle
+state name. New i18n keys carry both EN and JA arms, and the existing parity and
+plain-language guards apply.
+
+*Amended 2026-09-22, after slice 1.* This said "exactly three cases". Slice 1's
+implementation named six reasons a command can leave the queue, so the rule is
+stated per reason:
+
+| Reason | Reported |
+|---|---|
+| Overflow (§5.2), expiry (§5.3), changed document (§5.4) | yes |
+| The editor became unavailable, the relay to the page was lost | yes — the command will not run, and waiting will not fix it |
+| Shutdown | **no** — the window is closing, and a toast that cannot be read is noise in the log rather than information for a user |
+
+**When several are discarded at once, they are reported together**, grouped by
+reason, naming how many. Emptying a queue of two plus any commands already handed
+to the host must not produce a stack of toasts for one event.
 
 **Controls are never disabled during a transition.** Disabling a focused mode tab
 would move focus out from under the keyboard, and a screen-reader user would hear
@@ -156,8 +169,16 @@ waiting beyond ~300 ms, which is where a person starts to perceive delay.
 
 ### 5.6 What is unchanged · **[Binding]**
 
-- `NoOp` — switching to the mode already shown — stays a no-op, silently. There is
-  nothing to report.
+- `NoOp` stays silent. There is nothing to report.
+
+  *Amended 2026-09-22, by task 022.* This said "switching to the mode already
+  shown". That test read only the **mounted** editor, so it called a click a no-op
+  while a switch to another mode was already on its way, and the user's last click
+  was lost — the same defect this RFC exists to remove, one layer up. A switch is a
+  no-op only against the mode the app is **heading for**: never when another switch
+  is queued, else the one in flight, else the mounted editor. That single rule is
+  `SourceSyncState::is_same_source_mode`, and the focus layer compares against it
+  too rather than keeping its own copy.
 - `Unavailable { retired: Some(_) }` keeps its error toast. Waiting cannot resolve
   it, so it must not be queued.
 - The focus token travels with the queued entry. If the user moved focus while it
@@ -215,6 +236,10 @@ product defect.
    It also unifies the existing depth-1 `waiting_command` slot into this queue,
    so one mechanism remains rather than two.
 2. **The reporting**: §5.5's toast, its i18n keys, and §7's WebView phase.
+   Handoff:
+   [`handoffs/047-user-commands-during-editor-transitions/slice-2-the-report.md`](../handoffs/047-user-commands-during-editor-transitions/slice-2-the-report.md).
+   It also closes the one silent drop slice 1 left: `relay_disconnected` clearing
+   an `Execute` the host had not run yet.
 
 ## 10. Questions, answered
 
