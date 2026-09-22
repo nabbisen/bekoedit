@@ -149,6 +149,26 @@ fn one_discard_is_one_message_naming_the_action() {
     );
 }
 
+/// RFC-047 slice 2 review §3: word order is translatable data, not a Rust
+/// format string one language was written to fit. English states the effect
+/// then the cause; Japanese states the cause then the effect, as one
+/// sentence -- not two sentences spliced with an em dash.
+#[test]
+fn japanese_states_the_cause_before_the_effect_as_one_sentence() {
+    let discards = vec![discard(
+        SourceCommand::SwitchMode(EditorMode::Form),
+        DiscardReason::Overflow,
+    )];
+    let ja = discard_messages(&discards, Lang::Ja);
+    assert_eq!(
+        ja,
+        vec!["エディタが使用中のため、フォームに切り替えられませんでした。".to_string()]
+    );
+    // No em dash, and no dangling sentence without its own closing "。".
+    assert!(!ja[0].contains('—'));
+    assert_eq!(ja[0].matches('。').count(), 1);
+}
+
 #[test]
 fn two_discards_sharing_a_reason_report_once_naming_the_count() {
     let discards = vec![
@@ -167,7 +187,7 @@ fn two_discards_sharing_a_reason_report_once_naming_the_count() {
     let ja = discard_messages(&discards, Lang::Ja);
     assert_eq!(
         ja,
-        vec!["2件の操作を実行できませんでした — エディタが使用中でした。".to_string()]
+        vec!["エディタが使用中のため、2件の操作を実行できませんでした。".to_string()]
     );
 }
 

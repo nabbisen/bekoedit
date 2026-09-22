@@ -156,11 +156,18 @@ fn tr_en(key: &str) -> &'static str {
         "webview2.missing.body" => {
             "bekoedit needs the Microsoft Edge WebView2 Runtime, and it is not installed on this computer. Install it from Microsoft's download page, then start bekoedit again:"
         }
-        // RFC-047 slice 2: a discarded queued command, as one sentence --
-        // what did not happen (this half), then why (queue.reason.*). The
-        // `{}` placeholder is filled in by `discard_report::action_phrase`,
-        // where EN and JA differ in whether the dynamic part (a file name, a
-        // count) comes before or after the fixed text.
+        // RFC-047 slice 2: a discarded queued command, as one sentence -- what
+        // did not happen (queue.action.*), then why (queue.reason.*), joined
+        // by queue.template. The `{}` placeholder inside an action is filled
+        // in by `discard_report::action_phrase`, where EN and JA differ in
+        // whether the dynamic part (a file name, a count) comes before or
+        // after the fixed text. `queue.template` is why the join itself is
+        // translatable data rather than one Rust format string: English states
+        // the effect then the cause ("Could not switch to Form — the editor
+        // was busy."); Japanese states the cause then the effect as one
+        // sentence ("エディタが使用中のため、フォームに切り替えられませんでした。"),
+        // which is why the JA `queue.reason.*` values below are cause
+        // fragments ending in "のため、", not full sentences.
         "queue.action.switch_mode.text" => "Could not switch to Text",
         "queue.action.switch_mode.form" => "Could not switch to Form",
         "queue.action.switch_mode.preview" => "Could not switch to Preview",
@@ -181,6 +188,9 @@ fn tr_en(key: &str) -> &'static str {
         "queue.reason.busy" => "the editor was busy.",
         "queue.reason.document_changed" => "the document changed before it could run.",
         "queue.reason.unresponsive" => "the editor stopped responding.",
+        // Effect, then cause: "{action} — {reason}". `queue.reason.*`'s EN
+        // values already end in "." and need nothing added.
+        "queue.template" => "{action} — {reason}",
         "recovery.restored" => "Recovery restored",
         "recovery.recoverable_suffix" => "recoverable documents",
         "toast.dismiss" => "Dismiss notification",
@@ -334,9 +344,13 @@ fn tr_ja(key: &str) -> &'static str {
         "queue.action.move_section_down" => "セクションを下へ移動できませんでした",
         "queue.action.restore_history" => "このバージョンを復元できませんでした",
         "queue.action.many" => "{}件の操作を実行できませんでした",
-        "queue.reason.busy" => "エディタが使用中でした。",
-        "queue.reason.document_changed" => "実行前にドキュメントが変更されました。",
-        "queue.reason.unresponsive" => "エディタが応答しなくなりました。",
+        // Cause fragments, not full sentences: queue.template puts each one
+        // before the action it explains, ending the sentence itself.
+        "queue.reason.busy" => "エディタが使用中のため、",
+        "queue.reason.document_changed" => "実行前にドキュメントが変更されたため、",
+        "queue.reason.unresponsive" => "エディタが応答しなくなったため、",
+        // Cause, then effect, as one sentence: "{reason}{action}。".
+        "queue.template" => "{reason}{action}。",
         "recovery.restored" => "復元しました",
         "recovery.recoverable_suffix" => "件の復元可能なドキュメントがあります",
         "toast.dismiss" => "通知を閉じる",

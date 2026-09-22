@@ -100,9 +100,20 @@ pub fn discard_messages(discards: &[QueueDiscard], lang: Lang) -> Vec<String> {
                 [only] => action_phrase(only, lang),
                 many => many_action_phrase(many.len(), lang),
             };
-            format!("{action} — {reason_text}")
+            compose(&action, reason_text, lang)
         })
         .collect()
+}
+
+/// Joins an action and a reason into one sentence, in whichever order and
+/// punctuation `queue.template` gives for `lang`: EN states the effect then
+/// the cause; JA states the cause then the effect, as one sentence (RFC-047
+/// slice 2 review §3) -- word order and closing punctuation are translatable
+/// data here, not a Rust format string one language was written to fit.
+fn compose(action: &str, reason: &str, lang: Lang) -> String {
+    tr(lang, "queue.template")
+        .replacen("{action}", action, 1)
+        .replacen("{reason}", reason, 1)
 }
 
 #[cfg(test)]
