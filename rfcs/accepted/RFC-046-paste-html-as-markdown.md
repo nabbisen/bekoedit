@@ -221,6 +221,59 @@ that is meant to move. bekoedit does not block on any of it: §5.4's fallbacks a
 §5.3's guards cover the gaps, and each fix arrives here as a version bump with
 updated fixture expectations.
 
+### 6.1 Upstream's answer, 2026-09-22 · **implementation targets `mdka` 2.4.0**
+
+The letter was sent and answered
+(`.git-exclude/upstream/mdka/receive/2026-09-22-reply-conversion-gaps.md`).
+
+| Our item | Upstream status |
+|---|---|
+| 2 — `\1.` invalid escape | **Fixed in 2.3.0**, context-driven; `1)` too. They also found the inverse case our reproduction missed. |
+| 3 — emphasis wrapping blocks | **Fixed in 2.3.0**, and generalised to any inline element around block content. |
+| 4 — inline-style emphasis | **Partly.** `font-weight:normal` no longer emits delimiters, which fixes the all-bold Google Docs paste. Adding emphasis from `style` is still not done. |
+| 1 — tables, 5 — strikethrough, 6 — task lists | **Scheduled for 2.4.0.** Tables were deprioritised deliberately: their own conformance run found 64 of 177 cases emitting something other than what the HTML meant, and they chose validity first. |
+| 7 — `data:` option, 8 — `emit_id_anchors`, 9 — hard-break style | Candidates, no commitment. |
+
+**Three things they disclosed that decide our target version.** All predate
+2.3.0 and all are fixed on their `main` for 2.4.0:
+
+1. **A list item whose content is indented still splits the list in 2.3.0.** That
+   is the shape every formatter and CMS emits once the HTML is pretty-printed —
+   the shape a paste hits first.
+2. **An empty inline element emits literal asterisks**: `<p>a<b></b>b</p>` becomes
+   `a****b`, and a paragraph holding only an empty emphasis becomes `****`, which
+   reads as a horizontal rule. Editors routinely leave an empty `<b>` behind.
+3. **Nested identical emphasis inverts meaning**: `<em><em>x</em></em>` comes out
+   bold.
+
+Each is content damage a user would see, in ordinary pasted markup, and none is
+covered by §5.4's fallbacks — those catch *conversion failure*, not plausible-looking
+wrong output. **So this RFC targets 2.4.0, not 2.3.0.** 2.4.0 also lands tables,
+which deletes §5.4's rule 3 and its whole fallback branch, and strikethrough and
+task lists, which removes two more rows from §6's table.
+
+**Slice 1 is not blocked by that.** The converter crate, the §5.3 guards, the
+§5.4 rules and the fixture corpus are all version-independent work; only the
+version pin and the fixture expectations wait. Build slice 1 against 2.4.0 when
+it publishes, or build it now and pin at the end — but do not ship a paste path
+on 2.3.0.
+
+**Two measurements in this RFC are now version-specific.** §6's table and §8's
+timings were taken against 2.2.1. Upstream reports 2.3.0 converting text-heavy
+HTML **9–14% slower**, and list- or quote-heavy documents up to ~15% slower, with
+peak memory unchanged. At clipboard size that is microseconds against §5.4's 2 s
+budget, so no rule changes — but re-measure against 2.4.0 rather than carrying
+2.2.1's numbers forward.
+
+**`default-features = false` is narrower than §5.3 assumed.** It does not only
+drop `rayon`: it also removes `html_files_to_markdown` and its `_with` form,
+which are gated on the same feature. bekoedit uses neither, and conversion is
+unaffected. Upstream is making them unconditional in 2.4.0.
+
+**Owner's, routed not decided:** upstream added our items 2 and 3 to their
+conformance suite, credited, assuming the reproductions carry Apache-2.0 — the
+licence both projects already use. They asked us to say if that is wrong.
+
 ## 7. Testing
 
 - **Rust, headless.** A fixture corpus of real clipboard HTML from browsers, Google
