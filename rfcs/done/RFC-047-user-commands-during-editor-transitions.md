@@ -1,10 +1,25 @@
 # RFC-047: User commands during source-editor transitions
 
 **Project:** bekoedit
-**Status:** Accepted — approved for implementation by the project owner on
-2026-09-22, the day it was drafted, after RFC-044 slice 3 found the behaviour and
-task 021 worked around it in the harness. Slice 1 (the queue) is startable;
-slice 2 (the reporting) follows it.
+**Status:** Implemented — on `main`, not yet released. Accepted and drafted the
+same day, 2026-09-22, after RFC-044 slice 3 found the behaviour and task 021
+worked around it in the harness.
+
+- **Slice 1** (`4476f90`): the queue. A command that would have been answered
+  `Busy` is held, coalesced and expired, and every removal is recorded. It also
+  unified the pre-existing depth-1 `waiting_command` slot into the same queue, so
+  one mechanism remains.
+- **Task 022** (`7a0ca07`), which slice 1 uncovered: a switch claims editor focus
+  against the controller's effective target, not the UI mode, so the focus layer
+  and the controller share one notion of where the app is heading.
+- **Slice 2** (`79b45ec`): the report. One plain sentence per discarded command,
+  grouped by reason, with word order translated rather than assembled in English;
+  the last silent drop (`relay_disconnected`) closed; and RFC-044's
+  `queued_switch_claims_focus` phase, whose mutation fails naming itself.
+
+*Moved to `done/` 2026-09-22.* Nothing is deferred. The behaviour recorded for
+the owner in slice 1's review — a mode click lost during a teardown — is what
+this RFC removed.
 **Track:** Editor lifecycle
 **Priority:** Medium — no data is lost today, but a user action can vanish with no
 trace a user can see

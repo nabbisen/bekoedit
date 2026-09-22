@@ -1,10 +1,10 @@
 # RFC-047 handoff — slice 2: the report
 
-**Governing RFC:** [RFC-047](../../accepted/RFC-047-user-commands-during-editor-transitions.md) §5.5 (as amended 2026-09-22), §7, §9
+**Governing RFC:** [RFC-047](../../done/RFC-047-user-commands-during-editor-transitions.md) §5.5 (as amended 2026-09-22), §7, §9
 **Slice:** 2 of 2 — what the user sees, and the WebView proof.
 **Baseline:** `main` at `7a0ca07` or later, with slice 1 and task 022 merged. If
 `main` moves in a file this slice touches, merge `origin/main` in; never rebase.
-**Status:** inherited from RFC-047 (Accepted 2026-09-22)
+**Status:** inherited from RFC-047 (Implemented, on `main`; accepted 2026-09-22)
 **Date:** 2026-09-22
 
 ---

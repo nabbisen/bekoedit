@@ -1,10 +1,10 @@
 # RFC-047 handoff — slice 1: the queue
 
-**Governing RFC:** [RFC-047](../../accepted/RFC-047-user-commands-during-editor-transitions.md) §5.1–§5.4, §5.6, §7
+**Governing RFC:** [RFC-047](../../done/RFC-047-user-commands-during-editor-transitions.md) §5.1–§5.4, §5.6, §7
 **Slice:** 1 of 2 — the controller. Slice 2 is the user-facing reporting.
 **Baseline:** `main` at `5888d49` or later. If `main` moves in a file this slice
 touches, merge `origin/main` in; never rebase.
-**Status:** inherited from RFC-047 (Accepted 2026-09-22)
+**Status:** inherited from RFC-047 (Implemented, on `main`; accepted 2026-09-22)
 **Date:** 2026-09-22
 
 ---
