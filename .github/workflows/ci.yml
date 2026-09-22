@@ -297,9 +297,23 @@ jobs:
         # authority_released_after_editor_focus, settings_entry,
         # settings_exit_restored, conflict_dirtied and
         # conflict_banner_focus_kept last) changed this step's phase set.
-        # Count stands at 4 of 10, each read from its outcome line, never from
+        # Count stands at 9 of 10, each read from its outcome line, never from
         # a conclusion: 35168677703 (25253cf), 35169930195 (b963bf3),
-        # 35171045314 (73b64d1) and 35658660098 (5d44a5b, task 021's merge).
+        # 35171045314 (73b64d1), 35658660098 (5d44a5b), 35659415492 (3264f3a),
+        # 35661767800 (06c5bbb), 35663401077 (8989f1d), 35667042748 (0957415)
+        # and 35679554952 (4476f90, RFC-047 slice 1's merge).
+        # NOT COUNTED: 35663232933 (5888d49). Its log no longer returns any
+        # RFC-044 line, so the outcome line cannot be read; the step's own
+        # conclusion proves nothing, because continue-on-error masks it. Per
+        # the 2026-09-05 clock's precedent with run 33974083411, an unreadable
+        # run is skipped rather than treated as a failure or a pass.
+        # 35659415492 counts: its Fedora portability step hit a mirror timeout
+        # and the job was re-run, but this step's own outcome line read
+        # `success` on both attempts, and the criterion is about this step.
+        # AT 10: delete `continue-on-error: true` below, and this block records
+        # the promotion. Before doing so, decide what a later phase-set change
+        # means for a blocking step -- RFC-044 §10's restart rule was written
+        # for the non-blocking period, and RFC-047 §7 will add a phase.
         # RESET 2026-09-17 by a failure, not a phase-set change: the count had
         # reached 3 (35161575247 at 0978ff5, 35162153146 at 35ae3e8,
         # 35164021251 at fa8f2a1), then run 35168125047 at 00ff47c logged
