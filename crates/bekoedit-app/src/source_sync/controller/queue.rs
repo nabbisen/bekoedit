@@ -76,6 +76,15 @@ impl SourceSyncState {
         focus_token: Option<u64>,
     ) -> SubmitOutcome {
         self.drain_queue(current_document_id, now_ms);
+        // TEMP RFC-047 slice 2 handoff §7 mutation: a SwitchMode arriving
+        // while the controller is busy (any Held state -- SnapshotPending,
+        // Unmounting, etc.) is dropped rather than queued, the pre-RFC-047
+        // shape. Throwaway.
+        if matches!(self.gate(current_document_id), Gate::Held)
+            && matches!(command, SourceCommand::SwitchMode(_))
+        {
+            return SubmitOutcome::NoOp;
+        }
         match self.gate(current_document_id) {
             Gate::Unavailable => SubmitOutcome::Unavailable,
             Gate::Open if self.queue.is_empty() => {
