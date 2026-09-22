@@ -77,9 +77,10 @@ impl SourceSyncState {
     ) -> SubmitOutcome {
         self.drain_queue(current_document_id, now_ms);
         // TEMP RFC-047 slice 2 handoff §7 mutation: a SwitchMode arriving
-        // while Unmounting is dropped rather than queued (the pre-RFC-047
-        // shape). Throwaway.
-        if matches!(self.lifecycle.state, LifecycleState::Unmounting { .. })
+        // while the controller is busy (any Held state -- SnapshotPending,
+        // Unmounting, etc.) is dropped rather than queued, the pre-RFC-047
+        // shape. Throwaway.
+        if matches!(self.gate(current_document_id), Gate::Held)
             && matches!(command, SourceCommand::SwitchMode(_))
         {
             return SubmitOutcome::NoOp;
