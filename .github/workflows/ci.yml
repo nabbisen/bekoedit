@@ -280,78 +280,33 @@ jobs:
             env NO_AT_BRIDGE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
             ./target/release/bekoedit \
             --webview-smoke "$SMOKE_PARENT/bekoedit-webview-smoke-profile"
-      - name: RFC-044 shell-behaviour run -- tree navigation (§8 A)
-        # Non-blocking (RFC-044 §10, handoff §6): the RFC-044 §2 spike, its
-        # negative control, and the A.1 Tab probe are absorbed here and
-        # removed -- this step's down_up phase IS the §2 spike's proven
-        # assertion (contract 2), and the A.1 finding is why contract 1 is
-        # the roving-tabindex invariant asserted inside this run rather than
-        # a synthetic Tab.
+      - name: RFC-044 shell-behaviour run (§8 A-F)
+        # BLOCKING since 2026-09-22. RFC-044 §10's promotion criterion --
+        # ten consecutive green runs of this step on `main`, decided at §14
+        # Q1 -- was met and is recorded in RFC-044's Status. The ten, each
+        # read from its outcome line and never from a conclusion:
+        # 35168677703 (25253cf), 35169930195 (b963bf3), 35171045314 (73b64d1),
+        # 35658660098 (5d44a5b), 35659415492 (3264f3a), 35661767800 (06c5bbb),
+        # 35663401077 (8989f1d), 35667042748 (0957415), 35679554952 (4476f90)
+        # and 35680223116 (986d98f).
+        # Not counted: 35663232933 (5888d49), whose log no longer returns any
+        # RFC-044 line; an unreadable run is skipped, per the 2026-09-05
+        # clock's precedent with run 33974083411. The clock's full history is
+        # in this file's git log.
         #
-        # Promotion criterion, recorded per handoff §6: promote to blocking
-        # after 10 consecutive green runs of this step on `main`.
+        # ADDING A PHASE NOW (RFC-044 §10, amended 2026-09-22): the restart
+        # rule was written for the non-blocking period and no longer applies
+        # by itself. A change to this step's phase set merges blocking, with
+        # its own mutation evidence, and the reviewer may instead require it
+        # to land behind `continue-on-error` for a stated soak. If a phase
+        # proves unstable on `main`, fix or remove the phase -- do not make
+        # the whole step non-blocking again.
         #
-        # CLOCK RESTARTED 2026-09-17 (RFC-044 slice 3, PR #40): the ten C-F
-        # phases (recovery_entry and recovery_exit first; tabs_arrows_focus_only,
-        # tabs_click_activates, menu_closes_into_editor,
-        # authority_released_after_editor_focus, settings_entry,
-        # settings_exit_restored, conflict_dirtied and
-        # conflict_banner_focus_kept last) changed this step's phase set.
-        # Count stands at 9 of 10, each read from its outcome line, never from
-        # a conclusion: 35168677703 (25253cf), 35169930195 (b963bf3),
-        # 35171045314 (73b64d1), 35658660098 (5d44a5b), 35659415492 (3264f3a),
-        # 35661767800 (06c5bbb), 35663401077 (8989f1d), 35667042748 (0957415)
-        # and 35679554952 (4476f90, RFC-047 slice 1's merge).
-        # NOT COUNTED: 35663232933 (5888d49). Its log no longer returns any
-        # RFC-044 line, so the outcome line cannot be read; the step's own
-        # conclusion proves nothing, because continue-on-error masks it. Per
-        # the 2026-09-05 clock's precedent with run 33974083411, an unreadable
-        # run is skipped rather than treated as a failure or a pass.
-        # 35659415492 counts: its Fedora portability step hit a mirror timeout
-        # and the job was re-run, but this step's own outcome line read
-        # `success` on both attempts, and the criterion is about this step.
-        # AT 10: delete `continue-on-error: true` below, and this block records
-        # the promotion. Before doing so, decide what a later phase-set change
-        # means for a blocking step -- RFC-044 §10's restart rule was written
-        # for the non-blocking period, and RFC-047 §7 will add a phase.
-        # RESET 2026-09-17 by a failure, not a phase-set change: the count had
-        # reached 3 (35161575247 at 0978ff5, 35162153146 at 35ae3e8,
-        # 35164021251 at fa8f2a1), then run 35168125047 at 00ff47c logged
-        # `outcome: failure` at D2 (authority_released_after_editor_focus) --
-        # a harness race with the Text editor's teardown, fixed by task 021.
-        # "Consecutive" means a failure resets the count.
-        # Update this line as the count advances; delete `continue-on-error`
-        # when it reaches 10.
-        #
-        # Previous clocks, each superseded by the restart above:
-        # - 2026-09-16 (RFC-044 slice 2, PR #30): reached 4 of 10, runs
-        #   35111768240 (push at 59f21b7), 35113268467 (472b13f), 35114429436
-        #   (dd0c6aa) and 35155291453 (f3986a2), each outcome line `success`.
-        # - 2026-09-16 (task 016, PR #25): reached 3 of 10, runs 35045829469
-        #   (push at 896e151), 35103008667 (d9b0051) and 35108175240 (e9779bc,
-        #   task 017's merge), each outcome line `success`.
-        # - 2026-09-15 (task 014, PR #22, contract 7): reached 1 of 10, run
-        #   34978372539 (push at 685ea9a), outcome line `success`.
-        # - 2026-09-05 (PR #21, fast-forward to ab6acf9): reached 1 of 10, run
-        #   33943540388, verified from its log; run 33974083411 not counted,
-        #   its job log truncated with no result line.
-        #
-        # The count RESTARTS when this step's phase set changes (RFC-044 §10):
-        # any later change to the phase set records a new start here in its
-        # merge.
-        #
-        # How to read a run: NOT from any conclusion. continue-on-error masks
-        # this step's own API conclusion as well as the job's -- run
-        # 34971450076 reports conclusion=success for this step while its log
-        # says FAILED. Read the next step instead: "RFC-044 shell-behaviour
-        # outcome (unmasked)" prints `RFC-044 shell-behaviour outcome: <outcome>`
-        # from steps.shell_behaviour.outcome, which continue-on-error does not
-        # mask, and on anything but success raises a warning annotation titled
-        # "RFC-044 shell-behaviour run did not pass" (visible in
-        # `gh run view <id>`). This step's own log still carries the
-        # PASSED/FAILED line and the reason.
+        # This step's log carries the PASSED/FAILED line and the reason. The
+        # next step still prints a greppable
+        # `RFC-044 shell-behaviour outcome: <outcome>` line; now that the mask
+        # is gone, this step's own conclusion is truthful too.
         id: shell_behaviour
-        continue-on-error: true
         run: |
           BEHAVIOUR_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-shell-behaviour.XXXXXX")"
           trap 'rm -rf "$BEHAVIOUR_PARENT"' EXIT
@@ -366,7 +321,7 @@ jobs:
         run: |
           echo "RFC-044 shell-behaviour outcome: ${OUTCOME}"
           if [ "${OUTCOME}" != "success" ]; then
-            echo "::warning title=RFC-044 shell-behaviour run did not pass::non-blocking step outcome=${OUTCOME}; see that step's log"
+            echo "::warning title=RFC-044 shell-behaviour run did not pass::outcome=${OUTCOME}; see that step's log"
           fi
       - name: Check binary links and size
         run: |

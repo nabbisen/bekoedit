@@ -6,12 +6,13 @@ slice 1 on 2026-09-05 (`ab6acf9`), slice 2 on 2026-09-16 (`59f21b7`) and slice 3
 on 2026-09-17 (`0978ff5`). §8 A–F all run in the second WebView run on every push
 and pull request.
 **Deferred, with a written trigger:**
-- **Promotion to blocking (§10).** The step is still `continue-on-error`. It
-  becomes blocking when its promotion clock reaches 10 consecutive green `main`
-  push runs with no change to the phase set. The count lives beside
-  `continue-on-error` in `.github/workflows/ci.yml`. Making it blocking is a
-  one-line change, and whoever reads the tenth outcome line instructs it.
-- **Cross-OS (§9).** Linux only, revisited once promotion has happened.
+- ~~**Promotion to blocking (§10).**~~ **Done 2026-09-22.** The clock reached ten
+  consecutive green `main` push runs, each read from its outcome line, and
+  `continue-on-error` was deleted: the step now blocks every pull request. The ten
+  runs are listed beside the step in `.github/workflows/ci.yml`. §10 gains the
+  rule for adding a phase to a step that already blocks.
+- **Cross-OS (§9).** Linux only. Promotion has now happened, so this is the
+  one deferral left; §9 says to revisit it on that trigger.
 *Moved to `done/` 2026-09-17.* Every §12 acceptance criterion is met, including
 7 (a written promotion criterion). Promotion itself is an operational follow-up
 with a trigger, not unshipped design, and the lifecycle policy's granularity
@@ -351,7 +352,12 @@ A blocking gate that flakes gets disabled, and then protects nothing.
 blocking only after an agreed number of consecutive green runs on `main`.
 
 **The count restarts whenever the step's phase set changes** — decided
-2026-09-15. Ten green runs are evidence about the stability of what the step
+2026-09-15. *(Amended 2026-09-22, on promotion: that rule governed the
+non-blocking period. Now that the step blocks, a phase-set change merges blocking
+and carries its own mutation evidence; a reviewer may instead require the new
+phase to land behind `continue-on-error` for a stated soak, recorded in the same
+merge. An unstable phase is fixed or removed — the step as a whole does not go
+back to non-blocking.)* Ten green runs are evidence about the stability of what the step
 asserts. A slice or task that adds phases adds flake surface with no green
 history behind it, so each such merge records a new start date beside
 `continue-on-error` in `.github/workflows/ci.yml`. The consequence is intended:
