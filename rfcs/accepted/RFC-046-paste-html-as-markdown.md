@@ -273,6 +273,20 @@ unaffected. Upstream is making them unconditional in 2.4.0.
 **Owner's, routed not decided:** upstream added our items 2 and 3 to their
 conformance suite, credited, assuming the reproductions carry Apache-2.0 — the
 licence both projects already use. They asked us to say if that is wrong.
+*(Confirmed and acknowledged 2026-09-22; the licence is recorded on their side.)*
+
+**The 2.4.0 date is not committed, and we should not plan as if it were.**
+Upstream's 2026-09-22 acknowledgement carries an internal note, evidently not
+meant for us, saying three of the items we are waiting on sit behind work they
+have not yet written, and that they will write again "if it gets later". Two of
+the three defects in §6.1 are closed on their `main`; the third is in progress.
+
+So the pin is on a version, not a date. **Nothing in bekoedit should be scheduled
+against 2.4.0's arrival.** Slice 1's work — the crate, the guards, the fallback
+rules, the fixture corpus — is version-independent and can proceed whenever the
+owner wants it; only the pin and the fixture expectations wait. If 2.4.0 slips
+far enough to matter, the decision to revisit is the owner's, and §6.1's three
+defects are the evidence for it.
 
 ## 7. Testing
 
