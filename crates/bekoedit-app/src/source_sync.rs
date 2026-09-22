@@ -12,13 +12,16 @@ use crate::state::now_ms;
 
 mod commands;
 mod controller;
+mod discard_report;
 mod focus;
 mod handoff;
 pub mod host;
 pub mod lifecycle;
 
 pub use bekoedit_ui_contract::source_editor::SourceEditorId;
-pub use controller::{EditorMountHandle, MountOutcome, SourceSyncState, SubmitOutcome};
+pub use controller::{
+    DiscardReason, EditorMountHandle, MountOutcome, QueueDiscard, SourceSyncState, SubmitOutcome,
+};
 pub use focus::{
     SourceInteractionOrigin, cancel_pending_source_focus, cancel_source_focus,
     submit_source_interaction, submit_source_shortcut_interaction,

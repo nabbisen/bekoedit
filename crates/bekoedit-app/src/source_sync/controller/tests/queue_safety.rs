@@ -283,6 +283,47 @@ fn losing_the_relay_records_what_it_empties() {
     );
 }
 
+/// RFC-047 slice 2 handoff §5: an `Execute` already past the queue -- handed
+/// to the host, but not yet run -- is still a user command, and losing the
+/// relay must not drop it silently. A `Lifecycle` action, the controller's
+/// own business, must not be reported alongside it.
+#[test]
+fn losing_the_relay_records_an_unexecuted_command_but_not_a_lifecycle_action() {
+    let mut sync = SourceSyncState::default();
+    sync.relay_generation_started(1);
+    assert!(sync.relay_generation_ready(1, 10));
+    sync.start_bundle_probe(10);
+    assert!(matches!(
+        sync.actions.as_slice(),
+        [ControllerAction::Lifecycle(_)]
+    ));
+    assert_eq!(
+        sync.submit(SourceCommand::NewUntitled, None, 11),
+        SubmitOutcome::ExecuteQueued
+    );
+    assert!(matches!(
+        sync.actions.as_slice(),
+        [
+            ControllerAction::Lifecycle(_),
+            ControllerAction::Execute {
+                command: SourceCommand::NewUntitled,
+                ..
+            }
+        ]
+    ));
+
+    // `relay_lost()`'s own return names whether the lifecycle had an
+    // identity to retire; `Unmounted` has none, so it is `false` here. The
+    // discard recording happens regardless, before that check.
+    assert!(!sync.relay_disconnected(1));
+
+    assert!(sync.actions.is_empty());
+    assert_eq!(
+        sync.drain_discards(),
+        record(SourceCommand::NewUntitled, DiscardReason::RelayLost)
+    );
+}
+
 #[test]
 fn a_timeout_that_leaves_the_editor_unavailable_records_what_it_empties() {
     let mut sync = unmounting_sync(DOCUMENT);

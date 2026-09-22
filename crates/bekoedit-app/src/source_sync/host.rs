@@ -12,12 +12,14 @@ use serde::Deserialize;
 use crate::{
     bridge,
     components::toast::{Toast, ToastKind, push_toast},
+    i18n::Lang,
     state::{SettingsOpen, now_ms},
 };
 
 use super::{
     SourceSyncError, commands,
     controller::{ControllerAction, EventOutcome, SourceSyncState, TickOutcome, fingerprint},
+    discard_report,
     lifecycle::LifecycleEffect,
 };
 
@@ -40,6 +42,7 @@ pub fn SourceEditorControllerHost() -> Element {
     let mut mode = use_context::<Signal<EditorMode>>();
     let mut settings_open = use_context::<SettingsOpen>().0;
     let toasts = use_context::<Signal<Vec<Toast>>>();
+    let lang = *use_context::<Signal<Lang>>().read();
 
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
         sync.write().start_bundle_probe(now_ms());
@@ -122,7 +125,7 @@ pub fn SourceEditorControllerHost() -> Element {
     });
 
     use_effect(move || {
-        trace_discards(sync);
+        trace_discards(sync, toasts, lang);
         if !sync.read().has_dispatchable_actions() {
             return;
         }
@@ -230,7 +233,7 @@ pub fn SourceEditorControllerHost() -> Element {
             super::focus::cancel_focus_guards_through(token);
         }
         let effect = { sync.write().shutdown(now_ms()) };
-        trace_discards(sync);
+        trace_discards(sync, toasts, lang);
         let generation = sync.read().relay_generation();
         if let (Some(effect), Some(generation)) = (effect, generation) {
             dispatch_lifecycle_effect(sync, state, toasts, effect, generation);
@@ -240,14 +243,20 @@ pub fn SourceEditorControllerHost() -> Element {
     rsx! { document::Script { "{EDITOR_BUNDLE}" } }
 }
 
-/// Slice 1 of RFC-047: a queued command that will not run is only traced
-/// here. The user-facing message is slice 2's.
-fn trace_discards(mut sync: Signal<SourceSyncState>) {
+/// RFC-047 slice 2: a queued command that will not run is traced for a
+/// developer (the reason code) and, grouped by reason, reported to the user
+/// as one plain sentence per reason (`discard_report::discard_messages`).
+/// Drains the outbox exactly once, so nothing is reported twice.
+fn trace_discards(mut sync: Signal<SourceSyncState>, mut toasts: Signal<Vec<Toast>>, lang: Lang) {
     if !sync.read().has_discards() {
         return;
     }
-    for discard in sync.write().drain_discards() {
+    let discards = sync.write().drain_discards();
+    for discard in &discards {
         bridge::trace("source.queue.discarded", format!("{discard:?}"));
+    }
+    for message in discard_report::discard_messages(&discards, lang) {
+        push_toast(&mut toasts, ToastKind::Warning, message);
     }
 }
 

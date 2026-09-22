@@ -6,7 +6,7 @@ use super::{SourceCommand, SourceSyncError};
 
 pub use types::{
     ControllerAction, DiscardReason, EditorMountHandle, EventOutcome, FocusClaim, FocusResolution,
-    MountOutcome, SourceSyncState, SubmitOutcome, TickOutcome,
+    MountOutcome, QueueDiscard, SourceSyncState, SubmitOutcome, TickOutcome,
 };
 
 impl SourceSyncState {

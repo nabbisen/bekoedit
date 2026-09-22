@@ -156,6 +156,31 @@ fn tr_en(key: &str) -> &'static str {
         "webview2.missing.body" => {
             "bekoedit needs the Microsoft Edge WebView2 Runtime, and it is not installed on this computer. Install it from Microsoft's download page, then start bekoedit again:"
         }
+        // RFC-047 slice 2: a discarded queued command, as one sentence --
+        // what did not happen (this half), then why (queue.reason.*). The
+        // `{}` placeholder is filled in by `discard_report::action_phrase`,
+        // where EN and JA differ in whether the dynamic part (a file name, a
+        // count) comes before or after the fixed text.
+        "queue.action.switch_mode.text" => "Could not switch to Text",
+        "queue.action.switch_mode.form" => "Could not switch to Form",
+        "queue.action.switch_mode.preview" => "Could not switch to Preview",
+        "queue.action.switch_mode.split" => "Could not switch to Split",
+        "queue.action.open_document" => "Could not open {}",
+        "queue.action.save_now" => "Could not save",
+        "queue.action.save_as" => "Could not save as {}",
+        "queue.action.new_untitled" => "Could not create a new file",
+        "queue.action.open_workspace" => "Could not open the workspace",
+        "queue.action.close_workspace" => "Could not close the workspace",
+        "queue.action.open_settings" => "Could not open Settings",
+        "queue.action.move_section_up" => "Could not move the section up",
+        "queue.action.move_section_down" => "Could not move the section down",
+        "queue.action.restore_history" => "Could not restore this version",
+        // More than one discard shared this reason (RFC-047 §5.5): named by
+        // count only, not by listing each action.
+        "queue.action.many" => "Could not run {} actions",
+        "queue.reason.busy" => "the editor was busy.",
+        "queue.reason.document_changed" => "the document changed before it could run.",
+        "queue.reason.unresponsive" => "the editor stopped responding.",
         "recovery.restored" => "Recovery restored",
         "recovery.recoverable_suffix" => "recoverable documents",
         "toast.dismiss" => "Dismiss notification",
@@ -294,6 +319,24 @@ fn tr_ja(key: &str) -> &'static str {
         "webview2.missing.body" => {
             "bekoedit の実行には Microsoft Edge WebView2 Runtime が必要ですが、このコンピューターにはインストールされていません。Microsoft のダウンロードページからインストールしてから、bekoedit をもう一度起動してください:"
         }
+        "queue.action.switch_mode.text" => "テキストに切り替えられませんでした",
+        "queue.action.switch_mode.form" => "フォームに切り替えられませんでした",
+        "queue.action.switch_mode.preview" => "プレビューに切り替えられませんでした",
+        "queue.action.switch_mode.split" => "分割に切り替えられませんでした",
+        "queue.action.open_document" => "{}を開けませんでした",
+        "queue.action.save_now" => "保存できませんでした",
+        "queue.action.save_as" => "{}として保存できませんでした",
+        "queue.action.new_untitled" => "新規ファイルを作成できませんでした",
+        "queue.action.open_workspace" => "ワークスペースを開けませんでした",
+        "queue.action.close_workspace" => "ワークスペースを閉じられませんでした",
+        "queue.action.open_settings" => "設定を開けませんでした",
+        "queue.action.move_section_up" => "セクションを上へ移動できませんでした",
+        "queue.action.move_section_down" => "セクションを下へ移動できませんでした",
+        "queue.action.restore_history" => "このバージョンを復元できませんでした",
+        "queue.action.many" => "{}件の操作を実行できませんでした",
+        "queue.reason.busy" => "エディタが使用中でした。",
+        "queue.reason.document_changed" => "実行前にドキュメントが変更されました。",
+        "queue.reason.unresponsive" => "エディタが応答しなくなりました。",
         "recovery.restored" => "復元しました",
         "recovery.recoverable_suffix" => "件の復元可能なドキュメントがあります",
         "toast.dismiss" => "通知を閉じる",

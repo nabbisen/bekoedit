@@ -4,7 +4,10 @@ use bekoedit_ui_contract::{
     source_editor::{BridgeFailureReason, EditorIdentity, SourceEditorId},
 };
 
-use super::{DiscardReason, EditorMountHandle, SourceCommand, SourceSyncState};
+use super::{
+    ControllerAction, DiscardReason, EditorMountHandle, QueueDiscard, SourceCommand,
+    SourceSyncState,
+};
 use super::{SessionFingerprint, SourceSyncError, TransitionError};
 use crate::source_sync::lifecycle::{LifecycleState, MountIntent, ReadyEditor};
 
@@ -110,7 +113,25 @@ impl SourceSyncState {
         self.relay_generation = None;
         self.discard_queue(DiscardReason::RelayLost);
         self.protected_focus_token = None;
-        self.actions.clear();
+        // A user command already past the queue -- handed to the host as an
+        // `Execute` but not yet run -- is still a command the user asked for
+        // (RFC-047 slice 2 handoff §5). A `Lifecycle` or `Focus` action is
+        // the controller's own business, not the user's, and is not
+        // reported: `discards` is for `SourceCommand`s only.
+        for action in std::mem::take(&mut self.actions) {
+            if let ControllerAction::Execute {
+                command,
+                focus_token,
+                ..
+            } = action
+            {
+                self.discards.push(QueueDiscard {
+                    command,
+                    reason: DiscardReason::RelayLost,
+                    focus_token,
+                });
+            }
+        }
         if self.lifecycle.abandon_bundle_probe() {
             self.bundle_probe_started = false;
         }
