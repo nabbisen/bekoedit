@@ -50,6 +50,7 @@ use bekoedit_ui_contract::EditorMode;
 
 use crate::persistence::AppPersistence;
 use crate::settings::AppSettings;
+use crate::source_sync::SourceSyncState;
 
 use super::SmokeProfile;
 use super::transport::{
@@ -59,6 +60,9 @@ use super::transport::{
 
 mod phase;
 use phase::{EXPECTED_MILESTONES, TERMINAL_STAGE, TrustedClickPhase};
+
+mod settle;
+use settle::{SETTLE_GATE, wait_until_settled};
 
 mod xtest;
 use xtest::perform_trusted_clicks;
@@ -280,6 +284,7 @@ async fn run_trusted_click_phase(
 async fn run_trusted_click_sequence(
     desktop: &DesktopContext,
     terminal: &TrustedClickTerminal,
+    mut busy_state: impl FnMut() -> Option<String>,
 ) -> Result<DriverResult, String> {
     let mut machine = TrustedClickMachine::new();
     let mut exchange_id = 1_u64;
@@ -292,6 +297,12 @@ async fn run_trusted_click_sequence(
     let mut clicked_for: Option<TrustedClickPhase> = None;
     loop {
         let phase = machine.current();
+        // task 021's settle gate (`settle.rs`): CI's eighth real run
+        // showed a DOM-level wait alone is not enough -- the DOM can look
+        // ready before SourceSyncState's own async lifecycle has actually
+        // finished. No exchange is requested, and no click sent, while the
+        // controller would answer Busy.
+        wait_until_settled(phase, SETTLE_GATE, &mut busy_state).await?;
         if clicked_for != Some(phase) {
             perform_trusted_clicks(desktop, phase).await?;
             clicked_for = Some(phase);
@@ -336,6 +347,7 @@ async fn run_trusted_click_sequence(
 #[component]
 pub fn WebViewTrustedClickDriver() -> Element {
     let desktop: DesktopContext = consume_context();
+    let sync = use_context::<Signal<SourceSyncState>>();
     let terminal = super::launch_config()
         .trusted_click
         .clone()
@@ -345,7 +357,14 @@ pub fn WebViewTrustedClickDriver() -> Element {
         let desktop = desktop.clone();
         async move {
             println!("bekoedit task 023 trusted-click run: §B/§C via real XTEST clicks");
-            match run_trusted_click_sequence(&desktop, &terminal).await {
+            // A peek, not a read: the gate must not subscribe this
+            // component to the controller (`shell_behaviour.rs`'s own
+            // driver does the same).
+            let busy_state = move || match sync.try_peek() {
+                Ok(state) => state.busy_lifecycle_state().map(str::to_string),
+                Err(_) => Some("borrowed elsewhere".to_string()),
+            };
+            match run_trusted_click_sequence(&desktop, &terminal, busy_state).await {
                 Ok(result) => {
                     for milestone in &result.milestones {
                         println!("  ✓ {milestone}");
