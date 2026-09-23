@@ -239,7 +239,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
-            libxdo-dev libssl-dev xvfb
+            libxdo-dev libssl-dev xvfb xdotool
       - name: Install JS dependencies
         run: cd crates/bekoedit-app/js && npm ci
       - name: Test source-editor JavaScript adapter
@@ -322,6 +322,51 @@ jobs:
           echo "RFC-044 shell-behaviour outcome: ${OUTCOME}"
           if [ "${OUTCOME}" != "success" ]; then
             echo "::warning title=RFC-044 shell-behaviour run did not pass::outcome=${OUTCOME}; see that step's log"
+          fi
+      - name: Task 023 trusted-click coverage (manual-walkthrough §B/§C)
+        # NON-BLOCKING (task 023 §4, RFC-044 §10 as amended 2026-09-22): a
+        # new run, not a new phase on an already-blocking step, so §4's
+        # continue-on-error requirement applies to this step alone and
+        # never touches the shell-behaviour step above.
+        #
+        # This is the first run in the project to send real X-level
+        # (XTEST) input via `xdotool` rather than app-intercepted
+        # synthetic events -- proven necessary in the review request
+        # (§5.1: a synthetic click gets no default browser focus action,
+        # so it cannot exercise §B/§C at all). That means real-desktop
+        # concerns this project has not had to soak for before: whether
+        # Xvfb's default pointer-focus behaviour (no window manager is
+        # running) reliably delivers a click's default focus action to
+        # WebKitGTK on every runner, and whether `xdotool`'s own timing
+        # (`--sync`) is enough under CI's variable load.
+        #
+        # Soak: 10 consecutive green runs of this step on `main`, read
+        # from its own outcome line below (never from this step's masked
+        # conclusion) -- the same N RFC-044 §10 itself used to promote its
+        # shell-behaviour step to blocking. That precedent is the
+        # justification for reusing it here rather than picking a new
+        # number: ten runs is what this project has already treated as
+        # enough evidence that a WebView-driven CI mechanism, once green,
+        # stays green. Promotion to blocking is a separate, later review
+        # decision -- this comment only starts the clock.
+        # Soak record (append here, do not replace): none yet.
+        id: trusted_click
+        continue-on-error: true
+        run: |
+          TRUSTED_CLICK_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-trusted-click.XXXXXX")"
+          trap 'rm -rf "$TRUSTED_CLICK_PARENT"' EXIT
+          timeout 60 xvfb-run -a -s "-screen 0 1280x1024x24" \
+            env NO_AT_BRIDGE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
+            ./target/release/bekoedit \
+            --webview-trusted-click "$TRUSTED_CLICK_PARENT/bekoedit-webview-smoke-profile"
+      - name: Task 023 trusted-click outcome (unmasked)
+        if: always()
+        env:
+          OUTCOME: ${{ steps.trusted_click.outcome }}
+        run: |
+          echo "Task 023 trusted-click outcome: ${OUTCOME}"
+          if [ "${OUTCOME}" != "success" ]; then
+            echo "::warning title=Task 023 trusted-click run did not pass::outcome=${OUTCOME}; see that step's log"
           fi
       - name: Check binary links and size
         run: |

@@ -17,8 +17,10 @@ use self::transport::{PinnedExchange, run_driver_phase as run_transport_phase};
 mod protocol;
 mod shell_behaviour;
 mod transport;
+mod trusted_click;
 
 pub use shell_behaviour::WebViewShellBehaviourDriver;
+pub use trusted_click::WebViewTrustedClickDriver;
 
 const PROFILE_PREFIX: &str = "bekoedit-webview-smoke-";
 const MARKER: &str = "RFC041_WEBVIEW_SMOKE_MARKER";
@@ -46,6 +48,10 @@ pub enum RunMode {
     /// contracts (and, in later slices, B-F) -- a separate profile, driver
     /// and phase set from `WebViewSmoke`'s RFC-041 lifecycle regression.
     WebViewShellBehaviour(PathBuf),
+    /// Task 023: the third run, covering the manual-walkthrough
+    /// supplement's §B/§C via real XTEST clicks -- a separate profile,
+    /// driver and phase set from either of the other two runs.
+    WebViewTrustedClick(PathBuf),
 }
 
 impl RunMode {
@@ -65,6 +71,14 @@ impl RunMode {
             }
             return Ok(Self::WebViewShellBehaviour(PathBuf::from(&args[1])));
         }
+        if let Some(index) = args.iter().position(|arg| arg == "--webview-trusted-click") {
+            if index != 0 || args.len() != 2 {
+                return Err(
+                    "--webview-trusted-click requires exactly one profile-root argument".into(),
+                );
+            }
+            return Ok(Self::WebViewTrustedClick(PathBuf::from(&args[1])));
+        }
         let Some(index) = args.iter().position(|arg| arg == "--webview-smoke") else {
             return Ok(Self::Normal);
         };
@@ -81,11 +95,13 @@ pub struct LaunchConfig {
     pub webview_smoke: bool,
     terminal: Option<Arc<SmokeTerminal>>,
     pub shell_behaviour: Option<Arc<shell_behaviour::ShellBehaviourTerminal>>,
+    pub trusted_click: Option<Arc<trusted_click::TrustedClickTerminal>>,
 }
 
 enum SmokeRunKind {
     Smoke(Arc<SmokeTerminal>),
     ShellBehaviour(Arc<shell_behaviour::ShellBehaviourTerminal>),
+    TrustedClick(Arc<trusted_click::TrustedClickTerminal>),
 }
 
 impl SmokeRunKind {
@@ -93,12 +109,13 @@ impl SmokeRunKind {
         match self {
             Self::Smoke(terminal) => terminal.succeeded(),
             Self::ShellBehaviour(terminal) => terminal.succeeded(),
+            Self::TrustedClick(terminal) => terminal.succeeded(),
         }
     }
 
-    /// Labelled by run so a failed shell-behaviour run never reports itself
-    /// under the RFC-041 regression's name. The RFC-041 text is what logs
-    /// and people already know, so it stays byte-identical.
+    /// Labelled by run so a failed run never reports itself under another
+    /// run's name. The RFC-041 text is what logs and people already know,
+    /// so it stays byte-identical.
     const fn failure_message(&self) -> &'static str {
         match self {
             Self::Smoke(_) => {
@@ -106,6 +123,9 @@ impl SmokeRunKind {
             }
             Self::ShellBehaviour(_) => {
                 "bekoedit RFC-044 shell-behaviour run FAILED: no validated terminal success"
+            }
+            Self::TrustedClick(_) => {
+                "bekoedit task 023 trusted-click run FAILED: no validated terminal success"
             }
         }
     }
@@ -158,6 +178,7 @@ pub fn prepare_launch(run_mode: RunMode) -> Result<Option<SmokeRun>, String> {
                 webview_smoke: false,
                 terminal: None,
                 shell_behaviour: None,
+                trusted_click: None,
             },
             None,
         ),
@@ -169,6 +190,7 @@ pub fn prepare_launch(run_mode: RunMode) -> Result<Option<SmokeRun>, String> {
                 webview_smoke: true,
                 terminal: Some(terminal.clone()),
                 shell_behaviour: None,
+                trusted_click: None,
             };
             let run = SmokeRun {
                 profile_root: Some(profile.root),
@@ -186,10 +208,27 @@ pub fn prepare_launch(run_mode: RunMode) -> Result<Option<SmokeRun>, String> {
                 webview_smoke: false,
                 terminal: None,
                 shell_behaviour: Some(terminal.clone()),
+                trusted_click: None,
             };
             let run = SmokeRun {
                 profile_root: Some(profile.root),
                 kind: SmokeRunKind::ShellBehaviour(terminal),
+            };
+            (config, Some(run))
+        }
+        RunMode::WebViewTrustedClick(requested_root) => {
+            let profile = trusted_click::prepare(&requested_root)?;
+            let terminal = Arc::new(trusted_click::TrustedClickTerminal::default());
+            let config = LaunchConfig {
+                persistence: profile.persistence.clone(),
+                webview_smoke: false,
+                terminal: None,
+                shell_behaviour: None,
+                trusted_click: Some(terminal.clone()),
+            };
+            let run = SmokeRun {
+                profile_root: Some(profile.root),
+                kind: SmokeRunKind::TrustedClick(terminal),
             };
             (config, Some(run))
         }
