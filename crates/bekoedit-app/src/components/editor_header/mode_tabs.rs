@@ -74,7 +74,7 @@ pub(super) fn ModeTabs(props: ModeTabsProps) -> Element {
                             toasts,
                             SourceCommand::SwitchMode(m),
                             SourceInteractionOrigin::persistent_control(
-                                if m == EditorMode::Text { "mode-text" } else { "mode-preview" },
+                                if m == EditorMode::Text { "mode-text-broken" } else { "mode-preview" },
                             ),
                             || {},
                         );
