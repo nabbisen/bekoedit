@@ -300,23 +300,20 @@ pub(super) async fn perform_trusted_clicks(
                 0,
             )
             .await?;
-            // DIAGNOSTIC, not a proposed fix (see the review request):
-            // every other mitigation tried -- window focus, exactly-once
-            // clicking, rect stability, a DOM-level warm-up, this run's
-            // own settle gate before the phase and between the two
-            // clicks (both unconditional and queue-gated readings), and
-            // removing back-to-back eval calls -- left the very next
-            // phase query hanging for exactly the shared transport's
-            // 5.001s round-trip cap, every time, on eight consecutive
-            // real CI runs. TreeRowFocus mounts Text from nothing and
-            // BacklinkFocus never changes mode at all; ModeTabFocus is
-            // the only phase in this run that fully unmounts and remounts
-            // a source editor through two real clicks. This sleep is
-            // long enough to outlast the cap on purpose, to say whether
-            // exchange 9 then answers immediately (a genuine, real-world
-            // remount cost no other test drives through) or still hangs
-            // (something else entirely).
-            tokio::time::sleep(std::time::Duration::from_secs(8)).await;
+            // UNRESOLVED (see the review request, which leads with this):
+            // the very next phase query hangs for exactly the shared
+            // transport's 5.001s round-trip cap and never recovers,
+            // reproduced on every one of nine consecutive real CI runs
+            // regardless of what happens here first -- window focus,
+            // exactly-once clicking, rect stability, a DOM-level warm-up,
+            // both the queue-gated and unconditional settle gate before
+            // the phase and again between the two clicks, removing
+            // back-to-back eval calls, and even an 8 s sleep here (longer
+            // than the cap itself, to rule out "just needs to wait
+            // longer" -- it did not: exchange 9 still hung for the full
+            // 5.001s afterwards). A plain yield is what every other,
+            // working phase in this run does between exchanges.
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             Ok(())
         }
     }
