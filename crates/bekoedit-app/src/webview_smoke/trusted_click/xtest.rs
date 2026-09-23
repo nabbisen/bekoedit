@@ -129,6 +129,44 @@ async fn locate_click_target(
         .map_err(|error| format!("could not locate {selector}: {error}"))
 }
 
+/// Runs an `xdotool` subcommand, logging its exit status and both streams
+/// unconditionally -- task 023's first real CI run timed out at the very
+/// first click with no other signal, so this run's own log is the only
+/// diagnostic available while the soak (§4) is still open. Kept until the
+/// mechanism is trusted; the review request says which CI runs this
+/// covered.
+fn run_xdotool(args: &[&str]) -> Result<(), String> {
+    let output = std::process::Command::new("xdotool")
+        .args(args)
+        .output()
+        .map_err(|error| format!("cannot spawn xdotool {args:?}: {error}"))?;
+    println!(
+        "  xdotool {args:?} -> {} stdout={:?} stderr={:?}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    if !output.status.success() {
+        return Err(format!("xdotool {args:?} exited with {}", output.status));
+    }
+    Ok(())
+}
+
+/// Brings the bekoedit window to the front and gives it input focus by
+/// window title (`main.rs`'s `WindowBuilder::with_title("bekoedit")`) --
+/// Xvfb runs no window manager, so nothing else will ever do this for it.
+/// Idempotent; called once before the run's first click.
+pub(super) fn activate_window() -> Result<(), String> {
+    run_xdotool(&[
+        "search",
+        "--sync",
+        "--name",
+        "^bekoedit$",
+        "windowactivate",
+        "--sync",
+    ])
+}
+
 /// Locates one element, then sends a real XTEST click at its centre
 /// through `xdotool` -- the one new CI dependency task 023 §3.4 allows.
 /// Never a synthetic `.click()`: that is the entire point of this run.
@@ -152,24 +190,21 @@ async fn click_via_xtest(
         scale_factor,
         rect_center(target.x, target.y, target.width, target.height),
     );
-    let status = std::process::Command::new("xdotool")
-        .args([
-            "mousemove",
-            "--sync",
-            &screen_x.to_string(),
-            &screen_y.to_string(),
-            "click",
-            "--clearmodifiers",
-            "1",
-        ])
-        .status()
-        .map_err(|error| format!("cannot spawn xdotool for a trusted click: {error}"))?;
-    if !status.success() {
-        return Err(format!(
-            "xdotool exited with {status} while clicking {selector}"
-        ));
-    }
-    Ok(())
+    println!(
+        "  trusted click at {selector} (text_includes={text_includes:?}, index={index}): \
+         rect=({}, {}, {}, {}) inner_position=({}, {}) scale_factor={scale_factor} \
+         -> screen=({screen_x}, {screen_y})",
+        target.x, target.y, target.width, target.height, inner_position.x, inner_position.y,
+    );
+    run_xdotool(&[
+        "mousemove",
+        "--sync",
+        &screen_x.to_string(),
+        &screen_y.to_string(),
+        "click",
+        "--clearmodifiers",
+        "1",
+    ])
 }
 
 /// The real XTEST click(s) this run performs before requesting `phase`'s
@@ -183,6 +218,9 @@ pub(super) async fn perform_trusted_clicks(
     desktop: &DesktopContext,
     phase: TrustedClickPhase,
 ) -> Result<(), String> {
+    // Idempotent, and cheap next to a real click -- simpler to call before
+    // every phase than to track "only the first click needs this".
+    activate_window()?;
     match phase {
         TrustedClickPhase::ProofOfTrust => {
             click_via_xtest(desktop, "#app-menu-trigger", None, 0).await
