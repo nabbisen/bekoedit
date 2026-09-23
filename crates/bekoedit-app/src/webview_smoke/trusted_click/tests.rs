@@ -29,7 +29,7 @@ fn successful_result() -> DriverResult {
 }
 
 #[test]
-fn machine_advances_through_every_transition_ending_at_no_op_terminal() {
+fn machine_advances_through_every_transition_ending_at_mode_tab_focus() {
     let mut machine = TrustedClickMachine::new();
     let progression = [
         (
@@ -45,7 +45,7 @@ fn machine_advances_through_every_transition_ending_at_no_op_terminal() {
         (
             TrustedClickPhase::BacklinkFocus,
             "backlink_trusted_click_focused_editor",
-            TrustedClickPhase::NoOpTerminal,
+            TrustedClickPhase::ModeTabFocus,
         ),
     ];
     for (index, (phase, milestone, next)) in progression.into_iter().enumerate() {
@@ -58,11 +58,50 @@ fn machine_advances_through_every_transition_ending_at_no_op_terminal() {
         assert_eq!(machine.current(), next);
     }
     assert_eq!(
-        TrustedClickPhase::NoOpTerminal.next(),
+        TrustedClickPhase::ModeTabFocus.next(),
         None,
-        "no_op_terminal (diagnostic only) is the terminal phase -- §C is not part of this run"
+        "mode_tab_focus (§C, the check this file exists for) is the terminal phase"
     );
-    assert_eq!(TrustedClickPhase::NoOpTerminal.as_str(), TERMINAL_STAGE);
+    assert_eq!(TrustedClickPhase::ModeTabFocus.as_str(), "mode_tab_focus");
+}
+
+/// The 2026-09-23 finding review's root cause, made structural: every
+/// `TrustedClickPhase::as_str()` value must be a phase name
+/// `trusted_click_driver.js`'s own `phases` array recognizes. Before this
+/// test existed, the terminal phase's `as_str()` returned `TERMINAL_STAGE`
+/// (a result-*stage* name, not a phase name) on every one of sixteen real
+/// CI runs across this branch's whole history -- a request the driver
+/// rejected before its own `try`/`catch`, with nothing ever sent back, so
+/// Rust silently waited out the shared transport's 5 s cap every time.
+#[test]
+fn every_as_str_is_a_phase_the_driver_knows() {
+    let driver_phases: std::collections::BTreeSet<&str> = TRUSTED_CLICK_JS
+        .split_once("const phases = [")
+        .expect("driver must declare its phases array")
+        .1
+        .split_once(']')
+        .expect("phases array must be closed")
+        .0
+        .split(',')
+        .map(|entry| entry.trim().trim_matches('"'))
+        .filter(|entry| !entry.is_empty())
+        .collect();
+    let rust_phases: std::collections::BTreeSet<&str> = [
+        TrustedClickPhase::ProofOfTrust,
+        TrustedClickPhase::TreeRowFocus,
+        TrustedClickPhase::BacklinkFocus,
+        TrustedClickPhase::ModeTabFocus,
+    ]
+    .into_iter()
+    .map(TrustedClickPhase::as_str)
+    .collect();
+    assert_eq!(
+        rust_phases, driver_phases,
+        "TrustedClickPhase::as_str() must match trusted_click_driver.js's own \
+         phases array exactly -- a mismatch is a request the driver rejects \
+         before its own try/catch, silently, for the shared transport's full \
+         5 s round-trip cap"
+    );
 }
 
 #[test]
@@ -113,8 +152,8 @@ fn malformed_progress_and_terminal_messages_are_rejected() {
     assert!(machine.validate(&out_of_order, 1, None).is_err());
 
     let terminal_phase_nonterminal_progress =
-        TrustedClickMachine::for_phase(TrustedClickPhase::NoOpTerminal);
-    let mut malformed = phase_message(MessageKind::Progress, TERMINAL_STAGE, 1);
+        TrustedClickMachine::for_phase(TrustedClickPhase::ModeTabFocus);
+    let mut malformed = phase_message(MessageKind::Progress, "mode_tab_focus", 1);
     malformed.milestone = Some(TERMINAL_STAGE.into());
     assert!(
         terminal_phase_nonterminal_progress

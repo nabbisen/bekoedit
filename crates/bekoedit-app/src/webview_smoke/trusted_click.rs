@@ -1,22 +1,24 @@
 //! Task 023: a third WebView run, covering the manual-walkthrough
-//! supplement's §B (workspace-tree row and backlink clicks) -- one of the
-//! two checks neither RFC-041's nor RFC-044's runs can drive, because both
-//! dispatch synthetic, script-generated events (`isTrusted: false`), and a
-//! browser withholds its default focus action from those. A real mouse
-//! click is indistinguishable from one dispatched at the X level below the
+//! supplement's §B (workspace-tree row and backlink clicks) and §C (Form
+//! mode, mouse click on the Text tab) -- the two checks neither RFC-041's
+//! nor RFC-044's runs can drive, because both dispatch synthetic,
+//! script-generated events (`isTrusted: false`), and a browser withholds
+//! its default focus action from those. A real mouse click is
+//! indistinguishable from one dispatched at the X level below the
 //! browser (XTEST, via `xdotool`) -- `isTrusted: true`, default actions
 //! run -- so this run sends every click that way instead.
 //!
-//! §C (Form mode, click the Text tab) is deliberately not covered here.
-//! Task 023's review (2026-09-23,
-//! `.git-exclude/reviewed/2026-09-23-trusted-click-coverage-review.md`)
-//! found its phase never completes on real CI: a `document::eval` issued
-//! after a source-editor unmount-then-remount (Form, then Text) hangs for
-//! the shared transport's full round-trip cap and never answers, no
-//! matter how long the harness waits first. See `phase.rs`'s own doc
-//! comment for exactly where that code last lived, and task 024
-//! (`.git-exclude/tasks/dev-team/024-eval-after-remount.md`) for the
-//! investigation before it returns.
+//! §C's phase spent sixteen real CI runs never completing, chased through
+//! window focus, click cadence, rect stability, settle gates, and two
+//! genuine harness defects (blocking the event loop; an unjoined eval --
+//! both fixed regardless, see `xtest.rs`) before the actual cause turned
+//! up in `phase.rs`'s own doc comment: the terminal phase's `as_str()`
+//! was sending its *result-stage* name instead of its own phase name, a
+//! request `trusted_click_driver.js` rejected before its own `try`, with
+//! nothing ever sent back -- indistinguishable, from the outside, from
+//! every real hypothesis this task chased. See phase.rs's own doc comment
+//! and the review request/review pair dated 2026-09-23 for the full
+//! account.
 //!
 //! A separate run from both `webview_smoke.rs`'s RFC-041 regression and
 //! `shell_behaviour.rs`'s RFC-044 coverage, per task 023 §3 (advisory,
@@ -256,7 +258,8 @@ pub(super) fn prepare(requested_root: &std::path::Path) -> Result<PreparedTruste
         reopen_last_workspace: true,
         // See shell_behaviour.rs's `prepare`: AppState's real default is
         // Form (settings.rs), but §B's two phases need a CodeMirror text
-        // view to assert focus into.
+        // view to assert focus into. §C then switches into Form itself as
+        // its own setup click, so this only has to be right for §B.
         default_mode: EditorMode::Text,
         ..Default::default()
     };
@@ -317,12 +320,11 @@ async fn run_trusted_click_sequence(
             clicked_for = Some(phase);
         }
         // Timed and logged unconditionally, success or failure -- this is
-        // what let task 023's investigation into §C's now-removed
-        // mode_tab_focus phase pin the hang to an exact, reproducible
-        // 5.001s wall (the shared transport's own round-trip timeout,
-        // `transport.rs`, untouched by this run) rather than ordinary
-        // variance. Kept for §B's own remaining phases, at negligible
-        // cost.
+        // what let task 023's investigation pin the hang to an exact,
+        // reproducible 5.001s wall (the shared transport's own
+        // round-trip timeout, `transport.rs`, untouched by this run)
+        // before the actual cause (phase.rs's own doc comment) turned
+        // up. Kept at negligible cost.
         let started = tokio::time::Instant::now();
         let outcome = run_trusted_click_phase(phase, exchange_id, release).await;
         println!(
@@ -364,7 +366,7 @@ pub fn WebViewTrustedClickDriver() -> Element {
         let terminal = terminal.clone();
         let desktop = desktop.clone();
         async move {
-            println!("bekoedit task 023 trusted-click run: §B via real XTEST clicks");
+            println!("bekoedit task 023 trusted-click run: §B/§C via real XTEST clicks");
             // A peek, not a read: the gate must not subscribe this
             // component to the controller (`shell_behaviour.rs`'s own
             // driver does the same). Reads every non-`Ready` lifecycle

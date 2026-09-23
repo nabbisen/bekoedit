@@ -323,28 +323,31 @@ jobs:
           if [ "${OUTCOME}" != "success" ]; then
             echo "::warning title=RFC-044 shell-behaviour run did not pass::outcome=${OUTCOME}; see that step's log"
           fi
-      - name: Task 023 trusted-click coverage (manual-walkthrough §B)
+      - name: Task 023 trusted-click coverage (manual-walkthrough §B/§C)
         # NON-BLOCKING (task 023 §4, RFC-044 §10 as amended 2026-09-22): a
         # new run, not a new phase on an already-blocking step, so §4's
         # continue-on-error requirement applies to this step alone and
         # never touches the shell-behaviour step above.
         #
-        # §B only. §C (Form mode, click the Text tab) was cut from this
-        # run by its 2026-09-23 review: its phase never completed on real
-        # CI, and task 024 investigates the hang from its own branch
-        # before it returns here or anywhere else. This step never gained
-        # a §C phase, so nothing here needs correcting when it does.
-        #
         # This is the first run in the project to send real X-level
         # (XTEST) input via `xdotool` rather than app-intercepted
         # synthetic events -- proven necessary in the review request
         # (§5.1: a synthetic click gets no default browser focus action,
-        # so it cannot exercise §B at all). That means real-desktop
+        # so it cannot exercise §B/§C at all). That means real-desktop
         # concerns this project has not had to soak for before: whether
         # Xvfb's default pointer-focus behaviour (no window manager is
         # running) reliably delivers a click's default focus action to
         # WebKitGTK on every runner, and whether `xdotool`'s own timing
         # (`--sync`) is enough under CI's variable load.
+        #
+        # §C's own phase (mode_tab_focus) spent sixteen real CI runs never
+        # completing before its cause was found (2026-09-23 no-op-terminal
+        # review): TrustedClickPhase::as_str()'s terminal arm was sending
+        # a result-stage name, not a phase name, so the driver rejected
+        # every request for it before its own try/catch, silently. Fixed
+        # structurally in phase.rs, with a bijection test
+        # (every_as_str_is_a_phase_the_driver_knows) against the driver's
+        # own source so this cannot come back quietly.
         #
         # Soak: 10 consecutive green runs of this step on `main`, read
         # from its own outcome line below (never from this step's masked
@@ -359,9 +362,11 @@ jobs:
         #
         # Known, unexplained flake (2026-09-23 review §2): run 35810114012
         # timed out at tree_row_focus after 97 retries (a real 10 s
-        # internal deadline, not a hang); a rerun of the identical commit
-        # passed cleanly. Not root-caused, has not recurred since. Read
-        # the soak against this, not in ignorance of it.
+        # internal deadline, not the as_str() bug above -- tree_row_focus
+        # is never the terminal phase, so its own name was never wrong); a
+        # rerun of the identical commit passed cleanly. Not root-caused,
+        # has not recurred since. Read the soak against this, not in
+        # ignorance of it.
         # Soak record (append here, do not replace): none yet.
         id: trusted_click
         continue-on-error: true
@@ -372,7 +377,7 @@ jobs:
             env NO_AT_BRIDGE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
             ./target/release/bekoedit \
             --webview-trusted-click "$TRUSTED_CLICK_PARENT/bekoedit-webview-smoke-profile"
-      - name: Task 023 trusted-click outcome (unmasked, §B)
+      - name: Task 023 trusted-click outcome (unmasked)
         if: always()
         env:
           OUTCOME: ${{ steps.trusted_click.outcome }}

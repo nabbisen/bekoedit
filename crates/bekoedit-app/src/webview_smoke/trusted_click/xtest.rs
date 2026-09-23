@@ -255,9 +255,9 @@ async fn click_via_xtest(
 /// The real XTEST click(s) this run performs before requesting `phase`'s
 /// exchange -- `shell_behaviour.rs`'s `writes_conflict_after` pattern,
 /// applied to input instead of a file write. `BacklinkFocus` needs one
-/// real click first, to open the backlinks panel -- real, not synthetic,
-/// per `trusted_click.rs`'s own doc comment. `NoOpTerminal` sends none at
-/// all, on purpose -- see phase.rs's own doc comment.
+/// real click first, to open the backlinks panel, and `ModeTabFocus`
+/// needs one to switch into Form mode before the click under test --
+/// real, not synthetic, per `trusted_click.rs`'s own doc comment.
 pub(super) async fn perform_trusted_clicks(
     desktop: &DesktopContext,
     phase: TrustedClickPhase,
@@ -292,8 +292,22 @@ pub(super) async fn perform_trusted_clicks(
             )
             .await
         }
-        // Diagnostic (see phase.rs's own doc comment): no click at all.
-        TrustedClickPhase::NoOpTerminal => Ok(()),
+        TrustedClickPhase::ModeTabFocus => {
+            click_via_xtest(
+                desktop,
+                r#"[data-source-focus-launch="mode-form"]"#,
+                None,
+                0,
+            )
+            .await?;
+            click_via_xtest(
+                desktop,
+                r#"[data-source-focus-launch="mode-text"]"#,
+                None,
+                0,
+            )
+            .await
+        }
     }
 }
 

@@ -189,37 +189,87 @@ test(
 
     assert.equal(report.kind, "progress");
     assert.equal(report.milestone, "backlink_trusted_click_focused_editor");
-    assert.equal(window.__bkTrustedClickState.phase, "no_op_terminal");
+    assert.equal(window.__bkTrustedClickState.phase, "mode_tab_focus");
   },
 );
 
-async function reachNoOpTerminal(dom) {
+async function reachModeTabFocus(dom) {
   await reachBacklinkFocus(dom);
   focusEditorOn(dom, "parent.md");
   await exchange("backlink_focus", 3, { exchangeId: 2, phase: "tree_row_focus" });
 }
 
 test(
-  "no_op_terminal: reports terminal success on its very first query -- no click, nothing to wait for",
+  "mode_tab_focus: the Text tab not yet active is pending; active with the editor focused is terminal success",
   { concurrency: false },
   async () => {
     const dom = new FakeDom();
     dom.install();
     dom.setTime(0);
-    await reachNoOpTerminal(dom);
+    await reachModeTabFocus(dom);
 
-    const report = await exchange("no_op_terminal", 4, { exchangeId: 3, phase: "backlink_focus" });
+    const pending = await exchange("mode_tab_focus", 4, { exchangeId: 3, phase: "backlink_focus" });
+    assert.equal(pending.kind, "pending");
+
+    dom.setElement(
+      '[data-source-focus-launch="mode-text"].active[aria-selected="true"]',
+      new FakeElement(),
+    );
+    const report = await exchange("mode_tab_focus", 5, { exchangeId: 4, phase: "mode_tab_focus" });
 
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, true);
-    assert.equal(report.result.stage, "no_op_terminal_reported");
+    assert.equal(report.result.stage, "mode_tab_trusted_click_focused_editor");
     assert.equal(report.result.marker, MARKER);
     assert.deepEqual(report.result.milestones, [
       "trusted_click_focused_default_target",
       "tree_row_trusted_click_focused_editor",
       "backlink_trusted_click_focused_editor",
-      "no_op_terminal_reported",
+      "mode_tab_trusted_click_focused_editor",
     ]);
+  },
+);
+
+test(
+  "mode_tab_focus: the tab active but the editor not yet focused is still pending",
+  { concurrency: false },
+  async () => {
+    const dom = new FakeDom();
+    dom.install();
+    dom.setTime(0);
+    await reachModeTabFocus(dom);
+
+    // reachModeTabFocus already left the editor focused (needed to reach
+    // backlink_focus's own success) -- un-focus it again so this test
+    // isolates the tab check from the editorFocused check, same shape as
+    // driver-phases.test.mjs's own preview marker/active-tab isolation
+    // test. Active tab alone must not be enough.
+    dom.setEditorView(new FakeEditorView({ connected: true, hasFocus: false }));
+    dom.setElement(
+      '[data-source-focus-launch="mode-text"].active[aria-selected="true"]',
+      new FakeElement(),
+    );
+    const report = await exchange("mode_tab_focus", 4, { exchangeId: 3, phase: "backlink_focus" });
+
+    assert.equal(report.kind, "pending");
+  },
+);
+
+test(
+  "mode_tab_focus: an elapsed deadline fails, naming the stage it timed out at",
+  { concurrency: false },
+  async () => {
+    const dom = new FakeDom();
+    dom.install();
+    dom.setTime(0);
+    await reachModeTabFocus(dom); // advances to mode_tab_focus, deadline = 0 + 10000
+
+    dom.setTime(10000);
+    const report = await exchange("mode_tab_focus", 4, { exchangeId: 3, phase: "backlink_focus" });
+
+    assert.equal(report.kind, "terminal");
+    assert.equal(report.result.ok, false);
+    assert.match(report.result.error, /timed out at mode_tab_trusted_click_focused_editor/);
   },
 );
 
@@ -285,5 +335,43 @@ test(
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, false);
     assert.match(report.result.error, /phase mismatch: requested backlink_focus, current proof_of_trust/);
+  },
+);
+
+test(
+  "an unrecognized phase name sends a named diagnostic instead of hanging silently",
+  { concurrency: false },
+  async () => {
+    // 2026-09-23 finding review §4.3: this is exactly the shape every
+    // real hang across sixteen CI runs had -- a phase name the driver's
+    // own `phases` array does not recognize. Before failEarly existed,
+    // this threw before any dioxus.send() at all, so nothing reached
+    // Rust's own eval.recv() and it waited out the full 5 s cap in
+    // silence. Constructs the malformed request directly (request()
+    // always builds a well-formed one) and drives the raw channel, since
+    // this path rejects before exchange()'s own report/ack cycle can run.
+    const dom = new FakeDom();
+    dom.install();
+    dom.setTime(0);
+
+    const dioxus = new FakeDioxus();
+    const completion = runDriver(dioxus);
+    dioxus.push({
+      protocolVersion: 2,
+      exchangeId: 1,
+      phase: "a_phase_the_driver_does_not_know",
+      releaseExchangeId: null,
+      releasePhase: null,
+    });
+
+    const sent = await dioxus.nextSent();
+    assert.equal(sent.kind, "terminal");
+    assert.equal(sent.result.ok, false);
+    assert.match(sent.result.error, /invalid phase request/);
+    assert.match(sent.result.error, /a_phase_the_driver_does_not_know/);
+
+    // The driver's own promise rejects right after sending -- expected,
+    // and not what this test is about (a report was sent at all, fast).
+    await assert.rejects(completion);
   },
 );

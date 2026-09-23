@@ -9,10 +9,36 @@ return (async () => {
   const pinKey = "__bkTrustedClickEvalPin";
   const protocolVersion = 2;
   const pinProtocolVersion = 1;
-  const phases = ["proof_of_trust", "tree_row_focus", "backlink_focus", "no_op_terminal"];
+  const phases = ["proof_of_trust", "tree_row_focus", "backlink_focus", "mode_tab_focus"];
   const request = await dioxus.recv();
   const requestedPhase = request?.phase;
   const exchangeId = request?.exchangeId;
+
+  // 2026-09-23 finding review §4.3: a failure here used to throw before
+  // any dioxus.send() at all, so the async function's promise just
+  // rejected -- nothing ever reached Rust's own eval.recv(), which then
+  // waited out the shared transport's full 5 s cap in silence. Every one
+  // of these early checks now sends a diagnostic terminal report first,
+  // so a rejection here is fast and named instead of a 5-second silence.
+  const failEarly = (message) => {
+    dioxus.send({
+      protocolVersion,
+      exchangeId: exchangeId ?? 0,
+      phase: requestedPhase ?? "unknown",
+      releasedExchangeId: null,
+      releasedPhase: null,
+      kind: "terminal",
+      result: {
+        ok: false,
+        stage: "invalid_request",
+        marker,
+        milestones: [],
+        errorToastSeen: false,
+        error: message,
+      },
+    });
+    throw new Error(message);
+  };
 
   if (
     request?.protocolVersion !== protocolVersion ||
@@ -20,7 +46,10 @@ return (async () => {
     exchangeId <= 0 ||
     !phases.includes(requestedPhase)
   ) {
-    throw new Error("invalid phase request");
+    failEarly(
+      `invalid phase request: protocolVersion=${JSON.stringify(request?.protocolVersion)} ` +
+        `exchangeId=${JSON.stringify(exchangeId)} phase=${JSON.stringify(requestedPhase)}`,
+    );
   }
 
   let pinRegistry = window[pinKey];
@@ -37,13 +66,13 @@ return (async () => {
     !Object.isSealed(pinRegistry) ||
     Object.keys(pinRegistry).sort().join(",") !== "current,protocolVersion"
   ) {
-    throw new Error("incompatible trusted-click evaluator pin registry");
+    failEarly("incompatible trusted-click evaluator pin registry");
   }
 
   const hasReleaseId = request.releaseExchangeId !== null;
   const hasReleasePhase = request.releasePhase !== null;
   if (hasReleaseId !== hasReleasePhase) {
-    throw new Error("incomplete prior evaluator pin release");
+    failEarly("incomplete prior evaluator pin release");
   }
   let releasedExchangeId = null;
   let releasedPhase = null;
@@ -56,13 +85,13 @@ return (async () => {
       pinRegistry.current?.phase !== request.releasePhase ||
       !pinRegistry.current?.channel
     ) {
-      throw new Error("prior evaluator pin did not match release request");
+      failEarly("prior evaluator pin did not match release request");
     }
     releasedExchangeId = request.releaseExchangeId;
     releasedPhase = request.releasePhase;
     pinRegistry.current = null;
   } else if (pinRegistry.current !== null) {
-    throw new Error("unexpected prior evaluator pin");
+    failEarly("unexpected prior evaluator pin");
   }
 
   const containsErrorToast = (node) =>
@@ -184,19 +213,28 @@ return (async () => {
       } else {
         if (state.errorToastSeen) throw new Error("an error toast appeared");
         state.milestones.push("backlink_trusted_click_focused_editor");
-        advance("no_op_terminal", "no_op_terminal_reported");
+        advance("mode_tab_focus", "mode_tab_trusted_click_focused_editor");
         outgoing = {
           kind: "progress",
           milestone: "backlink_trusted_click_focused_editor",
         };
       }
-    } else if (requestedPhase === "no_op_terminal") {
-      // Diagnostic (task 023's 2026-09-23 finding review §4.3): no click
-      // of its own, nothing to wait for -- reports success on its very
-      // first query. §C (Form mode, click the Text tab) is not part of
-      // this run; see phase.rs's own doc comment.
-      state.milestones.push("no_op_terminal_reported");
-      outgoing = finish(true);
+    } else if (requestedPhase === "mode_tab_focus") {
+      // Rust has already switched parent.md to Form mode with a real
+      // XTEST click, then sent a second real XTEST click at the Text
+      // mode tab's rect. §C, the check this file exists for: the editor
+      // takes focus. Terminal.
+      if (timedOut()) throw new Error("timed out at mode_tab_trusted_click_focused_editor");
+      const active = document.querySelector(
+        '[data-source-focus-launch="mode-text"].active[aria-selected="true"]',
+      );
+      if (!active || !editorFocused("parent.md")) {
+        outgoing = { kind: "pending" };
+      } else {
+        if (state.errorToastSeen) throw new Error("an error toast appeared");
+        state.milestones.push("mode_tab_trusted_click_focused_editor");
+        outgoing = finish(true);
+      }
     } else {
       throw new Error(`unknown phase: ${requestedPhase}`);
     }
