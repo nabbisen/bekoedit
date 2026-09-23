@@ -62,7 +62,7 @@ mod phase;
 use phase::{EXPECTED_MILESTONES, TERMINAL_STAGE, TrustedClickPhase};
 
 mod settle;
-use settle::{SETTLE_GATE, wait_until_settled};
+use settle::{SETTLE_GATE, unsettled_lifecycle_state, wait_until_settled};
 
 mod xtest;
 use xtest::perform_trusted_clicks;
@@ -359,9 +359,13 @@ pub fn WebViewTrustedClickDriver() -> Element {
             println!("bekoedit task 023 trusted-click run: §B/§C via real XTEST clicks");
             // A peek, not a read: the gate must not subscribe this
             // component to the controller (`shell_behaviour.rs`'s own
-            // driver does the same).
+            // driver does the same). Reads every non-`Ready` lifecycle
+            // state (`settle::unsettled_lifecycle_state`), not
+            // `busy_lifecycle_state` -- see that function's own doc
+            // comment for why the narrower, queue-gated check cannot see
+            // this run's own shape of busy.
             let busy_state = move || match sync.try_peek() {
-                Ok(state) => state.busy_lifecycle_state().map(str::to_string),
+                Ok(state) => unsettled_lifecycle_state(&state),
                 Err(_) => Some("borrowed elsewhere".to_string()),
             };
             match run_trusted_click_sequence(&desktop, &terminal, busy_state).await {
