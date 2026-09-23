@@ -370,6 +370,12 @@ jobs:
         # Soak record (append here, do not replace):
         # 1/10 green -- 35847306100 (2026-09-23), the merge push itself
         # (task 023, 56b2f46).
+        # 2/10 green -- 35848237812 (2026-09-23), triggered by the commit
+        # that recorded run 1 (b9f9fd6). Recording every push's own run
+        # here would keep triggering a further push to record -- this
+        # entry breaks that cycle deliberately. The remaining runs toward
+        # N = 10 accumulate from ordinary, unrelated pushes to `main`; not
+        # every one needs its own recording commit.
         id: trusted_click
         continue-on-error: true
         run: |
