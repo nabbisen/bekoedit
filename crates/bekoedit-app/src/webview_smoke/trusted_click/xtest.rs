@@ -10,7 +10,6 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use super::phase::TrustedClickPhase;
-use super::settle::{SETTLE_GATE, wait_until_settled};
 
 const LOCATE_TIMEOUT_MS: u64 = 5000;
 
@@ -231,24 +230,12 @@ async fn click_via_xtest(
 /// The real XTEST click(s) this run performs before requesting `phase`'s
 /// exchange -- `shell_behaviour.rs`'s `writes_conflict_after` pattern,
 /// applied to input instead of a file write. Every phase has exactly one
-/// click under test; `BacklinkFocus` and `ModeTabFocus` also need one
-/// real click to reach the state the tested click starts from (opening
-/// the backlinks panel; switching into Form mode) -- real, not
-/// synthetic, per `trusted_click.rs`'s own doc comment.
-///
-/// `busy_state` gates every click, not only the first exchange of a
-/// phase (`run_trusted_click_sequence`'s own gate covers that one): CI's
-/// ninth real run showed why. `ModeTabFocus`'s two clicks switch modes
-/// twice in a row (Form, then Text) -- exactly RFC-047's shape, a second
-/// command arriving while the first's transition is still in flight, and
-/// RFC-047 queues rather than drops it. A queued switch is not a busy
-/// *editor* the DOM or a first, phase-level gate reading can see; it is
-/// only visible as the controller's own busy lifecycle state, checked
-/// again immediately before the second click.
+/// click under test; `BacklinkFocus` also needs one real click first, to
+/// open the backlinks panel -- real, not synthetic, per
+/// `trusted_click.rs`'s own doc comment.
 pub(super) async fn perform_trusted_clicks(
     desktop: &DesktopContext,
     phase: TrustedClickPhase,
-    busy_state: &mut dyn FnMut() -> Option<String>,
 ) -> Result<(), String> {
     // Idempotent, and cheap next to a real click -- simpler to call before
     // every phase than to track "only the first click needs this".
@@ -279,42 +266,6 @@ pub(super) async fn perform_trusted_clicks(
                 0,
             )
             .await
-        }
-        TrustedClickPhase::ModeTabFocus => {
-            click_via_xtest(
-                desktop,
-                r#"[data-source-focus-launch="mode-form"]"#,
-                None,
-                0,
-            )
-            .await?;
-            // The second click switches modes again immediately -- wait
-            // for the first switch's own transition to finish, or the
-            // second lands mid-transition and RFC-047 queues it instead
-            // of applying it now.
-            wait_until_settled(phase, SETTLE_GATE, &mut *busy_state).await?;
-            click_via_xtest(
-                desktop,
-                r#"[data-source-focus-launch="mode-text"]"#,
-                None,
-                0,
-            )
-            .await?;
-            // UNRESOLVED (see the review request, which leads with this):
-            // the very next phase query hangs for exactly the shared
-            // transport's 5.001s round-trip cap and never recovers,
-            // reproduced on every one of nine consecutive real CI runs
-            // regardless of what happens here first -- window focus,
-            // exactly-once clicking, rect stability, a DOM-level warm-up,
-            // both the queue-gated and unconditional settle gate before
-            // the phase and again between the two clicks, removing
-            // back-to-back eval calls, and even an 8 s sleep here (longer
-            // than the cap itself, to rule out "just needs to wait
-            // longer" -- it did not: exchange 9 still hung for the full
-            // 5.001s afterwards). A plain yield is what every other,
-            // working phase in this run does between exchanges.
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            Ok(())
         }
     }
 }

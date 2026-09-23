@@ -9,7 +9,7 @@ return (async () => {
   const pinKey = "__bkTrustedClickEvalPin";
   const protocolVersion = 2;
   const pinProtocolVersion = 1;
-  const phases = ["proof_of_trust", "tree_row_focus", "backlink_focus", "mode_tab_focus"];
+  const phases = ["proof_of_trust", "tree_row_focus", "backlink_focus"];
   const request = await dioxus.recv();
   const requestedPhase = request?.phase;
   const exchangeId = request?.exchangeId;
@@ -177,32 +177,15 @@ return (async () => {
     } else if (requestedPhase === "backlink_focus") {
       // Rust has already opened the backlinks panel and sent a real XTEST
       // click at the backlink button's rect. §B item 2: the editor takes
-      // focus, on parent.md (the backlink's source document).
+      // focus, on parent.md (the backlink's source document). Terminal --
+      // §C (Form mode, click the Text tab) is not part of this run; see
+      // phase.rs's own doc comment and task 024.
       if (timedOut()) throw new Error("timed out at backlink_trusted_click_focused_editor");
       if (!editorFocused("parent.md")) {
         outgoing = { kind: "pending" };
       } else {
         if (state.errorToastSeen) throw new Error("an error toast appeared");
         state.milestones.push("backlink_trusted_click_focused_editor");
-        advance("mode_tab_focus", "mode_tab_trusted_click_focused_editor");
-        outgoing = {
-          kind: "progress",
-          milestone: "backlink_trusted_click_focused_editor",
-        };
-      }
-    } else if (requestedPhase === "mode_tab_focus") {
-      // Rust has already switched parent.md to Form mode with a real XTEST
-      // click, then sent a second real XTEST click at the Text mode tab's
-      // rect. §C, the check this file exists for: the editor takes focus.
-      if (timedOut()) throw new Error("timed out at mode_tab_trusted_click_focused_editor");
-      const active = document.querySelector(
-        '[data-source-focus-launch="mode-text"].active[aria-selected="true"]',
-      );
-      if (!active || !editorFocused("parent.md")) {
-        outgoing = { kind: "pending" };
-      } else {
-        if (state.errorToastSeen) throw new Error("an error toast appeared");
-        state.milestones.push("mode_tab_trusted_click_focused_editor");
         outgoing = finish(true);
       }
     } else {

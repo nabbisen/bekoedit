@@ -29,7 +29,7 @@ fn successful_result() -> DriverResult {
 }
 
 #[test]
-fn machine_advances_through_every_transition_ending_at_mode_tab_focus() {
+fn machine_advances_through_every_transition_ending_at_backlink_focus() {
     let mut machine = TrustedClickMachine::new();
     let progression = [
         (
@@ -42,11 +42,6 @@ fn machine_advances_through_every_transition_ending_at_mode_tab_focus() {
             "tree_row_trusted_click_focused_editor",
             TrustedClickPhase::BacklinkFocus,
         ),
-        (
-            TrustedClickPhase::BacklinkFocus,
-            "backlink_trusted_click_focused_editor",
-            TrustedClickPhase::ModeTabFocus,
-        ),
     ];
     for (index, (phase, milestone, next)) in progression.into_iter().enumerate() {
         let exchange_id = (index + 1) as u64;
@@ -58,11 +53,11 @@ fn machine_advances_through_every_transition_ending_at_mode_tab_focus() {
         assert_eq!(machine.current(), next);
     }
     assert_eq!(
-        TrustedClickPhase::ModeTabFocus.next(),
+        TrustedClickPhase::BacklinkFocus.next(),
         None,
-        "mode_tab_focus (§C) is the terminal phase"
+        "backlink_focus (§B item 2) is the terminal phase -- §C is not part of this run"
     );
-    assert_eq!(TrustedClickPhase::ModeTabFocus.as_str(), TERMINAL_STAGE);
+    assert_eq!(TrustedClickPhase::BacklinkFocus.as_str(), TERMINAL_STAGE);
 }
 
 #[test]
@@ -113,9 +108,9 @@ fn malformed_progress_and_terminal_messages_are_rejected() {
     assert!(machine.validate(&out_of_order, 1, None).is_err());
 
     let terminal_phase_nonterminal_progress =
-        TrustedClickMachine::for_phase(TrustedClickPhase::ModeTabFocus);
+        TrustedClickMachine::for_phase(TrustedClickPhase::BacklinkFocus);
     let mut malformed = phase_message(MessageKind::Progress, TERMINAL_STAGE, 1);
-    malformed.milestone = Some("mode_tab_trusted_click_focused_editor".into());
+    malformed.milestone = Some(TERMINAL_STAGE.into());
     assert!(
         terminal_phase_nonterminal_progress
             .validate(&malformed, 1, None)
@@ -126,21 +121,21 @@ fn malformed_progress_and_terminal_messages_are_rejected() {
 
 #[test]
 fn released_pin_must_match_the_prior_exchange_exactly() {
-    let machine = TrustedClickMachine::for_phase(TrustedClickPhase::BacklinkFocus);
-    let mut message = phase_message(MessageKind::Progress, "backlink_focus", 2);
-    message.milestone = Some("backlink_trusted_click_focused_editor".into());
+    let machine = TrustedClickMachine::for_phase(TrustedClickPhase::TreeRowFocus);
+    let mut message = phase_message(MessageKind::Progress, "tree_row_focus", 2);
+    message.milestone = Some("tree_row_trusted_click_focused_editor".into());
     message.released_exchange_id = Some(1);
-    message.released_phase = Some("tree_row_focus".into());
+    message.released_phase = Some("proof_of_trust".into());
 
     let release = PinnedExchange {
         exchange_id: 1,
-        phase: TrustedClickPhase::TreeRowFocus,
+        phase: TrustedClickPhase::ProofOfTrust,
     };
     assert!(machine.validate(&message, 2, Some(release)).is_ok());
 
     let wrong_release = PinnedExchange {
         exchange_id: 1,
-        phase: TrustedClickPhase::ProofOfTrust,
+        phase: TrustedClickPhase::TreeRowFocus,
     };
     assert!(machine.validate(&message, 2, Some(wrong_release)).is_err());
     assert!(machine.validate(&message, 2, None).is_err());

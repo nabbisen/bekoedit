@@ -4,14 +4,17 @@
 //! that module, and this run must not touch it (per `trusted_click.rs`'s
 //! own doc comment on non-shared scope).
 //!
-//! CI's eighth real run showed why this run needs it too, not just a
-//! DOM-level wait: `xtest::await_editor_settled`'s bespoke eval saw the
-//! Text editor as visually ready within a few hundred milliseconds of the
-//! mode-text click, yet the very next phase query still hit the shared
-//! transport's 5 s round-trip cap. The DOM can look ready before
-//! `SourceSyncState`'s own async lifecycle (mount, snapshot, barrier) has
-//! actually finished settling -- exactly the gap this gate, not a DOM
-//! check, is built to close.
+//! Built during task 023's investigation into §C's `ModeTabFocus` phase
+//! (since removed to task 024 -- see `phase.rs`'s own doc comment): a
+//! bespoke DOM-level eval saw the Text editor as visually ready within a
+//! few hundred milliseconds of a mode-switching click, yet the very next
+//! phase query still hit the shared transport's 5 s round-trip cap. The
+//! DOM can look ready before `SourceSyncState`'s own async lifecycle
+//! (mount, snapshot, barrier) has actually finished settling -- the gap
+//! this gate, not a DOM check, is built to close. Kept for §B's own
+//! remaining phases, even though neither has ever shown this gap in
+//! practice, since checking before every exchange is cheap and matches
+//! `shell_behaviour.rs`'s own precedent.
 
 use std::time::Duration;
 
@@ -30,12 +33,12 @@ pub(super) struct SettleGate {
 /// `SourceSyncState::busy_lifecycle_state` (task 021), which only counts
 /// `Mounting`/`Initializing` as busy when a command is *queued* behind
 /// them, because that check exists to answer a narrower question: is a
-/// queued command blocked. CI's ninth through eleventh real runs showed
-/// why this run needs the broader question answered instead: the two
-/// real clicks in `ModeTabFocus` mount and unmount the Text editor with
-/// nothing ever queued behind them, so `busy_lifecycle_state` reported
-/// clear immediately while the mount was, in fact, still in flight --
-/// invisible to that narrower predicate by design, not a bug in it.
+/// queued command blocked. Task 023's now-removed `ModeTabFocus` phase
+/// (see `phase.rs`'s own doc comment) mounted and unmounted the Text
+/// editor through two real clicks with nothing ever queued behind them,
+/// so `busy_lifecycle_state` reported clear immediately while the mount
+/// was, in fact, still in flight -- invisible to that narrower predicate
+/// by design, not a bug in it.
 pub(super) fn unsettled_lifecycle_state(sync: &SourceSyncState) -> Option<String> {
     match &sync.lifecycle.state {
         LifecycleState::Unmounted
@@ -163,13 +166,13 @@ mod tests {
 
     #[tokio::test]
     async fn a_controller_that_never_settles_fails_naming_the_phase_and_the_state() {
-        let error = wait_until_settled(TrustedClickPhase::ModeTabFocus, quick_gate(30), || {
+        let error = wait_until_settled(TrustedClickPhase::BacklinkFocus, quick_gate(30), || {
             Some("Unmounting".to_string())
         })
         .await
         .unwrap_err();
         assert!(
-            error.contains("mode_tab_trusted_click_focused_editor"),
+            error.contains("backlink_trusted_click_focused_editor"),
             "{error}"
         );
         assert!(error.contains("Unmounting"), "{error}");
