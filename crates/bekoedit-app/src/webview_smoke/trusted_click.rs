@@ -67,7 +67,7 @@ use crate::source_sync::SourceSyncState;
 use super::SmokeProfile;
 use super::transport::{
     self, CompletedProbe, DriverResult, MessageKind, PhaseMessage, PinnedExchange,
-    SMOKE_PROTOCOL_VERSION,
+    SMOKE_PROTOCOL_VERSION, reject_with_reason,
 };
 
 mod phase;
@@ -122,27 +122,25 @@ impl TrustedClickMachine {
         // rejected it with a generic structural complaint, discarding the
         // driver's own, more specific explanation. A structural rejection
         // now carries that explanation along, when the message has one.
-        let reject = |base: &str| -> String {
-            let reason = (message.kind == MessageKind::Terminal)
-                .then_some(message.result.as_ref())
-                .flatten()
-                .filter(|result| !result.ok)
-                .and_then(|result| result.error.as_deref());
-            match reason {
-                Some(reason) => format!("{base}: {reason}"),
-                None => base.to_string(),
-            }
-        };
+        // Task 025 §2.3 generalised this to a shared helper
+        // (`transport::reject_with_reason`), used by every validator.
         if message.protocol_version != SMOKE_PROTOCOL_VERSION {
-            return Err(reject(
+            return Err(reject_with_reason(
+                message,
                 "driver returned an unsupported smoke protocol version",
             ));
         }
         if message.exchange_id != exchange_id {
-            return Err(reject("driver returned the wrong smoke exchange"));
+            return Err(reject_with_reason(
+                message,
+                "driver returned the wrong smoke exchange",
+            ));
         }
         if message.phase != self.current.as_str() {
-            return Err(reject("driver returned an out-of-order phase"));
+            return Err(reject_with_reason(
+                message,
+                "driver returned an out-of-order phase",
+            ));
         }
         let released_matches = match release {
             Some(release) => {
@@ -152,7 +150,8 @@ impl TrustedClickMachine {
             None => message.released_exchange_id.is_none() && message.released_phase.is_none(),
         };
         if !released_matches {
-            return Err(reject(
+            return Err(reject_with_reason(
+                message,
                 "driver did not release the exact prior evaluator pin",
             ));
         }

@@ -380,4 +380,6 @@ fn prepare_seeds_one_recovery_snapshot_a_one_day_debounce_and_the_conflict_file(
     std::fs::remove_dir_all(&prepared.root).unwrap();
 }
 
+mod phase_bijection;
 mod settle_gate;
+mod speaking_rejection;

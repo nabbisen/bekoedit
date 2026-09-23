@@ -77,7 +77,7 @@ use crate::source_sync::SourceSyncState;
 use super::SmokeProfile;
 use super::transport::{
     self, CompletedProbe, DriverResult, MessageKind, PhaseMessage, PinnedExchange,
-    SMOKE_PROTOCOL_VERSION,
+    SMOKE_PROTOCOL_VERSION, reject_with_reason,
 };
 
 mod phase;
@@ -119,14 +119,29 @@ impl ShellBehaviourMachine {
         exchange_id: u64,
         release: Option<PinnedExchange<ShellBehaviourPhase>>,
     ) -> Result<(), String> {
+        // Task 025 §2.3: a structural rejection carries the driver's own
+        // reason along, when the message is a terminal failure that has
+        // one (e.g. shell_behaviour_driver.js's failEarly, which always
+        // reports releasedExchangeId: null since it cannot know what Rust
+        // actually expected released -- trusted_click.rs's own validate()
+        // is the finding this generalises).
         if message.protocol_version != SMOKE_PROTOCOL_VERSION {
-            return Err("driver returned an unsupported smoke protocol version".into());
+            return Err(reject_with_reason(
+                message,
+                "driver returned an unsupported smoke protocol version",
+            ));
         }
         if message.exchange_id != exchange_id {
-            return Err("driver returned the wrong smoke exchange".into());
+            return Err(reject_with_reason(
+                message,
+                "driver returned the wrong smoke exchange",
+            ));
         }
         if message.phase != self.current.as_str() {
-            return Err("driver returned an out-of-order phase".into());
+            return Err(reject_with_reason(
+                message,
+                "driver returned an out-of-order phase",
+            ));
         }
         let released_matches = match release {
             Some(release) => {
@@ -136,7 +151,10 @@ impl ShellBehaviourMachine {
             None => message.released_exchange_id.is_none() && message.released_phase.is_none(),
         };
         if !released_matches {
-            return Err("driver did not release the exact prior evaluator pin".into());
+            return Err(reject_with_reason(
+                message,
+                "driver did not release the exact prior evaluator pin",
+            ));
         }
         match message.kind {
             MessageKind::Pending => {

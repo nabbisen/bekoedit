@@ -4,17 +4,46 @@ return (async () => {
   const pinKey = "__bkWebViewSmokeEvalPin";
   const protocolVersion = 2;
   const pinProtocolVersion = 1;
+  const phases = ["launch", "editor", "preview"];
   const request = await dioxus.recv();
   const requestedPhase = request?.phase;
   const exchangeId = request?.exchangeId;
+
+  // Task 023 review (root-cause-fixed) §4.3 / task 025 §2.3: a rejection
+  // here used to throw before any dioxus.send() at all, so Rust's own
+  // eval.recv() waited out the shared transport's full 5 s cap in silence.
+  // Every pre-try check now sends a diagnostic terminal report first, so a
+  // rejection here is fast and named instead of a 5-second silence.
+  const failEarly = (message) => {
+    dioxus.send({
+      protocolVersion,
+      exchangeId: exchangeId ?? 0,
+      phase: requestedPhase ?? "unknown",
+      releasedExchangeId: null,
+      releasedPhase: null,
+      kind: "terminal",
+      result: {
+        ok: false,
+        stage: "invalid_request",
+        marker,
+        milestones: [],
+        errorToastSeen: false,
+        error: message,
+      },
+    });
+    throw new Error(message);
+  };
 
   if (
     request?.protocolVersion !== protocolVersion ||
     !Number.isSafeInteger(exchangeId) ||
     exchangeId <= 0 ||
-    !["launch", "editor", "preview"].includes(requestedPhase)
+    !phases.includes(requestedPhase)
   ) {
-    throw new Error("invalid phase request");
+    failEarly(
+      `invalid phase request: protocolVersion=${JSON.stringify(request?.protocolVersion)} ` +
+        `exchangeId=${JSON.stringify(exchangeId)} phase=${JSON.stringify(requestedPhase)}`,
+    );
   }
 
   let pinRegistry = window[pinKey];
@@ -31,13 +60,13 @@ return (async () => {
     !Object.isSealed(pinRegistry) ||
     Object.keys(pinRegistry).sort().join(",") !== "current,protocolVersion"
   ) {
-    throw new Error("incompatible smoke evaluator pin registry");
+    failEarly("incompatible smoke evaluator pin registry");
   }
 
   const hasReleaseId = request.releaseExchangeId !== null;
   const hasReleasePhase = request.releasePhase !== null;
   if (hasReleaseId !== hasReleasePhase) {
-    throw new Error("incomplete prior evaluator pin release");
+    failEarly("incomplete prior evaluator pin release");
   }
   let releasedExchangeId = null;
   let releasedPhase = null;
@@ -45,18 +74,18 @@ return (async () => {
     if (
       !Number.isSafeInteger(request.releaseExchangeId) ||
       request.releaseExchangeId <= 0 ||
-      !["launch", "editor", "preview"].includes(request.releasePhase) ||
+      !phases.includes(request.releasePhase) ||
       pinRegistry.current?.exchangeId !== request.releaseExchangeId ||
       pinRegistry.current?.phase !== request.releasePhase ||
       !pinRegistry.current?.channel
     ) {
-      throw new Error("prior evaluator pin did not match release request");
+      failEarly("prior evaluator pin did not match release request");
     }
     releasedExchangeId = request.releaseExchangeId;
     releasedPhase = request.releasePhase;
     pinRegistry.current = null;
   } else if (pinRegistry.current !== null) {
-    throw new Error("unexpected prior evaluator pin");
+    failEarly("unexpected prior evaluator pin");
   }
 
   const containsErrorToast = (node) =>

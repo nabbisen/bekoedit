@@ -65,6 +65,63 @@ fn machine_advances_through_every_transition_ending_at_mode_tab_focus() {
     assert_eq!(TrustedClickPhase::ModeTabFocus.as_str(), "mode_tab_focus");
 }
 
+/// Every phase variant, matched exhaustively with no wildcard: adding a
+/// variant to `TrustedClickPhase` without adding it here is a compile
+/// error, naming the variant -- task 025 §2.2's completeness canary,
+/// paired with the derived walk below (which only proves reachability via
+/// `next()`, not that every declared variant was swept into it).
+const fn phase_count() -> usize {
+    match TrustedClickPhase::ProofOfTrust {
+        TrustedClickPhase::ProofOfTrust
+        | TrustedClickPhase::TreeRowFocus
+        | TrustedClickPhase::BacklinkFocus
+        | TrustedClickPhase::ModeTabFocus => {}
+    }
+    4
+}
+
+/// Walks `next()` from `first` to `None`, collecting each phase's own
+/// `as_str()` -- derived from the production transition chain, not a
+/// hand-written list of variant idents (task 025 §2.2: "a hand-written
+/// list lets a new variant slip past the very test meant to catch it").
+/// Bounded by `phase_count()` so a cycle fails this walk itself, naming
+/// the phase, instead of hanging the test.
+fn phases_via_next(first: TrustedClickPhase) -> std::collections::BTreeSet<&'static str> {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut current = Some(first);
+    while let Some(phase) = current {
+        assert!(
+            seen.insert(phase.as_str()),
+            "next() cycles back to {} without ever reaching None",
+            phase.as_str()
+        );
+        assert!(
+            seen.len() <= phase_count(),
+            "next() walk visited more than phase_count() ({}) phases without \
+             terminating -- a cycle?",
+            phase_count()
+        );
+        current = phase.next();
+    }
+    seen
+}
+
+/// Task 025 §2.2: the walk from `ProofOfTrust` must reach every declared
+/// variant, not stop short of one that was added to the enum but never
+/// chained into `next()`.
+#[test]
+fn every_variant_is_reached_by_walking_next_from_the_first_phase() {
+    let walked = phases_via_next(TrustedClickPhase::ProofOfTrust);
+    assert_eq!(
+        walked.len(),
+        phase_count(),
+        "next() walk visited {} phases but phase_count() says there are {} -- \
+         a variant exists that next() never reaches",
+        walked.len(),
+        phase_count()
+    );
+}
+
 /// The 2026-09-23 finding review's root cause, made structural: every
 /// `TrustedClickPhase::as_str()` value must be a phase name
 /// `trusted_click_driver.js`'s own `phases` array recognizes. Before this
@@ -75,26 +132,9 @@ fn machine_advances_through_every_transition_ending_at_mode_tab_focus() {
 /// Rust silently waited out the shared transport's 5 s cap every time.
 #[test]
 fn every_as_str_is_a_phase_the_driver_knows() {
-    let driver_phases: std::collections::BTreeSet<&str> = TRUSTED_CLICK_JS
-        .split_once("const phases = [")
-        .expect("driver must declare its phases array")
-        .1
-        .split_once(']')
-        .expect("phases array must be closed")
-        .0
-        .split(',')
-        .map(|entry| entry.trim().trim_matches('"'))
-        .filter(|entry| !entry.is_empty())
-        .collect();
-    let rust_phases: std::collections::BTreeSet<&str> = [
-        TrustedClickPhase::ProofOfTrust,
-        TrustedClickPhase::TreeRowFocus,
-        TrustedClickPhase::BacklinkFocus,
-        TrustedClickPhase::ModeTabFocus,
-    ]
-    .into_iter()
-    .map(TrustedClickPhase::as_str)
-    .collect();
+    let driver_phases =
+        crate::webview_smoke::transport::parse_js_declared_phase_list(TRUSTED_CLICK_JS);
+    let rust_phases = phases_via_next(TrustedClickPhase::ProofOfTrust);
     assert_eq!(
         rust_phases, driver_phases,
         "TrustedClickPhase::as_str() must match trusted_click_driver.js's own \

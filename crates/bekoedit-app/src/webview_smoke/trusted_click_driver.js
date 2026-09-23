@@ -14,12 +14,11 @@ return (async () => {
   const requestedPhase = request?.phase;
   const exchangeId = request?.exchangeId;
 
-  // 2026-09-23 finding review §4.3: a failure here used to throw before
-  // any dioxus.send() at all, so the async function's promise just
-  // rejected -- nothing ever reached Rust's own eval.recv(), which then
-  // waited out the shared transport's full 5 s cap in silence. Every one
-  // of these early checks now sends a diagnostic terminal report first,
-  // so a rejection here is fast and named instead of a 5-second silence.
+  // Task 023 review (root-cause-fixed) §4.3 / task 025 §2.3: a rejection
+  // here used to throw before any dioxus.send() at all, so Rust's own
+  // eval.recv() waited out the shared transport's full 5 s cap in silence.
+  // Every pre-try check now sends a diagnostic terminal report first, so a
+  // rejection here is fast and named instead of a 5-second silence.
   const failEarly = (message) => {
     dioxus.send({
       protocolVersion,

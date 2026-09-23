@@ -164,6 +164,25 @@ where
     })
 }
 
+/// Appends a terminal failure's own driver-reported reason to a structural
+/// rejection, when `message` carries one -- task 023 review
+/// (root-cause-fixed) §2's finding, generalised for every validator
+/// (task 025 §2.3): a driver's early-rejection report (e.g. `failEarly`)
+/// always carries `releasedExchangeId: null`, since it has no way to know
+/// what Rust actually expected released, so a bare structural complaint
+/// (below) would otherwise discard the driver's own, more specific reason.
+pub(super) fn reject_with_reason(message: &PhaseMessage, base: &str) -> String {
+    let reason = (message.kind == MessageKind::Terminal)
+        .then_some(message.result.as_ref())
+        .flatten()
+        .filter(|result| !result.ok)
+        .and_then(|result| result.error.as_deref());
+    match reason {
+        Some(reason) => format!("{base}: {reason}"),
+        None => base.to_string(),
+    }
+}
+
 pub(super) fn validate_completion(
     completion: &PhaseCompletion,
     exchange_id: u64,
@@ -182,4 +201,24 @@ pub(super) fn validate_completion(
         ));
     }
     Ok(())
+}
+
+/// Parses a driver's `const phases = [ ... ];` literal array of
+/// double-quoted phase names out of its JS source. Shared by every run's
+/// bijection test (task 025 §2.2), so there is one copy of this parse
+/// rather than three -- each run's own test only supplies its `as_str()`
+/// set to compare.
+#[cfg(test)]
+pub(super) fn parse_js_declared_phase_list(source: &str) -> std::collections::BTreeSet<&str> {
+    source
+        .split_once("const phases = [")
+        .expect("driver must declare its phases array")
+        .1
+        .split_once(']')
+        .expect("phases array must be closed")
+        .0
+        .split(',')
+        .map(|entry| entry.trim().trim_matches('"'))
+        .filter(|entry| !entry.is_empty())
+        .collect()
 }

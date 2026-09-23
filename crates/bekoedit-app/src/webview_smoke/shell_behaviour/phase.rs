@@ -36,6 +36,12 @@ pub(super) const EXPECTED_MILESTONES: [&str; 28] = [
 ];
 
 /// The phase whose success is the whole run's terminal result.
+///
+/// `TERMINAL_STAGE` and `ConflictBannerFocusKept::as_str()` are two
+/// different concepts that must stay two different strings -- see task 023
+/// (`trusted_click/phase.rs`'s own doc comment) for what happens when a
+/// terminal phase's `as_str()` returns the result-stage name instead of its
+/// own phase name.
 pub(super) const TERMINAL_STAGE: &str = "conflict_banner_focus_kept";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,7 +136,12 @@ impl ShellBehaviourPhase {
             Self::SettingsEntry => "settings_entry",
             Self::SettingsExitRestored => "settings_exit_restored",
             Self::ConflictDirtied => "conflict_dirtied",
-            Self::ConflictBannerFocusKept => TERMINAL_STAGE,
+            // Not TERMINAL_STAGE: this is the phase's own name, sent as
+            // PhaseRequest.phase, not the result-stage name. It happens to
+            // equal TERMINAL_STAGE's value today; task 023's bug was
+            // exactly this arm returning the constant instead of the
+            // literal, silently, for every rename of either one.
+            Self::ConflictBannerFocusKept => "conflict_banner_focus_kept",
         }
     }
 

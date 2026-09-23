@@ -166,3 +166,33 @@ test("incompatible or mismatched pin state fails before DOM work", { concurrency
   await assert.rejects(mismatchRun, /prior evaluator pin did not match release request/);
   assert.equal(window.__bkWebViewSmokeEvalPin.current.exchangeId, 41);
 });
+
+test(
+  "an unrecognized phase name sends a named diagnostic instead of hanging silently",
+  { concurrency: false },
+  async () => {
+    // Task 025 §2.3/§4.4: the same property task 023's failEarly proved for
+    // trusted_click_driver.js (trusted-click-driver.test.mjs), now here too
+    // -- a rejection before the try sends a diagnostic terminal report over
+    // the channel first, so Rust's own eval.recv() never waits out the
+    // shared transport's 5 s cap in silence.
+    installBrowser();
+    const dioxus = new FakeDioxus();
+    const completion = runDriver(dioxus);
+    dioxus.push({
+      protocolVersion: 2,
+      exchangeId: 1,
+      phase: "a_phase_the_driver_does_not_know",
+      releaseExchangeId: null,
+      releasePhase: null,
+    });
+
+    const sent = await dioxus.nextSent();
+    assert.equal(sent.kind, "terminal");
+    assert.equal(sent.result.ok, false);
+    assert.match(sent.result.error, /invalid phase request/);
+    assert.match(sent.result.error, /a_phase_the_driver_does_not_know/);
+
+    await assert.rejects(completion);
+  },
+);
