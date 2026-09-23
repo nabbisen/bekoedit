@@ -304,7 +304,7 @@ async fn run_trusted_click_sequence(
         // controller would answer Busy.
         wait_until_settled(phase, SETTLE_GATE, &mut busy_state).await?;
         if clicked_for != Some(phase) {
-            perform_trusted_clicks(desktop, phase).await?;
+            perform_trusted_clicks(desktop, phase, &mut busy_state).await?;
             clicked_for = Some(phase);
         }
         // Timed and logged unconditionally, success or failure: CI's sixth

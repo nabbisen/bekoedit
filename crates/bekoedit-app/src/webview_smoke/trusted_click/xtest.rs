@@ -10,6 +10,7 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use super::phase::TrustedClickPhase;
+use super::settle::{SETTLE_GATE, wait_until_settled};
 
 const LOCATE_TIMEOUT_MS: u64 = 5000;
 
@@ -285,9 +286,20 @@ async fn await_editor_settled(expected_file_name: &str) {
 /// real click to reach the state the tested click starts from (opening
 /// the backlinks panel; switching into Form mode) -- real, not
 /// synthetic, per `trusted_click.rs`'s own doc comment.
+///
+/// `busy_state` gates every click, not only the first exchange of a
+/// phase (`run_trusted_click_sequence`'s own gate covers that one): CI's
+/// ninth real run showed why. `ModeTabFocus`'s two clicks switch modes
+/// twice in a row (Form, then Text) -- exactly RFC-047's shape, a second
+/// command arriving while the first's transition is still in flight, and
+/// RFC-047 queues rather than drops it. A queued switch is not a busy
+/// *editor* the DOM or a first, phase-level gate reading can see; it is
+/// only visible as the controller's own busy lifecycle state, checked
+/// again immediately before the second click.
 pub(super) async fn perform_trusted_clicks(
     desktop: &DesktopContext,
     phase: TrustedClickPhase,
+    busy_state: &mut dyn FnMut() -> Option<String>,
 ) -> Result<(), String> {
     // Idempotent, and cheap next to a real click -- simpler to call before
     // every phase than to track "only the first click needs this".
@@ -327,6 +339,11 @@ pub(super) async fn perform_trusted_clicks(
                 0,
             )
             .await?;
+            // The second click switches modes again immediately -- wait
+            // for the first switch's own transition to finish, or the
+            // second lands mid-transition and RFC-047 queues it instead
+            // of applying it now.
+            wait_until_settled(phase, SETTLE_GATE, &mut *busy_state).await?;
             click_via_xtest(
                 desktop,
                 r#"[data-source-focus-launch="mode-text"]"#,
