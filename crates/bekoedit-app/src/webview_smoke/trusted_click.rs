@@ -296,7 +296,23 @@ async fn run_trusted_click_sequence(
             perform_trusted_clicks(desktop, phase).await?;
             clicked_for = Some(phase);
         }
-        let completed = run_trusted_click_phase(phase, exchange_id, release).await?;
+        // Timed and logged unconditionally, success or failure: CI's sixth
+        // real run failed with "phase evaluator did not report progress"
+        // at mode_tab_focus, the shared transport's own 5 s round-trip
+        // timeout (`transport.rs`, untouched by this run per this
+        // module's own doc comment) -- this says whether that phase's
+        // query is slow because the WebView itself was still busy (a mode
+        // switch mounts a different editor) or something else, while the
+        // soak (§4) is still open.
+        let started = tokio::time::Instant::now();
+        let outcome = run_trusted_click_phase(phase, exchange_id, release).await;
+        println!(
+            "  {} exchange {exchange_id} took {:?}, ok={}",
+            phase.as_str(),
+            started.elapsed(),
+            outcome.is_ok()
+        );
+        let completed = outcome?;
         machine.validate(&completed.message, exchange_id, release)?;
         transport::validate_completion(
             &completed.completion,
