@@ -273,6 +273,10 @@ jobs:
           # Uses xvfb-run to provide a virtual framebuffer on CI.
           timeout 10 xvfb-run -a ./target/release/bekoedit --headless-smoke
       - name: WebView lifecycle regression (RFC-041)
+        # THROWAWAY: task 025 §4.4 mutation-evidence run only, continue-on-error
+        # here so shell_behaviour's own mutation still runs in the same job.
+        id: webview_smoke_throwaway_proof
+        continue-on-error: true
         run: |
           SMOKE_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-webview-smoke.XXXXXX")"
           trap 'rm -rf "$SMOKE_PARENT"' EXIT
@@ -307,6 +311,8 @@ jobs:
         # `RFC-044 shell-behaviour outcome: <outcome>` line; now that the mask
         # is gone, this step's own conclusion is truthful too.
         id: shell_behaviour
+        # THROWAWAY: task 025 §4.4 mutation-evidence run only.
+        continue-on-error: true
         run: |
           BEHAVIOUR_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-shell-behaviour.XXXXXX")"
           trap 'rm -rf "$BEHAVIOUR_PARENT"' EXIT

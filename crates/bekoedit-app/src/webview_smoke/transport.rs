@@ -140,7 +140,7 @@ where
     eval.send(PhaseAcknowledgement {
         protocol_version: SMOKE_PROTOCOL_VERSION,
         exchange_id,
-        phase: phase_name,
+        phase: "MUTATED_TASK_025_S2_4_PROOF", // MUTATION: task 025 §2.4 proof only
         kind: message.kind,
     })
     .map_err(|error| format!("could not acknowledge {phase_name} phase: {error}"))?;

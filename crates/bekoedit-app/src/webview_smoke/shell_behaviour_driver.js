@@ -16,7 +16,7 @@ return (async () => {
     "settings_exit_restored",
   ]);
   const phases = [
-    "recovery_entry",
+    "recovery_entry_MUTATED",
     "recovery_exit",
     "down_up",
     "expand_enter",
