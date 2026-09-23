@@ -243,12 +243,19 @@ jobs:
       - name: Install JS dependencies
         run: cd crates/bekoedit-app/js && npm ci
       - name: Test source-editor JavaScript adapter
+        # THROWAWAY: task 025 §4.4 mutation-evidence run only -- the driver
+        # phases[] mutation below also breaks this suite's own happy-path
+        # tests, which is not what this experiment is measuring.
+        continue-on-error: true
         run: cd crates/bekoedit-app/js && npm test
       - name: Build JS bundle
         run: cd crates/bekoedit-app/js && node build.mjs
       - name: Check committed JS bundles are current
         run: git diff --exit-code -- crates/bekoedit-app/assets/editor-bundle.js crates/bekoedit-app/assets/focus-guard-bundle.js
       - name: Test desktop application
+        # THROWAWAY: task 025 §4.4 mutation-evidence run only -- same reason
+        # as the JS test step above.
+        continue-on-error: true
         run: cargo +1.88.0 test -p bekoedit --locked
       - name: Parse-check emitted eval scripts (RFC-042 slice 3 C1)
         shell: bash
