@@ -151,12 +151,25 @@ where
     // smoke-only JS pin keeps that exact channel reachable until this joined
     // return is consumed. Re-audit native_eval.ts, query.rs, document.rs, and
     // dioxus-document eval.rs before updating Dioxus.
+    // Task 025 §2.4: a real CI run (an unknown-phase failEarly rejection on
+    // a run's first exchange, no prior pin to release, so validate() above
+    // has nothing structural to reject) showed the JS exception's own
+    // message does not survive to `{error}` here -- Dioxus/WebKitGTK
+    // surfaces only a generic `EvalError::Communication`. But `message`
+    // was already received and validated above; when it is itself a
+    // terminal failure carrying a reason, that reason is known and is
+    // used instead of letting the generic join error discard it.
     let completion = tokio::time::timeout_at(deadline, eval.join::<PhaseCompletion>())
         .await
         .map_err(|_| {
             format!("{phase_name} phase evaluator did not complete after acknowledgement")
         })?
-        .map_err(|error| format!("{phase_name} phase evaluator join failed: {error}"))?;
+        .map_err(|error| {
+            reject_with_reason(
+                &message,
+                &format!("{phase_name} phase evaluator join failed: {error}"),
+            )
+        })?;
     Ok(CompletedProbe {
         message,
         completion,
