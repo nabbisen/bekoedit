@@ -300,19 +300,23 @@ pub(super) async fn perform_trusted_clicks(
                 0,
             )
             .await?;
-            // CI's ninth and tenth real runs showed the very next phase
-            // query hang for the full shared-transport timeout even with
-            // both a DOM-level wait (`await_editor_settled`, since
-            // removed) and this module's own settle gate reporting
-            // nothing busy -- three `document::eval` calls in a row
-            // (locate, locate, warm-up) with no yield between them,
-            // immediately followed by a fourth (the phase query itself),
-            // a pattern no other phase in this run has. A plain yield
-            // back to the WebView's own event loop, the same
-            // `PHASE_POLL_INTERVAL` every other exchange already sleeps
-            // for, is cheaper and more conservative than another bespoke
-            // eval.
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            // DIAGNOSTIC, not a proposed fix (see the review request):
+            // every other mitigation tried -- window focus, exactly-once
+            // clicking, rect stability, a DOM-level warm-up, this run's
+            // own settle gate before the phase and between the two
+            // clicks (both unconditional and queue-gated readings), and
+            // removing back-to-back eval calls -- left the very next
+            // phase query hanging for exactly the shared transport's
+            // 5.001s round-trip cap, every time, on eight consecutive
+            // real CI runs. TreeRowFocus mounts Text from nothing and
+            // BacklinkFocus never changes mode at all; ModeTabFocus is
+            // the only phase in this run that fully unmounts and remounts
+            // a source editor through two real clicks. This sleep is
+            // long enough to outlast the cap on purpose, to say whether
+            // exchange 9 then answers immediately (a genuine, real-world
+            // remount cost no other test drives through) or still hangs
+            // (something else entirely).
+            tokio::time::sleep(std::time::Duration::from_secs(8)).await;
             Ok(())
         }
     }
