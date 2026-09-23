@@ -173,7 +173,7 @@ async function reachBacklinkFocus(dom) {
 }
 
 test(
-  "backlink_focus: editor not focused on parent.md is pending; focused is terminal success",
+  "backlink_focus: editor not focused on parent.md is pending; focused reports progress and advances",
   { concurrency: false },
   async () => {
     const dom = new FakeDom();
@@ -187,14 +187,38 @@ test(
     focusEditorOn(dom, "parent.md");
     const report = await exchange("backlink_focus", 4, { exchangeId: 3, phase: "backlink_focus" });
 
+    assert.equal(report.kind, "progress");
+    assert.equal(report.milestone, "backlink_trusted_click_focused_editor");
+    assert.equal(window.__bkTrustedClickState.phase, "no_op_terminal");
+  },
+);
+
+async function reachNoOpTerminal(dom) {
+  await reachBacklinkFocus(dom);
+  focusEditorOn(dom, "parent.md");
+  await exchange("backlink_focus", 3, { exchangeId: 2, phase: "tree_row_focus" });
+}
+
+test(
+  "no_op_terminal: reports terminal success on its very first query -- no click, nothing to wait for",
+  { concurrency: false },
+  async () => {
+    const dom = new FakeDom();
+    dom.install();
+    dom.setTime(0);
+    await reachNoOpTerminal(dom);
+
+    const report = await exchange("no_op_terminal", 4, { exchangeId: 3, phase: "backlink_focus" });
+
     assert.equal(report.kind, "terminal");
     assert.equal(report.result.ok, true);
-    assert.equal(report.result.stage, "backlink_trusted_click_focused_editor");
+    assert.equal(report.result.stage, "no_op_terminal_reported");
     assert.equal(report.result.marker, MARKER);
     assert.deepEqual(report.result.milestones, [
       "trusted_click_focused_default_target",
       "tree_row_trusted_click_focused_editor",
       "backlink_trusted_click_focused_editor",
+      "no_op_terminal_reported",
     ]);
   },
 );

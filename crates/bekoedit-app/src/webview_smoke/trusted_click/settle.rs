@@ -171,10 +171,7 @@ mod tests {
         })
         .await
         .unwrap_err();
-        assert!(
-            error.contains("backlink_trusted_click_focused_editor"),
-            "{error}"
-        );
+        assert!(error.contains("backlink_focus"), "{error}");
         assert!(error.contains("Unmounting"), "{error}");
         assert!(error.contains("did not settle"), "{error}");
     }

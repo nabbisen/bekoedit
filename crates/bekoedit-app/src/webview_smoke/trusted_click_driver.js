@@ -9,7 +9,7 @@ return (async () => {
   const pinKey = "__bkTrustedClickEvalPin";
   const protocolVersion = 2;
   const pinProtocolVersion = 1;
-  const phases = ["proof_of_trust", "tree_row_focus", "backlink_focus"];
+  const phases = ["proof_of_trust", "tree_row_focus", "backlink_focus", "no_op_terminal"];
   const request = await dioxus.recv();
   const requestedPhase = request?.phase;
   const exchangeId = request?.exchangeId;
@@ -177,17 +177,26 @@ return (async () => {
     } else if (requestedPhase === "backlink_focus") {
       // Rust has already opened the backlinks panel and sent a real XTEST
       // click at the backlink button's rect. §B item 2: the editor takes
-      // focus, on parent.md (the backlink's source document). Terminal --
-      // §C (Form mode, click the Text tab) is not part of this run; see
-      // phase.rs's own doc comment and task 024.
+      // focus, on parent.md (the backlink's source document).
       if (timedOut()) throw new Error("timed out at backlink_trusted_click_focused_editor");
       if (!editorFocused("parent.md")) {
         outgoing = { kind: "pending" };
       } else {
         if (state.errorToastSeen) throw new Error("an error toast appeared");
         state.milestones.push("backlink_trusted_click_focused_editor");
-        outgoing = finish(true);
+        advance("no_op_terminal", "no_op_terminal_reported");
+        outgoing = {
+          kind: "progress",
+          milestone: "backlink_trusted_click_focused_editor",
+        };
       }
+    } else if (requestedPhase === "no_op_terminal") {
+      // Diagnostic (task 023's 2026-09-23 finding review §4.3): no click
+      // of its own, nothing to wait for -- reports success on its very
+      // first query. §C (Form mode, click the Text tab) is not part of
+      // this run; see phase.rs's own doc comment.
+      state.milestones.push("no_op_terminal_reported");
+      outgoing = finish(true);
     } else {
       throw new Error(`unknown phase: ${requestedPhase}`);
     }

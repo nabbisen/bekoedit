@@ -29,7 +29,7 @@ fn successful_result() -> DriverResult {
 }
 
 #[test]
-fn machine_advances_through_every_transition_ending_at_backlink_focus() {
+fn machine_advances_through_every_transition_ending_at_no_op_terminal() {
     let mut machine = TrustedClickMachine::new();
     let progression = [
         (
@@ -42,6 +42,11 @@ fn machine_advances_through_every_transition_ending_at_backlink_focus() {
             "tree_row_trusted_click_focused_editor",
             TrustedClickPhase::BacklinkFocus,
         ),
+        (
+            TrustedClickPhase::BacklinkFocus,
+            "backlink_trusted_click_focused_editor",
+            TrustedClickPhase::NoOpTerminal,
+        ),
     ];
     for (index, (phase, milestone, next)) in progression.into_iter().enumerate() {
         let exchange_id = (index + 1) as u64;
@@ -53,11 +58,11 @@ fn machine_advances_through_every_transition_ending_at_backlink_focus() {
         assert_eq!(machine.current(), next);
     }
     assert_eq!(
-        TrustedClickPhase::BacklinkFocus.next(),
+        TrustedClickPhase::NoOpTerminal.next(),
         None,
-        "backlink_focus (§B item 2) is the terminal phase -- §C is not part of this run"
+        "no_op_terminal (diagnostic only) is the terminal phase -- §C is not part of this run"
     );
-    assert_eq!(TrustedClickPhase::BacklinkFocus.as_str(), TERMINAL_STAGE);
+    assert_eq!(TrustedClickPhase::NoOpTerminal.as_str(), TERMINAL_STAGE);
 }
 
 #[test]
@@ -108,7 +113,7 @@ fn malformed_progress_and_terminal_messages_are_rejected() {
     assert!(machine.validate(&out_of_order, 1, None).is_err());
 
     let terminal_phase_nonterminal_progress =
-        TrustedClickMachine::for_phase(TrustedClickPhase::BacklinkFocus);
+        TrustedClickMachine::for_phase(TrustedClickPhase::NoOpTerminal);
     let mut malformed = phase_message(MessageKind::Progress, TERMINAL_STAGE, 1);
     malformed.milestone = Some(TERMINAL_STAGE.into());
     assert!(
