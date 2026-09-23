@@ -86,7 +86,7 @@ pub fn BacklinksPanel() -> Element {
                                             SourceCommand::OpenDocument(path.clone()),
                                             SourceInteractionOrigin::backlink(
                                                 position,
-                                                &path,
+                                                std::path::Path::new("mutated"),
                                                 line_number,
                                             ),
                                             || {},
