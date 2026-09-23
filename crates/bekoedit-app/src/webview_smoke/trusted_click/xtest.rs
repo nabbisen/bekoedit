@@ -100,17 +100,20 @@ fn render_locate_script(payload: &str) -> String {
                 previous = current;
                 await new Promise((resolve) => setTimeout(resolve, 50));
             }}
-            if (!rect) {{
-                dioxus.send({{ found: false, x: 0, y: 0, width: 0, height: 0 }});
-                return;
-            }}
-            dioxus.send({{
-                found: true,
-                x: rect.x,
-                y: rect.y,
-                width: rect.width,
-                height: rect.height,
-            }});
+            const response = rect
+                ? {{ found: true, x: rect.x, y: rect.y, width: rect.width, height: rect.height }}
+                : {{ found: false, x: 0, y: 0, width: 0, height: 0 }};
+            dioxus.send(response);
+            // Stay alive until Rust acknowledges: the 2026-09-23 review
+            // (§3.2) found that dropping this eval right after send(),
+            // without ever joining it, risks the exact Dioxus 0.7.9
+            // channel-drop hazard transport.rs's own audit comment
+            // documents. Waiting here, then returning a value join() can
+            // consume, keeps this query's slab entry alive until Rust is
+            // actually done with it, the same shape as the shared
+            // transport's own request/acknowledge/join handshake.
+            await dioxus.recv();
+            return null;
         }})();
         "#,
     )
@@ -138,9 +141,22 @@ async fn locate_click_target(
     })
     .map_err(|error| format!("cannot encode locate request for {selector}: {error}"))?;
     let mut eval = document::eval(&render_locate_script(&payload));
-    eval.recv::<LocateResponse>()
+    let response = eval
+        .recv::<LocateResponse>()
         .await
-        .map_err(|error| format!("could not locate {selector}: {error}"))
+        .map_err(|error| format!("could not locate {selector}: {error}"))?;
+    // Acknowledge, then join: see `render_locate_script`'s own comment.
+    // Not pinned across separate exchanges like the shared transport's
+    // evaluator pin -- this is one self-contained round trip -- but
+    // joined rather than dropped, so Dioxus's own cleanup runs now
+    // instead of being deferred to a later GC pass.
+    eval.send(true).map_err(|error| {
+        format!("could not acknowledge locate response for {selector}: {error}")
+    })?;
+    eval.join::<Option<serde_json::Value>>()
+        .await
+        .map_err(|error| format!("locate query for {selector} did not complete: {error}"))?;
+    Ok(response)
 }
 
 /// Runs an `xdotool` subcommand, logging its exit status and both streams
@@ -149,10 +165,18 @@ async fn locate_click_target(
 /// diagnostic available while the soak (§4) is still open. Kept until the
 /// mechanism is trusted; the review request says which CI runs this
 /// covered.
-fn run_xdotool(args: &[&str]) -> Result<(), String> {
-    let output = std::process::Command::new("xdotool")
+///
+/// `tokio::process::Command`, not `std::process::Command`: the 2026-09-23
+/// review (§3.1) found the blocking form here froze the app's own tao/GTK
+/// event loop for as long as `xdotool` ran, since this runs on that same
+/// thread -- the X events `xdotool` itself was sending could not be
+/// processed until it returned, and nothing else in the app could run
+/// either.
+async fn run_xdotool(args: &[&str]) -> Result<(), String> {
+    let output = tokio::process::Command::new("xdotool")
         .args(args)
         .output()
+        .await
         .map_err(|error| format!("cannot spawn xdotool {args:?}: {error}"))?;
     println!(
         "  xdotool {args:?} -> {} stdout={:?} stderr={:?}",
@@ -225,6 +249,7 @@ async fn click_via_xtest(
         "--clearmodifiers",
         "1",
     ])
+    .await
 }
 
 /// The real XTEST click(s) this run performs before requesting `phase`'s

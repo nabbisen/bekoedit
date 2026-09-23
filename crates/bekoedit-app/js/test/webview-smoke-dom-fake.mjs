@@ -16,6 +16,11 @@
 // `article.textContent`. Nothing beyond that list is implemented here on
 // purpose (task 012 §3.4) -- this is not a DOM, it is a lookup table
 // shaped like the handful of calls one file makes.
+//
+// `getElementById` and `activeElement` (get/set) were added for task
+// 023's `trusted_click_driver.js`, the first driver to read either --
+// its whole point is asserting on `document.activeElement` itself (the
+// 2026-09-23 review's §5.1), which no earlier driver ever needed.
 
 /** A fake element: dispatchEvent, matches, querySelector, textContent --
  * exactly what driver.js reads or calls on a DOM node -- plus `click`,
@@ -107,6 +112,8 @@ export class FakeEditorView {
 export class FakeDom {
   constructor() {
     this.elements = new Map();
+    this.elementsById = new Map();
+    this.active = null;
     this.time = 0;
     this.observerCallback = null;
     this.observerConnected = false;
@@ -137,6 +144,10 @@ export class FakeDom {
     globalThis.document = {
       documentElement: {},
       querySelector: (selector) => this.elements.get(selector) ?? null,
+      getElementById: (id) => this.elementsById.get(id) ?? null,
+      get activeElement() {
+        return self.active;
+      },
     };
   }
 
@@ -144,6 +155,20 @@ export class FakeDom {
    * `null`, the default, if never set). */
   setElement(selector, element) {
     this.elements.set(selector, element ?? null);
+    return this;
+  }
+
+  /** `document.getElementById(id)` will return `element`. */
+  setElementById(id, element) {
+    this.elementsById.set(id, element ?? null);
+    return this;
+  }
+
+  /** `document.activeElement` will be `element` until changed again --
+   * the trusted-click driver's own default-focus-action assertion reads
+   * this directly. */
+  setActiveElement(element) {
+    this.active = element ?? null;
     return this;
   }
 
