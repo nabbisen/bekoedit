@@ -152,19 +152,15 @@ fn run_xdotool(args: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
-/// Brings the bekoedit window to the front and gives it input focus by
-/// window title (`main.rs`'s `WindowBuilder::with_title("bekoedit")`) --
-/// Xvfb runs no window manager, so nothing else will ever do this for it.
-/// Idempotent; called once before the run's first click.
+/// Gives the bekoedit window X input focus by window title (`main.rs`'s
+/// `WindowBuilder::with_title("bekoedit")`), via `windowfocus`
+/// (`XSetInputFocus`) rather than `windowactivate` (`_NET_ACTIVE_WINDOW`,
+/// an EWMH client message a window manager answers) -- CI's first real
+/// run showed Xvfb runs no window manager, so `windowactivate` fails
+/// outright there ("windowmanager claims not to support
+/// _NET_ACTIVE_WINDOW"). Idempotent; called before every phase's clicks.
 pub(super) fn activate_window() -> Result<(), String> {
-    run_xdotool(&[
-        "search",
-        "--sync",
-        "--name",
-        "^bekoedit$",
-        "windowactivate",
-        "--sync",
-    ])
+    run_xdotool(&["search", "--sync", "--name", "^bekoedit$", "windowfocus"])
 }
 
 /// Locates one element, then sends a real XTEST click at its centre
