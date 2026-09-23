@@ -121,6 +121,39 @@ fn terminal_can_come_from_any_phase_not_only_the_last_one() {
     machine.validate(&message, 1, None).unwrap();
 }
 
+/// 2026-09-23 review (root-cause-fixed) §2: exactly the shape
+/// `trusted_click_driver.js`'s `failEarly` sends -- a terminal failure
+/// whose `releasedExchangeId` is always `null`, since it has no way to
+/// know what Rust actually expected released. Before this test, the
+/// pin-release check below fired first with a generic structural
+/// complaint, discarding the driver's own, more specific reason -- the
+/// review's own repro of why sixteen runs never found the real cause.
+#[test]
+fn a_terminal_failure_s_own_reason_survives_a_structural_pin_mismatch() {
+    let machine = TrustedClickMachine::for_phase(TrustedClickPhase::ModeTabFocus);
+    let mut message = phase_message(MessageKind::Terminal, "mode_tab_focus", 6);
+    message.result = Some(DriverResult {
+        ok: false,
+        stage: "invalid_request".into(),
+        marker: MARKER.into(),
+        milestones: Vec::new(),
+        error_toast_seen: false,
+        error: Some("invalid phase request: phase=\"garbage\"".into()),
+    });
+    // release expected, but the message reports none released -- exactly
+    // failEarly's shape, which triggers the pin-release check.
+    let release = PinnedExchange {
+        exchange_id: 5,
+        phase: TrustedClickPhase::BacklinkFocus,
+    };
+
+    let error = machine.validate(&message, 6, Some(release)).unwrap_err();
+    assert!(
+        error.contains("invalid phase request"),
+        "the driver's own reason must survive a structural rejection: {error}"
+    );
+}
+
 #[test]
 fn malformed_progress_and_terminal_messages_are_rejected() {
     let machine = TrustedClickMachine::for_phase(TrustedClickPhase::TreeRowFocus);

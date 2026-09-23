@@ -115,14 +115,34 @@ impl TrustedClickMachine {
         exchange_id: u64,
         release: Option<PinnedExchange<TrustedClickPhase>>,
     ) -> Result<(), String> {
+        // 2026-09-23 review (root-cause-fixed) §2: `failEarly` sends a
+        // terminal failure carrying its own reason, but always with
+        // `releasedExchangeId: null` -- it has no way to know what Rust
+        // actually expected released -- so the pin-release check below
+        // rejected it with a generic structural complaint, discarding the
+        // driver's own, more specific explanation. A structural rejection
+        // now carries that explanation along, when the message has one.
+        let reject = |base: &str| -> String {
+            let reason = (message.kind == MessageKind::Terminal)
+                .then_some(message.result.as_ref())
+                .flatten()
+                .filter(|result| !result.ok)
+                .and_then(|result| result.error.as_deref());
+            match reason {
+                Some(reason) => format!("{base}: {reason}"),
+                None => base.to_string(),
+            }
+        };
         if message.protocol_version != SMOKE_PROTOCOL_VERSION {
-            return Err("driver returned an unsupported smoke protocol version".into());
+            return Err(reject(
+                "driver returned an unsupported smoke protocol version",
+            ));
         }
         if message.exchange_id != exchange_id {
-            return Err("driver returned the wrong smoke exchange".into());
+            return Err(reject("driver returned the wrong smoke exchange"));
         }
         if message.phase != self.current.as_str() {
-            return Err("driver returned an out-of-order phase".into());
+            return Err(reject("driver returned an out-of-order phase"));
         }
         let released_matches = match release {
             Some(release) => {
@@ -132,7 +152,9 @@ impl TrustedClickMachine {
             None => message.released_exchange_id.is_none() && message.released_phase.is_none(),
         };
         if !released_matches {
-            return Err("driver did not release the exact prior evaluator pin".into());
+            return Err(reject(
+                "driver did not release the exact prior evaluator pin",
+            ));
         }
         match message.kind {
             MessageKind::Pending => {
