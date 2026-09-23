@@ -64,32 +64,46 @@ struct LocateResponse {
 /// built from would catch that, per the RFC-042 slice 3 re-review C1/C2
 /// finding `shell_focus/tests.rs` documents) can be unit tested without a
 /// real WebView (task 023 §5.4).
+///
+/// Requires the same rect across two consecutive polls before accepting
+/// it: CI's fifth real run showed the first nonzero rect a freshly
+/// launched WebView reports for `#app-menu-trigger` can be a pre-layout
+/// position (`(8, 32, 29, 24)`) that the page immediately abandons for
+/// its true, stable one (`(1159, 6, 31, 23)`, seen once a slower run's
+/// own repeated polling happened to land after layout settled) -- a
+/// single nonzero reading is not evidence the layout has finished.
 fn render_locate_script(payload: &str) -> String {
     format!(
         r#"
         return (async () => {{
             const request = {payload};
             const deadline = performance.now() + request.timeoutMs;
-            let el = null;
+            const sameRect = (a, b) =>
+                a !== null && b !== null &&
+                a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+            let rect = null;
+            let previous = null;
             while (performance.now() < deadline) {{
                 const matches = [...document.querySelectorAll(request.selector)].filter(
                     (candidate) =>
                         request.textIncludes === null ||
                         candidate.textContent.includes(request.textIncludes),
                 );
-                el = matches[request.index] ?? null;
-                if (!el || el.getClientRects().length === 0) {{
-                    el = null;
-                    await new Promise((resolve) => setTimeout(resolve, 50));
-                    continue;
+                const el = matches[request.index] ?? null;
+                const current = el && el.getClientRects().length > 0
+                    ? el.getBoundingClientRect()
+                    : null;
+                if (current && sameRect(current, previous)) {{
+                    rect = current;
+                    break;
                 }}
-                break;
+                previous = current;
+                await new Promise((resolve) => setTimeout(resolve, 50));
             }}
-            if (!el) {{
+            if (!rect) {{
                 dioxus.send({{ found: false, x: 0, y: 0, width: 0, height: 0 }});
                 return;
             }}
-            const rect = el.getBoundingClientRect();
             dioxus.send({{
                 found: true,
                 x: rect.x,
