@@ -228,57 +228,6 @@ async fn click_via_xtest(
     ])
 }
 
-/// Bespoke, single-exchange, and -- unlike `run_driver_phase`'s shared
-/// transport -- not wrapped in any Rust-side timeout: a warm-up wait,
-/// with its own generous internal budget, for the Text editor to finish
-/// mounting after a mode switch. CI's seventh real run showed the
-/// mode-text click's own phase query hit the shared transport's fixed 5 s
-/// round-trip cap (`transport.rs`, untouched by this run) at exactly
-/// `5.001s` while every other exchange answered in under 40 ms --
-/// WebKitGTK's JS thread was still busy mounting CodeMirror when that
-/// quick query was dispatched, so the query itself had to wait behind it
-/// past the cap. Waiting here first, on an eval with room to actually
-/// wait, means the phase's own query -- performed after this returns --
-/// finds the condition already true and answers immediately, same as
-/// every other phase in this run did.
-async fn await_editor_settled(expected_file_name: &str) {
-    let payload = serde_json::to_string(&serde_json::json!({
-        "expectedFileName": expected_file_name,
-        "timeoutMs": 15000,
-    }))
-    .expect("a plain string pair always serializes");
-    let mut eval = document::eval(&format!(
-        r#"
-        return (async () => {{
-            const request = {payload};
-            const ready = () => {{
-                const active = document.querySelector(
-                    '[data-source-focus-launch="mode-text"].active[aria-selected="true"]',
-                );
-                const view = window.__bk?._view;
-                const host = document.querySelector('[data-source-focus-launch-region="text"]');
-                const fileName = document.querySelector(".file-name")?.textContent?.trim() ?? null;
-                return Boolean(
-                    active && view && view.dom?.isConnected && view.hasFocus && host &&
-                        !host.querySelector(".source-editor-status") &&
-                        fileName === request.expectedFileName,
-                );
-            }};
-            const deadline = performance.now() + request.timeoutMs;
-            while (!ready() && performance.now() < deadline) {{
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            }}
-            dioxus.send(ready());
-        }})();
-        "#,
-    ));
-    // Best-effort: a timeout or error here just means the authoritative
-    // phase query that follows may itself have to wait or, if the
-    // condition never becomes true, fail for real -- not a reason to fail
-    // the run over this warm-up.
-    let _: Result<bool, _> = eval.recv().await;
-}
-
 /// The real XTEST click(s) this run performs before requesting `phase`'s
 /// exchange -- `shell_behaviour.rs`'s `writes_conflict_after` pattern,
 /// applied to input instead of a file write. Every phase has exactly one
@@ -351,7 +300,19 @@ pub(super) async fn perform_trusted_clicks(
                 0,
             )
             .await?;
-            await_editor_settled("parent.md").await;
+            // CI's ninth and tenth real runs showed the very next phase
+            // query hang for the full shared-transport timeout even with
+            // both a DOM-level wait (`await_editor_settled`, since
+            // removed) and this module's own settle gate reporting
+            // nothing busy -- three `document::eval` calls in a row
+            // (locate, locate, warm-up) with no yield between them,
+            // immediately followed by a fourth (the phase query itself),
+            // a pattern no other phase in this run has. A plain yield
+            // back to the WebView's own event loop, the same
+            // `PHASE_POLL_INTERVAL` every other exchange already sleeps
+            // for, is cheaper and more conservative than another bespoke
+            // eval.
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             Ok(())
         }
     }
