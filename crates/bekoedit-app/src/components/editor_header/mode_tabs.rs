@@ -66,6 +66,7 @@ pub(super) fn ModeTabs(props: ModeTabsProps) -> Element {
                     role: "tab",
                     tabindex: if mode == m { "0" } else { "-1" },
                     aria_selected: "{mode == m}",
+                    onmousedown: move |event| event.prevent_default(),
                     onclick: move |_| {
                         submit_source_interaction(
                             source_sync,

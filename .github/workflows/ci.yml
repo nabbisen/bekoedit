@@ -307,6 +307,7 @@ jobs:
         # `RFC-044 shell-behaviour outcome: <outcome>` line; now that the mask
         # is gone, this step's own conclusion is truthful too.
         id: shell_behaviour
+        continue-on-error: true # THROWAWAY MUTATION BRANCH ONLY, see task 023 §5.2/§3 mutation evidence -- never merged.
         run: |
           BEHAVIOUR_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-shell-behaviour.XXXXXX")"
           trap 'rm -rf "$BEHAVIOUR_PARENT"' EXIT
