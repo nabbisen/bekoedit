@@ -152,24 +152,25 @@ fn run_xdotool(args: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
-/// Best-effort: gives the bekoedit window X input focus by window title
-/// (`main.rs`'s `WindowBuilder::with_title("bekoedit")`), via
-/// `windowfocus` (`XSetInputFocus`) rather than `windowactivate`
-/// (`_NET_ACTIVE_WINDOW`, an EWMH client message a window manager
-/// answers) -- CI's first real run showed Xvfb runs no window manager, so
-/// `windowactivate` fails outright there ("windowmanager claims not to
-/// support _NET_ACTIVE_WINDOW"). `windowfocus` needs no window manager,
-/// but CI's second run hit `X_SetInputFocus BadMatch`, an ICCCM error for
-/// a window the X server does not yet consider viewable -- a race against
-/// this run's own just-created window, not a reason to fail the click
-/// that follows: a real XTEST click is delivered to whatever window is
-/// under the pointer regardless of which window holds input focus, so a
-/// failed focus attempt here is logged and swallowed, never propagated.
-/// Idempotent; called before every phase's clicks.
-pub(super) fn activate_window() {
-    if let Err(error) = run_xdotool(&["search", "--sync", "--name", "^bekoedit$", "windowfocus"]) {
-        println!("  trusted click: window focus attempt did not stick, continuing: {error}");
-    }
+/// Gives the bekoedit window X input focus by asking `tao` to do it from
+/// inside the process that owns the window (`Window::set_focus`), not
+/// through `xdotool` as an outside client. CI's first two real runs tried
+/// `xdotool windowactivate` (fails outright: Xvfb runs no window manager
+/// to answer its `_NET_ACTIVE_WINDOW` message) and then `xdotool
+/// windowfocus` (fails with `X_SetInputFocus BadMatch` on every attempt,
+/// not only the first -- not a startup race, but this run's window never
+/// becoming one an *outside* client may focus without a window manager to
+/// broker it). A client requesting focus for its own window is a
+/// different, permitted request. Logs `is_focused()` either way and never
+/// fails the run over it -- a real XTEST click is still delivered to
+/// whatever window is under the pointer regardless. Idempotent; called
+/// before every phase's clicks.
+pub(super) fn activate_window(desktop: &DesktopContext) {
+    desktop.window.set_focus();
+    println!(
+        "  trusted click: window focus requested, is_focused={}",
+        desktop.window.is_focused()
+    );
 }
 
 /// Locates one element, then sends a real XTEST click at its centre
@@ -225,7 +226,7 @@ pub(super) async fn perform_trusted_clicks(
 ) -> Result<(), String> {
     // Idempotent, and cheap next to a real click -- simpler to call before
     // every phase than to track "only the first click needs this".
-    activate_window();
+    activate_window(desktop);
     match phase {
         TrustedClickPhase::ProofOfTrust => {
             click_via_xtest(desktop, "#app-menu-trigger", None, 0).await

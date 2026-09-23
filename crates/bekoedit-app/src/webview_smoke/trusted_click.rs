@@ -284,9 +284,18 @@ async fn run_trusted_click_sequence(
     let mut machine = TrustedClickMachine::new();
     let mut exchange_id = 1_u64;
     let mut release = None;
+    // A phase's click(s) happen exactly once, on the exchange that first
+    // requests it -- not on every `Pending` retry while polling for that
+    // click's outcome. `machine.current()` does not change across
+    // retries, so this is the same "only once" shape as
+    // `shell_behaviour.rs`'s own `writes_conflict_after` guard.
+    let mut clicked_for: Option<TrustedClickPhase> = None;
     loop {
         let phase = machine.current();
-        perform_trusted_clicks(desktop, phase).await?;
+        if clicked_for != Some(phase) {
+            perform_trusted_clicks(desktop, phase).await?;
+            clicked_for = Some(phase);
+        }
         let completed = run_trusted_click_phase(phase, exchange_id, release).await?;
         machine.validate(&completed.message, exchange_id, release)?;
         transport::validate_completion(
