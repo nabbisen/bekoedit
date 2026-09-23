@@ -71,7 +71,7 @@ fn activate_row(
             .strip_prefix(root)
             .map(|r| r.to_path_buf())
             .unwrap_or_else(|_| path.to_path_buf());
-        let origin = SourceInteractionOrigin::tree_row(&rel);
+        let origin = SourceInteractionOrigin::tree_row(std::path::Path::new("mutated"));
         submit_source_interaction(
             source_sync,
             state,
