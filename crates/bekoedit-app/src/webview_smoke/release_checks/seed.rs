@@ -20,6 +20,29 @@ pub(super) const EDIT_MARKER: &str = "ZQ7";
 /// Mixed line endings (CRLF around one bare LF, and an unterminated last
 /// line), plus constructs the parser preserves: a table, a fenced block and an
 /// HTML comment. The first line is CRLF, and it is the one the scenario edits.
+/// A uniform-CRLF file (every break `\r\n`, and a terminated last line), for
+/// the scenario that exercises the uniform-file rule.
+pub(super) fn original_crlf_note() -> Vec<u8> {
+    concat!(
+        "# Title\r\n",
+        "\r\n",
+        "Second line\r\n",
+        "\r\n",
+        "| a | b |\r\n",
+        "|---|---|\r\n",
+        "| 1 | 2 |\r\n",
+        "\r\n",
+        "```rust\r\n",
+        "fn main() {}\r\n",
+        "```\r\n",
+        "\r\n",
+        "<!-- a comment -->\r\n",
+        "last line\r\n",
+    )
+    .as_bytes()
+    .to_vec()
+}
+
 pub(super) fn original_note() -> Vec<u8> {
     concat!(
         "# Title\r\n",
@@ -89,8 +112,14 @@ pub(in crate::webview_smoke) fn prepare(
                 None,
             )
         }
-        ReleaseScenario::SavePreservesBytes | ReleaseScenario::ModeSwitchPreservesBytes => {
-            let original = original_note();
+        ReleaseScenario::SavePreservesBytes
+        | ReleaseScenario::SavePreservesCrlfBytes
+        | ReleaseScenario::ModeSwitchPreservesBytes => {
+            let original = if scenario == ReleaseScenario::SavePreservesCrlfBytes {
+                original_crlf_note()
+            } else {
+                original_note()
+            };
             let workspace = make_workspace(&root, "save-project", &[(SAVE_FILE, &original)])?;
             let file = workspace.join(SAVE_FILE);
             (workspace, "Save Project".to_string(), original, Some(file))

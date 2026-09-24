@@ -34,15 +34,19 @@ pub(super) async fn run(
         .as_ref()
         .ok_or_else(|| format!("{NAME}: no file was seeded"))?;
 
-    wait_until("the workspace tree to show the seeded file", || async {
-        Ok(dom::snapshot().await?.tree_rows >= 2)
-    })
+    wait_until(
+        NAME,
+        "the workspace tree to show the seeded file",
+        || async { Ok(dom::snapshot().await?.tree_rows >= 2) },
+    )
     .await?;
     activate_window(desktop);
     click_via_xtest(desktop, ".tree-row.tree-file", Some(SAVE_FILE), 0).await?;
-    wait_until("the editor to open the file and take focus", || async {
-        dom::editor_focused().await
-    })
+    wait_until(
+        NAME,
+        "the editor to open the file and take focus",
+        || async { dom::editor_focused().await },
+    )
     .await?;
 
     click_via_xtest(
@@ -52,7 +56,7 @@ pub(super) async fn run(
         0,
     )
     .await?;
-    wait_until("the Preview tab to be selected", || async {
+    wait_until(NAME, "the Preview tab to be selected", || async {
         dom::preview_selected().await
     })
     .await?;

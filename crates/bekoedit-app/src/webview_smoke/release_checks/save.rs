@@ -18,14 +18,17 @@ use super::dom;
 use super::seed::{EDIT_MARKER, SAVE_FILE};
 
 pub(super) const POLL_INTERVAL: Duration = Duration::from_millis(50);
-const NAME: &str = "save_preserves_bytes";
 const STEP_DEADLINE: Duration = Duration::from_secs(15);
 const POLL: Duration = Duration::from_millis(50);
 /// After the file first differs, a further wait and a re-read: a save is an
 /// atomic replace, and the comparison must be of the settled file.
 const SETTLE: Duration = Duration::from_millis(800);
 
-pub(super) async fn wait_until<F, Fut>(what: &str, mut condition: F) -> Result<(), String>
+pub(super) async fn wait_until<F, Fut>(
+    name: &str,
+    what: &str,
+    mut condition: F,
+) -> Result<(), String>
 where
     F: FnMut() -> Fut,
     Fut: std::future::Future<Output = Result<bool, String>>,
@@ -40,7 +43,7 @@ where
         }
         if started.elapsed() >= STEP_DEADLINE {
             return Err(format!(
-                "{NAME}: timed out waiting for {what}{}",
+                "{name}: timed out waiting for {what}{}",
                 last_error.map_or(String::new(), |error| format!(" (last error: {error})"))
             ));
         }
@@ -54,27 +57,32 @@ pub(super) async fn run(
     state: Signal<AppState>,
 ) -> Result<Vec<String>, String> {
     let expectation = &terminal.expectation;
+    let name = terminal.scenario.name();
     let file = expectation
         .file
         .as_ref()
-        .ok_or_else(|| format!("{NAME}: no file was seeded"))?;
+        .ok_or_else(|| format!("{name}: no file was seeded"))?;
 
-    wait_until("the workspace tree to show the seeded file", || async {
-        Ok(dom::snapshot().await?.tree_rows >= 2)
-    })
+    wait_until(
+        name,
+        "the workspace tree to show the seeded file",
+        || async { Ok(dom::snapshot().await?.tree_rows >= 2) },
+    )
     .await?;
     activate_window(desktop);
     click_via_xtest(desktop, ".tree-row.tree-file", Some(SAVE_FILE), 0).await?;
-    wait_until("the editor to open the file and take focus", || async {
-        dom::editor_focused().await
-    })
+    wait_until(
+        name,
+        "the editor to open the file and take focus",
+        || async { dom::editor_focused().await },
+    )
     .await?;
 
     // The document is at its start after Ctrl+Home, so the edit lands on the
     // first line -- a CRLF line, the case most likely to lose its ending.
     run_xdotool(&["key", "--clearmodifiers", "ctrl+Home"]).await?;
     run_xdotool(&["type", "--clearmodifiers", "--delay", "60", EDIT_MARKER]).await?;
-    wait_until("the typed edit to reach the editor", || async {
+    wait_until(name, "the typed edit to reach the editor", || async {
         dom::editor_contains(EDIT_MARKER).await
     })
     .await?;
@@ -89,13 +97,13 @@ pub(super) async fn run(
     let started = tokio::time::Instant::now();
     loop {
         let saved = std::fs::read(file)
-            .map_err(|error| format!("{NAME}: cannot read {}: {error}", file.display()))?;
+            .map_err(|error| format!("{name}: cannot read {}: {error}", file.display()))?;
         if saved != expectation.original {
             break;
         }
         if started.elapsed() >= STEP_DEADLINE {
             return Err(format!(
-                "{NAME}: the file on disk never changed after Ctrl+S (still the original {} bytes)",
+                "{name}: the file on disk never changed after Ctrl+S (still the original {} bytes)",
                 saved.len()
             ));
         }
@@ -103,8 +111,8 @@ pub(super) async fn run(
     }
     tokio::time::sleep(SETTLE).await;
     let saved = std::fs::read(file)
-        .map_err(|error| format!("{NAME}: cannot read {}: {error}", file.display()))?;
-    let at = check_saved_bytes(&expectation.original, &saved, EDIT_MARKER.as_bytes())?;
+        .map_err(|error| format!("{name}: cannot read {}: {error}", file.display()))?;
+    let at = check_saved_bytes(name, &expectation.original, &saved, EDIT_MARKER.as_bytes())?;
     Ok(vec![
         format!(
             "one edit at byte {at}, saved through the app; the other {} bytes are identical",

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use super::bytes::{check_bytes_unchanged, check_saved_bytes};
 use super::launch::{Observation, judge};
-use super::seed::{EDIT_MARKER, original_note, prepare};
+use super::seed::{EDIT_MARKER, original_crlf_note, original_note, prepare};
 use super::*;
 use crate::components::toast::ToastKind;
 use crate::i18n::tr;
@@ -61,6 +61,7 @@ fn scenarios_parse_by_name_and_reject_anything_else() {
         "reopen_missing",
         "reopen_disabled",
         "save_preserves_bytes",
+        "save_preserves_crlf_bytes",
         "mode_switch_preserves_bytes",
     ] {
         assert_eq!(ReleaseScenario::parse(name).unwrap().name(), name);
@@ -191,11 +192,21 @@ fn saved_bytes_must_be_the_original_plus_one_insertion() {
     let original = original_note();
     let marker = EDIT_MARKER.as_bytes();
     assert_eq!(
-        check_saved_bytes(&original, &saved_with_marker(0), marker),
+        check_saved_bytes(
+            "save_preserves_bytes",
+            &original,
+            &saved_with_marker(0),
+            marker
+        ),
         Ok(0)
     );
     assert_eq!(
-        check_saved_bytes(&original, &saved_with_marker(3), marker),
+        check_saved_bytes(
+            "save_preserves_bytes",
+            &original,
+            &saved_with_marker(3),
+            marker
+        ),
         Ok(3)
     );
 
@@ -204,22 +215,28 @@ fn saved_bytes_must_be_the_original_plus_one_insertion() {
         .unwrap()
         .replace("\r\n", "\n")
         .into_bytes();
-    let error = check_saved_bytes(&original, &normalised, marker).unwrap_err();
+    let error =
+        check_saved_bytes("save_preserves_bytes", &original, &normalised, marker).unwrap_err();
     assert!(error.contains("first differing byte offset 10"), "{error}");
 
     let mut other_byte = saved_with_marker(0);
     *other_byte.last_mut().unwrap() = b'!';
-    assert!(check_saved_bytes(&original, &other_byte, marker).is_err());
+    assert!(check_saved_bytes("save_preserves_bytes", &original, &other_byte, marker).is_err());
     assert!(
-        check_saved_bytes(&original, &original, marker)
+        check_saved_bytes("save_preserves_bytes", &original, &original, marker)
             .unwrap_err()
             .contains("not in the saved file")
     );
     let inside_crlf = 8; // between the first line's \r and \n
     assert!(
-        check_saved_bytes(&original, &saved_with_marker(inside_crlf), marker)
-            .unwrap_err()
-            .contains("inside a CRLF pair")
+        check_saved_bytes(
+            "save_preserves_bytes",
+            &original,
+            &saved_with_marker(inside_crlf),
+            marker
+        )
+        .unwrap_err()
+        .contains("inside a CRLF pair")
     );
 }
 
@@ -285,4 +302,20 @@ fn an_unedited_file_must_be_byte_identical_and_a_change_names_its_offset() {
             .unwrap_err()
             .contains("end of file")
     );
+}
+
+#[test]
+fn the_uniform_crlf_note_is_all_crlf_and_the_scenario_seeds_it() {
+    let note = String::from_utf8(original_crlf_note()).unwrap();
+    assert_eq!(note.matches("\r\n").count(), note.matches('\n').count());
+    assert_eq!(note.matches('\r').count(), note.matches("\r\n").count());
+    assert!(note.ends_with("\r\n") && !note.contains(EDIT_MARKER));
+    let (profile, terminal) =
+        prepare(&scratch("rc-crlf"), ReleaseScenario::SavePreservesCrlfBytes).unwrap();
+    assert_eq!(terminal.expectation.original, original_crlf_note());
+    assert_eq!(
+        std::fs::read(terminal.expectation.file.clone().unwrap()).unwrap(),
+        original_crlf_note()
+    );
+    std::fs::remove_dir_all(&profile.root).unwrap();
 }

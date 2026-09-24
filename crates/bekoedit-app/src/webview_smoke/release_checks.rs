@@ -44,6 +44,8 @@ pub enum ReleaseScenario {
     ReopenMissing,
     ReopenDisabled,
     SavePreservesBytes,
+    /// Task 027: the same edit-and-save over a uniform-CRLF file (Rule 1).
+    SavePreservesCrlfBytes,
     /// Task 027: open a CRLF file in Text Mode, make no edit, switch to
     /// Preview, wait past autosave: the bytes must not change.
     ModeSwitchPreservesBytes,
@@ -56,6 +58,7 @@ impl ReleaseScenario {
             Self::ReopenMissing => "reopen_missing",
             Self::ReopenDisabled => "reopen_disabled",
             Self::SavePreservesBytes => "save_preserves_bytes",
+            Self::SavePreservesCrlfBytes => "save_preserves_crlf_bytes",
             Self::ModeSwitchPreservesBytes => "mode_switch_preserves_bytes",
         }
     }
@@ -66,6 +69,7 @@ impl ReleaseScenario {
             Self::ReopenMissing,
             Self::ReopenDisabled,
             Self::SavePreservesBytes,
+            Self::SavePreservesCrlfBytes,
             Self::ModeSwitchPreservesBytes,
         ]
         .into_iter()
@@ -73,8 +77,8 @@ impl ReleaseScenario {
         .ok_or_else(|| {
             format!(
                 "unknown release-checks scenario {name:?}; expected reopen_usable, \
-                 reopen_missing, reopen_disabled, save_preserves_bytes or \
-                 mode_switch_preserves_bytes"
+                 reopen_missing, reopen_disabled, save_preserves_bytes, \
+                 save_preserves_crlf_bytes or mode_switch_preserves_bytes"
             )
         })
     }
@@ -139,7 +143,9 @@ pub fn WebViewReleaseChecksDriver() -> Element {
             println!("bekoedit task 026 release-checks run: {name}");
             let lang = *lang.peek();
             let outcome = match terminal.scenario {
-                ReleaseScenario::SavePreservesBytes => save::run(&terminal, &desktop, state).await,
+                ReleaseScenario::SavePreservesBytes | ReleaseScenario::SavePreservesCrlfBytes => {
+                    save::run(&terminal, &desktop, state).await
+                }
                 ReleaseScenario::ModeSwitchPreservesBytes => {
                     mode_switch::run(&terminal, &desktop, state).await
                 }
