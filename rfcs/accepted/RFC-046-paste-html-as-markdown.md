@@ -11,6 +11,7 @@ start.
 **Date:** 2026-09-16
 **Related RFCs:** [RFC-011](../done/RFC-011-text-mode-with-codemirror-6.md), [RFC-015](../done/RFC-015-sourcepatch-engine-and-source-preserving-mutation.md), [RFC-016](../done/RFC-016-form-mode-mvp-surface-and-safe-editable-blocks.md), [RFC-017](../done/RFC-017-raw-markdown-islands.md), [RFC-038](../done/RFC-038-advanced-markdown-extension-policy.md), [RFC-041](../done/RFC-041-source-editor-lifecycle-and-synchronization-controller.md), [RFC-044](../done/RFC-044-shell-behaviour-regression-coverage.md)
 **Upstream:** [`mdka`](https://github.com/nabbisen/mdka-rs), maintained by the project owner
+**Upstream pin:** `mdka = "=2.5.1"`, since 2026-09-24 (§6.2)
 
 ---
 
@@ -113,6 +114,13 @@ Two constraints, because conversion is asynchronous:
   - The output must contain no raw HTML. A test enforces it over the fixture
     corpus (§7).
 
+    **Amended 2026-09-24 (§6.2): one exception, and only one.** A bare `<br>`
+    is permitted **inside a GFM table row**, because it is the only way GFM can
+    express more than one line in a cell, and `mdka` 2.4+ uses it there. The
+    exception is exactly that token, with no attributes, on a line that is part of
+    a table. Any other raw HTML, or a `<br>` outside a table row, still fails the
+    corpus test.
+
 ### 5.4 When bekoedit falls back to plain text · **[Binding]**
 
 The `text/plain` flavour kept in §5.1 is inserted instead, through the same
@@ -124,10 +132,12 @@ transaction, when any of these is true:
    "proposed". A 1 MiB paste converts in 22 ms, so 2 s is two orders of magnitude
    of headroom: it can only be reached by a genuine stall, which is precisely when
    the plain flavour should win.
-3. The HTML contains `<table>`. `mdka` 2.2.1 flattens every table — `AB12` from a
+3. ~~The HTML contains `<table>`. `mdka` 2.2.1 flattens every table — `AB12` from a
    two-by-two table — and bekoedit edits GFM tables (RFC-027). A tab-separated plain
    paste is better than a destroyed table. This rule is removed once `mdka` emits
-   GFM tables (§6, request 1).
+   GFM tables (§6, request 1).~~ **Removed 2026-09-24**, as this rule said it
+   would be: `mdka` 2.4.0 emits GFM tables. What replaces it is not a fallback. See
+   *Tables that have no GFM form* below.
 4. Conversion produces empty output while the plain flavour is not empty.
 
 **A fallback is announced, not silent** · amended 2026-09-16, on review.
@@ -147,6 +157,33 @@ signal that the paste took the other branch.
 
 Rule 4 (empty output) is the one case that may stay quiet, because an empty
 conversion of empty-looking HTML is not a loss the user needs told about.
+
+**Tables that have no GFM form** · added 2026-09-24 (§6.2).
+
+GFM tables have exactly one header row and no row headers. Some HTML tables
+therefore have no GFM expression:
+
+- `<th>` as the first cell of every row;
+- two header rows;
+- a nested table;
+- a `<caption>`.
+
+`mdka` converts those to one paragraph per cell. The text is kept; the grid is
+not. The paste still takes the converted branch, since everything around the
+table converted correctly, but losing the grid is the same kind of loss rule 3
+used to announce. So:
+
+- **[Binding]** When the HTML contains `<table>` and the converted output contains
+  **no** GFM table, the paste raises one non-modal toast: "pasted table as text:
+  no Markdown table form". It uses the same surface and rules as the fallback
+  toasts above, and the converted text is inserted as usual.
+- The input check is the same case-insensitive `<table` test rule 3 used. The
+  output check parses the converted Markdown with the document's own GFM options
+  and looks for a table.
+- **Known gap, recorded:** a paste with two tables, where one converts and one
+  does not, raises no toast. Detecting that means counting outermost tables in
+  the HTML, which needs an HTML parser outside `mdka`, and §5.3 keeps one out of
+  this crate. Revisit if the corpus shows mixed pastes are common.
 
 ### 5.5 Pasting plain text on purpose
 
@@ -221,7 +258,7 @@ that is meant to move. bekoedit does not block on any of it: §5.4's fallbacks a
 §5.3's guards cover the gaps, and each fix arrives here as a version bump with
 updated fixture expectations.
 
-### 6.1 Upstream's answer, 2026-09-22 · **implementation targets `mdka` 2.4.0**
+### 6.1 Upstream's answer, 2026-09-22 · ~~implementation targets `mdka` 2.4.0~~ superseded by §6.2
 
 The letter was sent and answered
 (`.git-exclude/upstream/mdka/receive/2026-09-22-reply-conversion-gaps.md`).
@@ -288,6 +325,76 @@ owner wants it; only the pin and the fixture expectations wait. If 2.4.0 slips
 far enough to matter, the decision to revisit is the owner's, and §6.1's three
 defects are the evidence for it.
 
+### 6.2 Upstream's answer, 2026-09-24 · **the pin is `mdka` `=2.5.1`**
+
+Two letters arrived the same day
+(`.git-exclude/upstream/mdka/receive/2026-09-24-all-nine-dispositioned.md` and
+`…/2026-09-24b-correction-take-2.5.1.md`). All nine items are now dispositioned.
+The second letter withdraws the first's recommendation of 2.4.1.
+
+| Our item | Upstream status |
+|---|---|
+| 1 — tables | **Shipped in 2.4.0.** Real GFM tables. On their measurement, 10 of 11 tables across five real pages now convert; before, 3 did. Block content in a cell is flattened with `<br>`. |
+| 2, 3 | Shipped in 2.3.0 (§6.1). |
+| 4 — inline-style emphasis | **Unchanged: partly.** Bold carried only by `<span style="font-weight:700">` is still lost. |
+| 5 — strikethrough, 6 — task lists | **Shipped in 2.4.0.** |
+| 7 — `data:` option, 9 — hard-break style | Candidates, no commitment. |
+| 8 — `id` anchors | Half done: a CLI flag. Defaults stay tied to the mode, by design. We use `Minimal`, which emits none, so nothing changes for us. |
+
+**§6.1's three volunteered defects are all fixed**, and so is the
+`default-features = false` narrowing.
+
+**Why `=2.5.1`, exactly, and not 2.4.x.**
+
+- **2.4.0** could, with a blank line inside a code block inside a table cell,
+  swallow the next cell.
+- **2.4.1** broke any table row whose cell held two sibling wrappers, such as
+  `<div>` or `<span>`, **in `Minimal` only**. That is our mode, and it is dense
+  in Google Docs and browser clipboard HTML. The row ended mid-cell, and the rest
+  escaped as body text carrying a literal `|`.
+- Fixed in 2.4.2. 2.5.0 and 2.5.1 change only npm packaging.
+
+An exact pin, not a caret: two consecutive patch releases changed our output. A
+future bump is a deliberate change, re-run against the corpus.
+
+**Verified by us**, from crates.io metadata: 2.5.1 is published, not yanked,
+Apache-2.0, and declares `rust-version = 1.88`, our toolchain. **Not verified by
+us:** the conversion claims. Slice 1's corpus is where they are measured. The
+2.4.1 reproduction above belongs in that corpus verbatim, as a regression fixture.
+
+**Three consequences for this RFC,** each amended in place:
+
+1. **§5.4 rule 3 is removed**, and *Tables that have no GFM form* replaces it.
+2. **§5.3's "no raw HTML" gains one exception:** a bare `<br>` inside a table
+   row.
+3. **Preview shows that `<br>` literally.** `render_preview_html` turns every
+   inline HTML event into text (`bekoedit-markdown/src/preview.rs`), so a
+   multi-line cell reads `Alice<br>lead`. **This is pre-existing:** any document
+   with `<br>` in a table, typed or authored elsewhere, renders this way today.
+   RFC-046 makes it more common; it does not cause it. As with the link-scheme
+   filter, it is recorded as a finding and decided there, not here:
+   `.git-exclude/governance/2026-09-24-preview-br-in-table-cells-finding.md`.
+   **It is not a precondition for slice 2.** The source is correct GFM, and only
+   the preview is less faithful than it could be.
+
+**Item 4 is now the gap a user will meet most.** Google Docs expresses bold only
+through `font-weight:700` spans, so every bold word in a Google Docs paste arrives
+plain. The text is intact and the document is valid. It is not announced, because
+we cannot detect it without reading `style` ourselves. It is recorded in §7's
+manual walkthrough as an expected result, so a tester does not file it as a
+defect. Our reply to upstream ranks it first among what remains.
+
+**Definition lists.** `mdka` now emits each term and each description as its own
+paragraph, and asked whether that is wrong for a paste feature. This RFC agrees
+with them, and our reply says so. Bolding the term, or inventing `- **Term** — Desc`, is structure the source
+did not have, which is the class of defect our item 3 was. The text is kept.
+
+**Measurements.** §8's timings and §6's table were taken against 2.2.1. Slice 1
+re-measures against 2.5.1, replacing §6.1's "re-measure against 2.4.0".
+
+**Scheduling.** The upstream wait is over. RFC-046 is now gated only on this
+project's own queue: the 0.16.0 release, then slice 2's two preconditions (§9).
+
 ## 7. Testing
 
 - **Rust, headless.** A fixture corpus of real clipboard HTML from browsers, Google
@@ -309,7 +416,10 @@ defects are the evidence for it.
   form, and stops and reports if it does not hold.
 - **Manual walkthrough.** A real paste from Firefox, Chromium, Google Docs and
   LibreOffice, plus Ctrl+Shift+V. A trusted paste from a real application is
-  something only a person can perform.
+  something only a person can perform. **Expected, not a defect** (§6.2):
+  - bold from Google Docs arrives plain;
+  - a multi-line table cell previews with a literal `<br>`, until the finding
+    that owns it is decided.
 
 ## 8. Cost
 
