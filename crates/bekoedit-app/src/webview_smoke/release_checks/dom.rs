@@ -54,3 +54,11 @@ pub(super) async fn editor_contains(needle: &str) -> Result<bool, String> {
     ))
     .await
 }
+
+/// The Preview tab is the selected mode tab.
+pub(super) async fn preview_selected() -> Result<bool, String> {
+    returned(
+        "document.querySelector('[data-source-focus-launch=\"mode-preview\"].active[aria-selected=\"true\"]') !== null",
+    )
+    .await
+}

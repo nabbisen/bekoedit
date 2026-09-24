@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use super::bytes::check_saved_bytes;
+use super::bytes::{check_bytes_unchanged, check_saved_bytes};
 use super::launch::{Observation, judge};
 use super::seed::{EDIT_MARKER, original_note, prepare};
 use super::*;
@@ -61,6 +61,7 @@ fn scenarios_parse_by_name_and_reject_anything_else() {
         "reopen_missing",
         "reopen_disabled",
         "save_preserves_bytes",
+        "mode_switch_preserves_bytes",
     ] {
         assert_eq!(ReleaseScenario::parse(name).unwrap().name(), name);
     }
@@ -262,4 +263,26 @@ fn seeds_set_the_reopen_setting_and_the_file() {
     let file = terminal.expectation.file.clone().unwrap();
     assert_eq!(std::fs::read(&file).unwrap(), original_note());
     std::fs::remove_dir_all(&save.root).unwrap();
+}
+
+#[test]
+fn an_unedited_file_must_be_byte_identical_and_a_change_names_its_offset() {
+    let original = original_note();
+    assert_eq!(
+        check_bytes_unchanged("mode_switch_preserves_bytes", &original, &original),
+        Ok(())
+    );
+    let lf_only = String::from_utf8(original.clone())
+        .unwrap()
+        .replace("\r\n", "\n")
+        .into_bytes();
+    let error =
+        check_bytes_unchanged("mode_switch_preserves_bytes", &original, &lf_only).unwrap_err();
+    assert!(error.contains("first differing byte offset 7"), "{error}");
+    let truncated = &original[..original.len() - 1];
+    assert!(
+        check_bytes_unchanged("x", &original, truncated)
+            .unwrap_err()
+            .contains("end of file")
+    );
 }

@@ -17,6 +17,7 @@ use super::bytes::check_saved_bytes;
 use super::dom;
 use super::seed::{EDIT_MARKER, SAVE_FILE};
 
+pub(super) const POLL_INTERVAL: Duration = Duration::from_millis(50);
 const NAME: &str = "save_preserves_bytes";
 const STEP_DEADLINE: Duration = Duration::from_secs(15);
 const POLL: Duration = Duration::from_millis(50);
@@ -24,7 +25,7 @@ const POLL: Duration = Duration::from_millis(50);
 /// atomic replace, and the comparison must be of the settled file.
 const SETTLE: Duration = Duration::from_millis(800);
 
-async fn wait_until<F, Fut>(what: &str, mut condition: F) -> Result<(), String>
+pub(super) async fn wait_until<F, Fut>(what: &str, mut condition: F) -> Result<(), String>
 where
     F: FnMut() -> Fut,
     Fut: std::future::Future<Output = Result<bool, String>>,

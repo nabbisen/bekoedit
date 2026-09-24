@@ -89,7 +89,7 @@ pub(in crate::webview_smoke) fn prepare(
                 None,
             )
         }
-        ReleaseScenario::SavePreservesBytes => {
+        ReleaseScenario::SavePreservesBytes | ReleaseScenario::ModeSwitchPreservesBytes => {
             let original = original_note();
             let workspace = make_workspace(&root, "save-project", &[(SAVE_FILE, &original)])?;
             let file = workspace.join(SAVE_FILE);

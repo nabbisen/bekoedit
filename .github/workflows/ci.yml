@@ -412,7 +412,7 @@ jobs:
         continue-on-error: true
         run: |
           failed=0
-          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes; do
+          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes mode_switch_preserves_bytes; do
             RELEASE_CHECKS_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-release-checks.XXXXXX")"
             echo "release-checks scenario: $scenario"
             timeout 90 xvfb-run -a -s "-screen 0 1280x1024x24" \

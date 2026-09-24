@@ -33,6 +33,7 @@ use crate::i18n::Lang;
 mod bytes;
 mod dom;
 mod launch;
+mod mode_switch;
 mod save;
 mod seed;
 pub(super) use seed::prepare;
@@ -43,6 +44,9 @@ pub enum ReleaseScenario {
     ReopenMissing,
     ReopenDisabled,
     SavePreservesBytes,
+    /// Task 027: open a CRLF file in Text Mode, make no edit, switch to
+    /// Preview, wait past autosave: the bytes must not change.
+    ModeSwitchPreservesBytes,
 }
 
 impl ReleaseScenario {
@@ -52,6 +56,7 @@ impl ReleaseScenario {
             Self::ReopenMissing => "reopen_missing",
             Self::ReopenDisabled => "reopen_disabled",
             Self::SavePreservesBytes => "save_preserves_bytes",
+            Self::ModeSwitchPreservesBytes => "mode_switch_preserves_bytes",
         }
     }
 
@@ -61,13 +66,15 @@ impl ReleaseScenario {
             Self::ReopenMissing,
             Self::ReopenDisabled,
             Self::SavePreservesBytes,
+            Self::ModeSwitchPreservesBytes,
         ]
         .into_iter()
         .find(|scenario| scenario.name() == name)
         .ok_or_else(|| {
             format!(
                 "unknown release-checks scenario {name:?}; expected reopen_usable, \
-                 reopen_missing, reopen_disabled or save_preserves_bytes"
+                 reopen_missing, reopen_disabled, save_preserves_bytes or \
+                 mode_switch_preserves_bytes"
             )
         })
     }
@@ -133,6 +140,9 @@ pub fn WebViewReleaseChecksDriver() -> Element {
             let lang = *lang.peek();
             let outcome = match terminal.scenario {
                 ReleaseScenario::SavePreservesBytes => save::run(&terminal, &desktop, state).await,
+                ReleaseScenario::ModeSwitchPreservesBytes => {
+                    mode_switch::run(&terminal, &desktop, state).await
+                }
                 _ => launch::run(&terminal, state, toasts, lang).await,
             };
             match outcome.and_then(|checks| terminal.accept().map(|()| checks)) {

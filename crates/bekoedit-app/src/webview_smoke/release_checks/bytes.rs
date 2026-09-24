@@ -66,3 +66,30 @@ fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
         .windows(needle.len())
         .position(|window| window == needle)
 }
+
+/// The file must be byte-for-byte the seeded original (a mode switch with no
+/// edit must not write anything). Names the first differing byte offset.
+pub(super) fn check_bytes_unchanged(
+    scenario: &str,
+    original: &[u8],
+    saved: &[u8],
+) -> Result<(), String> {
+    let Some(offset) =
+        (0..original.len().max(saved.len())).find(|&i| original.get(i) != saved.get(i))
+    else {
+        return Ok(());
+    };
+    let show = |bytes: &[u8]| {
+        bytes
+            .get(offset)
+            .map_or("end of file".to_string(), |b| format!("{b:#04x}"))
+    };
+    Err(format!(
+        "{scenario}: the file changed with no edit: first differing byte offset {offset}: \
+         original {}, on disk {} (original {} bytes, on disk {})",
+        show(original),
+        show(saved),
+        original.len(),
+        saved.len()
+    ))
+}
