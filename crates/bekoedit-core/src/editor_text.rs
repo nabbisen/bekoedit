@@ -113,7 +113,7 @@ pub fn reconcile(canonical: &str, incoming: &str) -> String {
     let lone_cr = breaks.iter().filter(|b| b.len == 1 && is(b, b'\r')).count();
     let lf = breaks.iter().filter(|b| b.len == 1 && is(b, b'\n')).count();
     if lone_cr == 0 && (crlf == 0 || lf == 0) {
-        return incoming.replace('\n', if crlf > 0 { "\r\n" } else { "\n" });
+        return incoming; // THROWAWAY MUTATION: Rule 1 replaced by "keep the incoming text"
     }
 
     let prefix: usize = current
