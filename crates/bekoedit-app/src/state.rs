@@ -92,15 +92,17 @@ pub fn decide_launch_workspace(
     if !reopen_enabled {
         return LaunchWorkspaceDecision::NotAttempted;
     }
-    let Some(entry) = recents.entries.first() else {
-        return LaunchWorkspaceDecision::NotAttempted;
-    };
-    if try_open(&entry.root_path) {
-        LaunchWorkspaceDecision::Opened
-    } else {
-        LaunchWorkspaceDecision::Failed {
-            display_name: entry.display_name.clone(),
+    // THROWAWAY MUTATION: fall back to the next recent entry.
+    for entry in &recents.entries {
+        if try_open(&entry.root_path) {
+            return LaunchWorkspaceDecision::Opened;
         }
+    }
+    match recents.entries.first() {
+        Some(entry) => LaunchWorkspaceDecision::Failed {
+            display_name: entry.display_name.clone(),
+        },
+        None => LaunchWorkspaceDecision::NotAttempted,
     }
 }
 
