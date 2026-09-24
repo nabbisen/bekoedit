@@ -23,8 +23,13 @@ fn clean_crlf_document() -> (SourceSyncState, AppState, u64) {
     (sync, app, document_id)
 }
 
-/// Switches to Preview with no edit, delivering the editor's own snapshot.
-fn switch_without_editing(sync: &mut SourceSyncState, app: &mut AppState, document_id: u64) {
+/// Switches to Preview, delivering the editor's snapshot `text`.
+fn switch_without_editing(
+    sync: &mut SourceSyncState,
+    app: &mut AppState,
+    document_id: u64,
+    text: &str,
+) {
     let identity = sync.lifecycle.ready_editor().unwrap().identity;
     let SubmitOutcome::SnapshotRequested(operation_id) = sync.submit(
         SourceCommand::SwitchMode(EditorMode::Preview),
@@ -40,7 +45,7 @@ fn switch_without_editing(sync: &mut SourceSyncState, app: &mut AppState, docume
             operation_id,
             identity,
             seq: 1,
-            text: EDITOR_FORM.into(),
+            text: text.into(),
             composing: false,
         },
         app,
@@ -49,24 +54,28 @@ fn switch_without_editing(sync: &mut SourceSyncState, app: &mut AppState, docume
     .unwrap();
 }
 
-/// DEMONSTRATION of task 027 consequence 2, on the unfixed code, with an
-/// **inverted assertion** (it asserts the defect, so it passes today): a
-/// snapshot that is only the editor form of an unedited CRLF document marks
-/// it dirty and advances its revision. The fix commit flips these assertions.
+/// Task 027 consequence 2, fixed. This test was committed first as an
+/// unfixed demonstration with inverted assertions (it asserted the defect and
+/// passed); the fix commit flipped it. A snapshot that is only the editor form
+/// of an unedited CRLF document is not an edit: no revision, no dirty flag, and
+/// not one byte of the canonical text changes.
 #[test]
-fn unfixed_demonstration_an_unedited_crlf_snapshot_dirties_the_document() {
+fn an_unedited_crlf_snapshot_changes_nothing() {
     let (mut sync, mut app, document_id) = clean_crlf_document();
-    assert!(!app.session.as_ref().unwrap().dirty);
     let revision_before = app.session.as_ref().unwrap().revision;
-    switch_without_editing(&mut sync, &mut app, document_id);
+    switch_without_editing(&mut sync, &mut app, document_id, EDITOR_FORM);
     let session = app.session.as_ref().unwrap();
-    assert!(
-        session.dirty,
-        "the defect: the document is dirty with no edit"
-    );
-    assert_eq!(session.revision, revision_before + 1);
-    assert_eq!(
-        session.canonical_text, EDITOR_FORM,
-        "the defect: every CR is gone from the canonical text"
-    );
+    assert!(!session.dirty, "no edit, so the document stays clean");
+    assert_eq!(session.revision, revision_before);
+    assert_eq!(session.canonical_text, CRLF_FILE);
+}
+
+/// A real edit still keeps every CRLF: only the typed text is new.
+#[test]
+fn an_edited_crlf_snapshot_keeps_every_other_line_ending() {
+    let (mut sync, mut app, document_id) = clean_crlf_document();
+    switch_without_editing(&mut sync, &mut app, document_id, "# Title\nsecond X line\n");
+    let session = app.session.as_ref().unwrap();
+    assert!(session.dirty);
+    assert_eq!(session.canonical_text, "# Title\r\nsecond X line\r\n");
 }

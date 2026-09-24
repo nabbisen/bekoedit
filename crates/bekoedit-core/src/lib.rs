@@ -12,6 +12,7 @@
 //! (Form Mode) — never by the UI directly.
 
 pub mod conflict;
+pub mod editor_text;
 pub mod save;
 pub mod session;
 pub mod store;

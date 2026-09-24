@@ -166,19 +166,32 @@ impl AppState {
         }
     }
 
-    /// Text Mode edit (whole-document snapshot after debounce, RFC-011).
+    /// Text Mode edit (whole-document snapshot after debounce, RFC-011). `text`
+    /// is in editor form (every line break `\n`); it is reconciled with the
+    /// document's own line endings (`editor_text.rs`, task 027). Text that is
+    /// just the editor form of the document is a no-op: no edit is recorded.
     pub fn edit_text(
         &mut self,
         base_revision: u64,
         text: String,
         now_ms: u64,
     ) -> Result<(), StoreError> {
+        if self
+            .session
+            .as_ref()
+            .is_some_and(|session| session.matches_editor_text(&text))
+        {
+            return Ok(());
+        }
         if self.conflict.requires_user_decision() {
             return Err(StoreError::ConflictPending);
         }
-        self.session_mut()?
-            .apply_text_snapshot(base_revision, text)?;
-        self.after_edit(now_ms);
+        if self
+            .session_mut()?
+            .apply_editor_text(base_revision, &text)?
+        {
+            self.after_edit(now_ms);
+        }
         Ok(())
     }
 
