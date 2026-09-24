@@ -69,8 +69,17 @@ pub fn App() -> Element {
     // no parallel usability check) runs exactly once, not once per
     // render.
     let (state, reopen_failure) = use_hook(|| {
-        let (initial_state, notice) = create_app_state(&persistence, &settings);
-        (Signal::new(initial_state), notice)
+        let mut off = settings.clone();
+        off.reopen_last_workspace = false;
+        let (initial_state, _) = create_app_state(&persistence, &off);
+        (Signal::new(initial_state), None::<crate::state::ReopenFailureNotice>)
+    });
+    let late_persistence = persistence.clone();
+    let late_settings = settings.clone();
+    use_effect(move || {
+        let (real, _) = create_app_state(&late_persistence, &late_settings);
+        let mut late_state = state;
+        late_state.set(real); // THROWAWAY MUTATION: the reopen decision runs after first render
     });
     use_context_provider(|| state);
     use_context_provider(|| Signal::new(settings.lang));
