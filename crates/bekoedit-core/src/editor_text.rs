@@ -135,7 +135,7 @@ pub fn reconcile(canonical: &str, incoming: &str) -> String {
         .iter()
         .find(|b| b.at >= start)
         .or(breaks.last())
-        .map_or("\n", |b| &canonical[b.at..b.at + b.len]);
+        .map_or("\n", |_| "\n"); // THROWAWAY MUTATION: Rule 2 always inserts LF
     let inserted = incoming[prefix..incoming.len() - suffix].replace('\n', ending);
     format!("{}{inserted}{}", &canonical[..start], &canonical[end..])
 }
