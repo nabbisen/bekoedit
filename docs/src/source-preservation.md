@@ -22,3 +22,22 @@ The golden test suite locks this in: editing one block of a document
 containing CRLF, Japanese text and emoji, mixed list markers, tilde
 fences, non-1 ordered lists, reference links, front matter, HTML, and
 tables must leave every other byte identical.
+
+## Text Mode and line endings
+
+The editor always shows a document with `\n` line breaks, whatever the file
+contains. The session keeps the file's own bytes and reconciles the editor's
+text with them (`bekoedit-core`, `editor_text.rs`):
+
+- Text that is just the editor's view of the document is not an edit. Nothing
+  changes: no revision, no unsaved-change marker, no write.
+- In a file whose line endings are all `\n`, or all `\r\n`, every new line
+  break takes the file's ending.
+- In a file with mixed endings, or any lone `\r`, only the span between the
+  first and last changed character is replaced; every byte outside it is
+  untouched, and a line break you type takes the ending of the line it splits.
+
+**Known limit.** In a *mixed* file, one edit changes only the lines it touches.
+A single change delivered at several separated places at once (for example a
+replace-all) can re-end the untouched lines *between* them, because the span
+runs from the first change to the last.

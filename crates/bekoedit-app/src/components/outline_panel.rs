@@ -51,6 +51,19 @@ pub fn OutlinePanel() -> Element {
                                     let offset = heading.source_range.start;
                                     let level  = heading.level;
                                     move |_| {
+                                        // `offset` is a canonical byte offset; the
+                                        // editor's positions are UTF-16 units into
+                                        // its own form (task 027 §5).
+                                        let offset = state
+                                            .peek()
+                                            .session
+                                            .as_ref()
+                                            .map_or(offset, |s| {
+                                                bekoedit_core::editor_text::editor_position(
+                                                    &s.canonical_text,
+                                                    offset,
+                                                )
+                                            });
                                         let js = format!(r#"
                                             if (window.__bk?._view) {{
                                                 const v = window.__bk._view;

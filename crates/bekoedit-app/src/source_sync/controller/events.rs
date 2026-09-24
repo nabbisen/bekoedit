@@ -130,9 +130,9 @@ impl SourceSyncState {
         if session.document_id != identity.document_id || session.revision != ready.revision {
             return Err(SourceSyncError::RevisionDrift);
         }
-        if session.canonical_text != *text {
-            app.edit_text(ready.revision, text.clone(), now_ms)?;
-        }
+        // Rule 0 lives in `edit_text`: editor-form text that is just this
+        // document is a no-op there (task 027).
+        app.edit_text(ready.revision, text.clone(), now_ms)?;
         let revision = app
             .session
             .as_ref()
@@ -179,9 +179,7 @@ impl SourceSyncState {
             }
             return Err(SourceSyncError::RevisionDrift);
         }
-        if session.canonical_text != *text
-            && let Err(error) = app.edit_text(editor.revision, text.clone(), now_ms)
-        {
+        if let Err(error) = app.edit_text(editor.revision, text.clone(), now_ms) {
             if let Some(effect) = self.lifecycle.reject_snapshot(event, true, now_ms)? {
                 self.push_effect(effect);
             }

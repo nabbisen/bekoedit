@@ -45,6 +45,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   longer ignored. It runs as soon as the editor is ready, or, if it cannot, a
   message says which action did not happen and why. Saving is never applied to
   a different document than the one that was open when you asked.
+- Text Mode no longer converts Windows (CRLF) line endings to Unix ones. Before
+  this fix, a file with CRLF line endings was rewritten with LF endings when you
+  saved it after an edit, and also when you switched between modes without
+  editing anything at all (autosave then wrote the change). Now every line you
+  did not touch keeps its own ending, in files with all-CRLF, all-LF, mixed or
+  old Mac (CR) endings. The outline panel also now jumps to the right heading in
+  documents that contain CRLF line endings or non-ASCII text.
 
 ### Security
 - Updated `rustls` to 0.23.45, resolving RUSTSEC-2026-0285.

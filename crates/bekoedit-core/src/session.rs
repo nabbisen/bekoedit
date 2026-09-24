@@ -2,9 +2,11 @@
 //! (RFC-006).
 //!
 //! Mutation paths:
-//! - `apply_text_snapshot`: Text Mode replaces the canonical text wholesale
-//!   after debounce (RFC-011 MVP strategy); allowed because Text Mode *is*
-//!   the raw source editor.
+//! - `apply_editor_text`: Text Mode's snapshot, in editor form, reconciled
+//!   with the canonical text so line endings survive (`editor_text.rs`,
+//!   task 027).
+//! - `apply_text_snapshot`: replaces the canonical text wholesale; for
+//!   callers that already hold canonical-form text (section operations).
 //! - `apply_form_edit`: Form Mode semantic commands are resolved into
 //!   minimal source patches by the markdown crate; whole-document rewrite
 //!   from Form Mode is impossible by construction (FM-006).
@@ -122,6 +124,36 @@ impl DocumentSession {
         self.canonical_text = text;
         self.after_mutation();
         Ok(())
+    }
+
+    /// Whether `editor_text` (editor form) is exactly this document as the
+    /// editor shows it -- Rule 0 of `editor_text.rs`.
+    pub fn matches_editor_text(&self, editor_text: &str) -> bool {
+        crate::editor_text::editor_form(editor_text)
+            == crate::editor_text::editor_form(&self.canonical_text)
+    }
+
+    /// Text Mode update: reconciles the editor's text with the canonical text
+    /// so the file's own line endings survive. Returns whether anything
+    /// changed; under Rule 0 nothing does, and the revision and dirty flag
+    /// are left alone.
+    pub fn apply_editor_text(
+        &mut self,
+        base_revision: u64,
+        editor_text: &str,
+    ) -> Result<bool, SessionError> {
+        if base_revision != self.revision {
+            return Err(SessionError::TextRevisionMismatch {
+                base: base_revision,
+                current: self.revision,
+            });
+        }
+        if self.matches_editor_text(editor_text) {
+            return Ok(false);
+        }
+        self.canonical_text = crate::editor_text::reconcile(&self.canonical_text, editor_text);
+        self.after_mutation();
+        Ok(true)
     }
 
     /// Form Mode update: semantic command -> validated minimal patch.
