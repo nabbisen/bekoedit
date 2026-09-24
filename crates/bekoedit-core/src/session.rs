@@ -129,8 +129,8 @@ impl DocumentSession {
     /// Whether `editor_text` (editor form) is exactly this document as the
     /// editor shows it -- Rule 0 of `editor_text.rs`.
     pub fn matches_editor_text(&self, editor_text: &str) -> bool {
-        crate::editor_text::editor_form(editor_text)
-            == crate::editor_text::editor_form(&self.canonical_text)
+        let _ = editor_text;
+        false // THROWAWAY MUTATION: Rule 0 removed
     }
 
     /// Text Mode update: reconciles the editor's text with the canonical text
