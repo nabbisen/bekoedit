@@ -110,22 +110,6 @@ pub(super) fn judge(
             passed.push("no toast appeared".to_string());
         }
         ReleaseScenario::ReopenMissing | ReleaseScenario::ReopenDisabled => {
-            if !dom.start_screen || observation.start_screen_mounts == 0 {
-                return fail(
-                    "the Start Screen is shown",
-                    format!(
-                        "start screen in DOM: {}, mounts: {}, {} tree row(s){}",
-                        dom.start_screen,
-                        observation.start_screen_mounts,
-                        dom.tree_rows,
-                        observation
-                            .dom_error
-                            .as_ref()
-                            .map_or(String::new(), |error| format!(", last DOM error: {error}"))
-                    ),
-                );
-            }
-            passed.push("the Start Screen is shown".to_string());
             if !observation.workspaces.is_empty() || observation.session_seen {
                 let older = expectation
                     .older_workspace
@@ -146,6 +130,22 @@ pub(super) fn judge(
                 );
             }
             passed.push("no workspace opened".to_string());
+            if !dom.start_screen || observation.start_screen_mounts == 0 {
+                return fail(
+                    "the Start Screen is shown",
+                    format!(
+                        "start screen in DOM: {}, mounts: {}, {} tree row(s){}",
+                        dom.start_screen,
+                        observation.start_screen_mounts,
+                        dom.tree_rows,
+                        observation
+                            .dom_error
+                            .as_ref()
+                            .map_or(String::new(), |error| format!(", last DOM error: {error}"))
+                    ),
+                );
+            }
+            passed.push("the Start Screen is shown".to_string());
             if scenario == ReleaseScenario::ReopenDisabled {
                 if !toast_texts.is_empty() {
                     return fail("no reopen toast", format!("saw {toast_texts:?}"));
