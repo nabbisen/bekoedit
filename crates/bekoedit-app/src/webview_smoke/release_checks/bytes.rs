@@ -9,11 +9,11 @@
 /// check does not assume where the caret was; it only requires that the edit
 /// is one insertion, not inside a CRLF pair, and that the rest is untouched.
 pub(super) fn check_saved_bytes(
+    scenario: &str,
     original: &[u8],
     saved: &[u8],
     marker: &[u8],
 ) -> Result<usize, String> {
-    let scenario = "save_preserves_bytes";
     if find(original, marker).is_some() {
         return Err(format!(
             "{scenario}: the seeded file already contains the marker"

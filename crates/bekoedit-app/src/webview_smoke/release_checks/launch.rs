@@ -172,7 +172,9 @@ pub(super) fn judge(
                 passed.push(format!("exactly one Warning toast: {expected}"));
             }
         }
-        ReleaseScenario::SavePreservesBytes | ReleaseScenario::ModeSwitchPreservesBytes => {
+        ReleaseScenario::SavePreservesBytes
+        | ReleaseScenario::SavePreservesCrlfBytes
+        | ReleaseScenario::ModeSwitchPreservesBytes => {
             unreachable!("save.rs and mode_switch.rs run these scenarios")
         }
     }
