@@ -90,6 +90,10 @@ pub(super) struct PhaseCompletion {
     pub(super) kind: MessageKind,
     pub(super) acknowledgement_processed: bool,
     pub(super) evaluator_pinned: bool,
+    /// Task 025 review §3.1: why the part after the acknowledgement failed.
+    /// A thrown JS message does not survive `eval.join()`; a returned one does.
+    #[serde(default)]
+    pub(super) error: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -208,12 +212,41 @@ pub(super) fn validate_completion(
         || completion.kind != kind
         || !completion.acknowledgement_processed
         || !completion.evaluator_pinned
+        || completion.error.is_some()
     {
-        return Err(format!(
-            "{phase} phase evaluator returned invalid pinned completion"
-        ));
+        let base = format!("{phase} phase evaluator returned invalid pinned completion");
+        return Err(match &completion.error {
+            Some(reason) => format!("{base}: {reason}"),
+            None => base,
+        });
     }
     Ok(())
+}
+
+/// Walks `next` from `first` to `None`, returning each phase visited, in
+/// order -- the one bounded walk every run's tests share (task 025 review
+/// §3.3/§4). `bound` is the run's exhaustive phase count: a walk longer than
+/// that is a cycle, and fails here, naming the phase, instead of hanging the
+/// suite.
+#[cfg(test)]
+pub(super) fn phases_via_next<Phase: PhaseKind>(
+    first: Phase,
+    next: impl Fn(Phase) -> Option<Phase>,
+    bound: usize,
+) -> Vec<Phase> {
+    let mut walked = vec![first];
+    let mut current = first;
+    while let Some(following) = next(current) {
+        assert!(
+            walked.len() < bound,
+            "next() walk exceeded phase_count() ({bound}) without reaching None -- \
+             a cycle through {}?",
+            following.as_str()
+        );
+        walked.push(following);
+        current = following;
+    }
+    walked
 }
 
 /// Parses a driver's `const phases = [ ... ];` literal array of

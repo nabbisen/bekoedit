@@ -21,6 +21,16 @@ impl SmokePhase {
             Self::Preview => "preview",
         }
     }
+
+    /// The transition order; `Preview` is terminal. `apply_completed` and the
+    /// bijection test walk this same table (task 025 review §3.2).
+    pub(super) const fn next(self) -> Option<Self> {
+        match self {
+            Self::Launch => Some(Self::Editor),
+            Self::Editor => Some(Self::Preview),
+            Self::Preview => None,
+        }
+    }
 }
 
 impl PhaseKind for SmokePhase {
@@ -139,10 +149,7 @@ impl PhaseMachine {
         }
         self.last_applied_exchange_id = Some(exchange_id);
         if message.kind == MessageKind::Progress {
-            self.current = match self.current {
-                SmokePhase::Launch => SmokePhase::Editor,
-                SmokePhase::Editor | SmokePhase::Preview => SmokePhase::Preview,
-            };
+            self.current = self.current.next().unwrap_or(self.current);
         }
         Ok(())
     }

@@ -80,30 +80,15 @@ const fn phase_count() -> usize {
     4
 }
 
-/// Walks `next()` from `first` to `None`, collecting each phase's own
-/// `as_str()` -- derived from the production transition chain, not a
-/// hand-written list of variant idents (task 025 §2.2: "a hand-written
-/// list lets a new variant slip past the very test meant to catch it").
-/// Bounded by `phase_count()` so a cycle fails this walk itself, naming
-/// the phase, instead of hanging the test.
-fn phases_via_next(first: TrustedClickPhase) -> std::collections::BTreeSet<&'static str> {
-    let mut seen = std::collections::BTreeSet::new();
-    let mut current = Some(first);
-    while let Some(phase) = current {
-        assert!(
-            seen.insert(phase.as_str()),
-            "next() cycles back to {} without ever reaching None",
-            phase.as_str()
-        );
-        assert!(
-            seen.len() <= phase_count(),
-            "next() walk visited more than phase_count() ({}) phases without \
-             terminating -- a cycle?",
-            phase_count()
-        );
-        current = phase.next();
-    }
-    seen
+fn walked() -> std::collections::BTreeSet<&'static str> {
+    crate::webview_smoke::transport::phases_via_next(
+        TrustedClickPhase::ProofOfTrust,
+        TrustedClickPhase::next,
+        phase_count(),
+    )
+    .into_iter()
+    .map(TrustedClickPhase::as_str)
+    .collect()
 }
 
 /// Task 025 §2.2: the walk from `ProofOfTrust` must reach every declared
@@ -111,7 +96,7 @@ fn phases_via_next(first: TrustedClickPhase) -> std::collections::BTreeSet<&'sta
 /// chained into `next()`.
 #[test]
 fn every_variant_is_reached_by_walking_next_from_the_first_phase() {
-    let walked = phases_via_next(TrustedClickPhase::ProofOfTrust);
+    let walked = walked();
     assert_eq!(
         walked.len(),
         phase_count(),
@@ -134,7 +119,7 @@ fn every_variant_is_reached_by_walking_next_from_the_first_phase() {
 fn every_as_str_is_a_phase_the_driver_knows() {
     let driver_phases =
         crate::webview_smoke::transport::parse_js_declared_phase_list(TRUSTED_CLICK_JS);
-    let rust_phases = phases_via_next(TrustedClickPhase::ProofOfTrust);
+    let rust_phases = walked();
     assert_eq!(
         rust_phases, driver_phases,
         "TrustedClickPhase::as_str() must match trusted_click_driver.js's own \

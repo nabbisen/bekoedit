@@ -1326,6 +1326,18 @@ return (async () => {
     ...outgoing,
   };
   dioxus.send(report);
+  // Task 025 review §3.1: a thrown message does not survive eval.join() on
+  // WebKitGTK (a bare EvalError::Communication), but a returned value does,
+  // so a failure after the acknowledgement is returned in the completion.
+  const completionFailure = (acknowledgementProcessed, error) => ({
+    protocolVersion,
+    exchangeId,
+    phase: requestedPhase,
+    kind: report.kind,
+    acknowledgementProcessed,
+    evaluatorPinned: false,
+    error,
+  });
   const acknowledgement = await dioxus.recv();
   if (
     acknowledgement?.protocolVersion !== protocolVersion ||
@@ -1333,11 +1345,11 @@ return (async () => {
     acknowledgement?.phase !== requestedPhase ||
     acknowledgement?.kind !== report.kind
   ) {
-    throw new Error("invalid phase acknowledgement");
+    return completionFailure(false, "invalid phase acknowledgement");
   }
 
   if (pinRegistry.current !== null) {
-    throw new Error("smoke evaluator pin was already occupied");
+    return completionFailure(true, "smoke evaluator pin was already occupied");
   }
   pinRegistry.current = Object.freeze({
     exchangeId,

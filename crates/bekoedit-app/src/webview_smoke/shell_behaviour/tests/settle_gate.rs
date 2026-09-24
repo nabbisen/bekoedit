@@ -82,6 +82,7 @@ fn completed(
             kind,
             acknowledgement_processed: true,
             evaluator_pinned: true,
+            error: None,
         },
         pin: PinnedExchange { exchange_id, phase },
     }

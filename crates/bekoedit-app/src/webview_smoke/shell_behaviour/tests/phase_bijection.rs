@@ -11,13 +11,13 @@ use std::collections::BTreeSet;
 
 use crate::webview_smoke::shell_behaviour::SHELL_BEHAVIOUR_JS;
 use crate::webview_smoke::shell_behaviour::phase::ShellBehaviourPhase;
-use crate::webview_smoke::transport::parse_js_declared_phase_list;
+use crate::webview_smoke::transport::{parse_js_declared_phase_list, phases_via_next};
 
 /// Every phase variant, matched exhaustively with no wildcard: adding a
 /// variant without adding it here is a compile error, naming it -- paired
 /// with the derived walk below (which only proves reachability via
 /// `next()`, not that every declared variant was swept into it).
-const fn phase_count() -> usize {
+pub(super) const fn phase_count() -> usize {
     match ShellBehaviourPhase::RecoveryEntry {
         ShellBehaviourPhase::RecoveryEntry
         | ShellBehaviourPhase::RecoveryExit
@@ -51,33 +51,20 @@ const fn phase_count() -> usize {
     28
 }
 
-/// Walks `next()` from `first` to `None`, collecting each phase's own
-/// `as_str()` -- derived from the production transition chain, not a
-/// hand-written list of variant idents. Bounded by `phase_count()` so a
-/// cycle fails this walk itself, naming the phase, instead of hanging.
-fn phases_via_next(first: ShellBehaviourPhase) -> BTreeSet<&'static str> {
-    let mut seen = BTreeSet::new();
-    let mut current = Some(first);
-    while let Some(phase) = current {
-        assert!(
-            seen.insert(phase.as_str()),
-            "next() cycles back to {} without ever reaching None",
-            phase.as_str()
-        );
-        assert!(
-            seen.len() <= phase_count(),
-            "next() walk visited more than phase_count() ({}) phases without \
-             terminating -- a cycle?",
-            phase_count()
-        );
-        current = phase.next();
-    }
-    seen
+fn walked() -> BTreeSet<&'static str> {
+    phases_via_next(
+        ShellBehaviourPhase::RecoveryEntry,
+        ShellBehaviourPhase::next,
+        phase_count(),
+    )
+    .into_iter()
+    .map(ShellBehaviourPhase::as_str)
+    .collect()
 }
 
 #[test]
 fn every_variant_is_reached_by_walking_next_from_the_first_phase() {
-    let walked = phases_via_next(ShellBehaviourPhase::RecoveryEntry);
+    let walked = walked();
     assert_eq!(
         walked.len(),
         phase_count(),
@@ -97,7 +84,7 @@ fn every_variant_is_reached_by_walking_next_from_the_first_phase() {
 #[test]
 fn every_as_str_is_a_phase_the_driver_knows() {
     let driver_phases = parse_js_declared_phase_list(SHELL_BEHAVIOUR_JS);
-    let rust_phases = phases_via_next(ShellBehaviourPhase::RecoveryEntry);
+    let rust_phases = walked();
     assert_eq!(
         rust_phases, driver_phases,
         "ShellBehaviourPhase::as_str() must match shell_behaviour_driver.js's own \

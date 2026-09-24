@@ -375,3 +375,39 @@ test(
     await assert.rejects(completion);
   },
 );
+
+test(
+  "a bad acknowledgement and an occupied pin return their reasons in the completion",
+  { concurrency: false },
+  async () => {
+    // Task 025 review §3.1: returned, not thrown -- a thrown message does not
+    // survive eval.join() on WebKitGTK.
+    const dom = new FakeDom();
+    dom.install();
+    dom.setTime(0);
+    const bad = new FakeDioxus();
+    const badRun = runDriver(bad);
+    bad.push(request(1, "proof_of_trust"));
+    const badReport = await bad.nextSent();
+    bad.push({ ...acknowledgement(badReport), exchangeId: 2 });
+    const badReturned = await badRun;
+    assert.equal(badReturned.error, "invalid phase acknowledgement");
+    assert.equal(badReturned.acknowledgementProcessed, false);
+    assert.equal(badReturned.evaluatorPinned, false);
+    assert.equal(window.__bkTrustedClickEvalPin.current, null);
+
+    // The failed exchange left no pin, so the next one starts clean; another
+    // pin appears between its pre-checks and its footer.
+    const occupied = new FakeDioxus();
+    const occupiedRun = runDriver(occupied);
+    occupied.push(request(3, "proof_of_trust"));
+    const occupiedReport = await occupied.nextSent();
+    const occupant = { occupied: true };
+    window.__bkTrustedClickEvalPin.current = occupant;
+    occupied.push(acknowledgement(occupiedReport));
+    const occupiedReturned = await occupiedRun;
+    assert.equal(occupiedReturned.error, "trusted-click evaluator pin was already occupied");
+    assert.equal(occupiedReturned.evaluatorPinned, false);
+    assert.equal(window.__bkTrustedClickEvalPin.current, occupant);
+  },
+);

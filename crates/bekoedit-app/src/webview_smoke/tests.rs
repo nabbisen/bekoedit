@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use super::*;
 
+mod completion_failure;
 mod phase_bijection;
 mod speaking_rejection;
 mod transport_guard;
@@ -43,6 +44,7 @@ fn phase_completion(kind: MessageKind, phase: &str, exchange_id: u64) -> PhaseCo
         kind,
         acknowledgement_processed: true,
         evaluator_pinned: true,
+        error: None,
     }
 }
 

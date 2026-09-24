@@ -8,15 +8,12 @@ use std::collections::BTreeSet;
 
 use crate::webview_smoke::WEBVIEW_SMOKE_JS;
 use crate::webview_smoke::protocol::SmokePhase;
-use crate::webview_smoke::transport::parse_js_declared_phase_list;
+use crate::webview_smoke::transport::{parse_js_declared_phase_list, phases_via_next};
 
 /// Every phase variant, matched exhaustively with no wildcard: adding a
 /// variant without adding it here is a compile error, naming it -- paired
 /// with the derived walk below (which only proves reachability via
-/// `next()`, not that every declared variant was swept into it). RFC-041's
-/// `SmokePhase` has no `next()` of its own (`PhaseMachine::apply_completed`
-/// advances it inline), so the walk here follows the same Launch ->
-/// Editor -> Preview order that function encodes.
+/// `next()`, not that every declared variant was swept into it).
 const fn phase_count() -> usize {
     match SmokePhase::Launch {
         SmokePhase::Launch | SmokePhase::Editor | SmokePhase::Preview => {}
@@ -24,41 +21,16 @@ const fn phase_count() -> usize {
     3
 }
 
-fn next(phase: SmokePhase) -> Option<SmokePhase> {
-    match phase {
-        SmokePhase::Launch => Some(SmokePhase::Editor),
-        SmokePhase::Editor => Some(SmokePhase::Preview),
-        SmokePhase::Preview => None,
-    }
-}
-
-/// Walks `next()` from `first` to `None`, collecting each phase's own
-/// `as_str()` -- derived from the transition order above, not a
-/// hand-written list of variant idents. Bounded by `phase_count()` so a
-/// cycle fails this walk itself, naming the phase, instead of hanging.
-fn phases_via_next(first: SmokePhase) -> BTreeSet<&'static str> {
-    let mut seen = BTreeSet::new();
-    let mut current = Some(first);
-    while let Some(phase) = current {
-        assert!(
-            seen.insert(phase.as_str()),
-            "next() cycles back to {} without ever reaching None",
-            phase.as_str()
-        );
-        assert!(
-            seen.len() <= phase_count(),
-            "next() walk visited more than phase_count() ({}) phases without \
-             terminating -- a cycle?",
-            phase_count()
-        );
-        current = next(phase);
-    }
-    seen
+fn walked() -> BTreeSet<&'static str> {
+    phases_via_next(SmokePhase::Launch, SmokePhase::next, phase_count())
+        .into_iter()
+        .map(SmokePhase::as_str)
+        .collect()
 }
 
 #[test]
 fn every_variant_is_reached_by_walking_next_from_the_first_phase() {
-    let walked = phases_via_next(SmokePhase::Launch);
+    let walked = walked();
     assert_eq!(
         walked.len(),
         phase_count(),
@@ -76,7 +48,7 @@ fn every_variant_is_reached_by_walking_next_from_the_first_phase() {
 #[test]
 fn every_as_str_is_a_phase_the_driver_knows() {
     let driver_phases = parse_js_declared_phase_list(WEBVIEW_SMOKE_JS);
-    let rust_phases = phases_via_next(SmokePhase::Launch);
+    let rust_phases = walked();
     assert_eq!(
         rust_phases, driver_phases,
         "SmokePhase::as_str() must match driver.js's own phases array exactly -- \

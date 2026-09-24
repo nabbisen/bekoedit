@@ -110,15 +110,35 @@ test("next probe releases the exact prior pin before DOM access", { concurrency:
   assert.equal(window.__bkWebViewSmokeEvalPin.current.channel, second);
 });
 
-test("wrong acknowledgement rejects without creating a pin", { concurrency: false }, async () => {
+test("wrong acknowledgement returns its reason in the completion and creates no pin", { concurrency: false }, async () => {
+  // Task 025 review §3.1: returned, not thrown -- a thrown message does not
+  // survive eval.join() on WebKitGTK.
   installBrowser();
   const dioxus = new FakeDioxus();
   const completion = runDriver(dioxus);
   dioxus.push(request(20));
   const report = await dioxus.nextSent();
   dioxus.push({ ...acknowledgement(report), exchangeId: 21 });
-  await assert.rejects(completion, /invalid phase acknowledgement/);
+  const returned = await completion;
+  assert.equal(returned.error, "invalid phase acknowledgement");
+  assert.equal(returned.acknowledgementProcessed, false);
+  assert.equal(returned.evaluatorPinned, false);
   assert.equal(window.__bkWebViewSmokeEvalPin.current, null);
+});
+
+test("an already-occupied pin returns its reason in the completion", { concurrency: false }, async () => {
+  installBrowser();
+  const dioxus = new FakeDioxus();
+  const completion = runDriver(dioxus);
+  dioxus.push(request(22));
+  const report = await dioxus.nextSent();
+  const occupant = { occupied: true };
+  window.__bkWebViewSmokeEvalPin.current = occupant;
+  dioxus.push(acknowledgement(report));
+  const returned = await completion;
+  assert.equal(returned.error, "smoke evaluator pin was already occupied");
+  assert.equal(returned.evaluatorPinned, false);
+  assert.equal(window.__bkWebViewSmokeEvalPin.current, occupant);
 });
 
 test("missing acknowledgement leaves the promise pending and unpinned", { concurrency: false }, async () => {

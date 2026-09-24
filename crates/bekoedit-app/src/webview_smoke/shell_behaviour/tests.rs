@@ -298,14 +298,14 @@ fn terminal_result_transitions_the_terminal_exactly_once() {
 fn the_conflict_write_happens_only_between_f1_and_f2() {
     // Slice 3 §4.2: after F1's progress and before F2 is requested -- and
     // after no other phase, so no earlier phase sees a changed file.
-    let mut phase = Some(ShellBehaviourMachine::new().current());
-    let mut writers = Vec::new();
-    while let Some(current) = phase {
-        if writes_conflict_after(current) {
-            writers.push(current);
-        }
-        phase = current.next();
-    }
+    let writers: Vec<_> = crate::webview_smoke::transport::phases_via_next(
+        ShellBehaviourMachine::new().current(),
+        ShellBehaviourPhase::next,
+        phase_bijection::phase_count(),
+    )
+    .into_iter()
+    .filter(|phase| writes_conflict_after(*phase))
+    .collect();
     assert_eq!(writers, [ShellBehaviourPhase::ConflictDirtied]);
     assert_eq!(
         ShellBehaviourPhase::ConflictDirtied.next(),

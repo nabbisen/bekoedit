@@ -115,38 +115,37 @@ test("the report/acknowledgement/pin-set footer is the same protocol in every dr
   assertSharedAcrossAllDrivers(extractFooter, "footer");
 });
 
-test("pinKey, protocolVersion and pinProtocolVersion are declared identically between driver.js and shell_behaviour_driver.js; marker and stateKey are allowed to differ", () => {
-  // extractPinRegistryProtocol's window starts at `let pinRegistry =
-  // window[pinKey];`, so these five constants -- declared above that line
-  // -- are read inside the extracted block but never themselves compared.
-  // pinKey/protocolVersion/pinProtocolVersion are wire-protocol values two
-  // separate WebView processes must still agree on; marker and stateKey
-  // are deliberately per-run (RFC041_... vs RFC044_..., separate state
-  // keys so the two runs never collide). A drift in the first three would
-  // be silent forever: each driver is internally self-consistent, and
-  // nothing else ever compares them against each other.
-  //
-  // trusted_click_driver.js is not part of this particular check (task 025
-  // §2.5): its pinKey already differs from the other two on purpose (its
-  // own WebView process never runs alongside either), a "constant" this
-  // task's carve-out excuses -- the structural blocks above still cover it.
-  for (const name of ["pinKey", "protocolVersion", "pinProtocolVersion"]) {
-    assert.equal(
-      declaredConstant(shellBehaviourJs, name, "shell_behaviour_driver.js"),
-      declaredConstant(driverJs, name, "driver.js"),
-      `${name} has drifted between driver.js and shell_behaviour_driver.js`,
-    );
+test("protocolVersion and pinProtocolVersion are declared identically in every driver", () => {
+  // They version the one shared protocol this file is about, so a per-run
+  // difference is a bug (task 025 review §3.4). Declared above the extracted
+  // blocks, so they are never compared by the block tests.
+  for (const name of ["protocolVersion", "pinProtocolVersion"]) {
+    const [[firstLabel, firstSource], ...rest] = DRIVERS;
+    const reference = declaredConstant(firstSource, name, firstLabel);
+    for (const [label, source] of rest) {
+      assert.equal(
+        declaredConstant(source, name, label),
+        reference,
+        `${name} has drifted between ${firstLabel} and ${label}`,
+      );
+    }
   }
-  assert.notEqual(
-    declaredConstant(shellBehaviourJs, "marker", "shell_behaviour_driver.js"),
-    declaredConstant(driverJs, "marker", "driver.js"),
-    "marker is meant to differ per run -- if it doesn't, that's worth knowing too",
+});
+
+test("pinKey is shared by driver.js and shell_behaviour_driver.js; marker and stateKey differ per run", () => {
+  // pinKey/marker/stateKey are per-run by design. trusted_click_driver.js's
+  // own pinKey differs on purpose (different evaluators should not share a
+  // registry key -- task 025 review §2). marker and stateKey must differ in
+  // every pair, or two runs' state would collide.
+  assert.equal(
+    declaredConstant(shellBehaviourJs, "pinKey", "shell_behaviour_driver.js"),
+    declaredConstant(driverJs, "pinKey", "driver.js"),
+    "pinKey has drifted between driver.js and shell_behaviour_driver.js",
   );
-  assert.notEqual(
-    declaredConstant(shellBehaviourJs, "stateKey", "shell_behaviour_driver.js"),
-    declaredConstant(driverJs, "stateKey", "driver.js"),
-    "stateKey is meant to differ per run -- if it doesn't, the two runs' state would collide",
-  );
+  for (const name of ["marker", "stateKey"]) {
+    const values = DRIVERS.map(([label, source]) => declaredConstant(source, name, label));
+    assert.equal(new Set(values).size, values.length, `${name} must differ in every driver: ${values}`);
+  }
 });
 
 test("every driver's failEarly helper and request-shape check are the same protocol", () => {
