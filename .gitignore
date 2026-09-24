@@ -24,3 +24,6 @@ target/
 docs/book
 **/*.bekoedit-tmp
 /.git-exclude/
+
+# JS dependencies for the source-editor bundle: installed with `npm ci`, never committed.
+/crates/bekoedit-app/js/node_modules/
