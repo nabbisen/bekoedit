@@ -159,9 +159,19 @@ fn reopen_disabled_needs_the_start_screen_no_workspace_and_no_toast() {
     )
     .unwrap_err();
     assert!(
-        error.contains("reopen_disabled") && error.contains("Start Screen is shown"),
+        error.contains("reopen_disabled") && error.contains("a workspace opened"),
         "{error}"
     );
+
+    let no_screen = observed(false, 0, 0);
+    let error = judge(
+        ReleaseScenario::ReopenDisabled,
+        &expectation(),
+        lang,
+        &no_screen,
+    )
+    .unwrap_err();
+    assert!(error.contains("Start Screen is shown"), "{error}");
 
     let toasted = with_toast(good, "x".into(), ToastKind::Warning);
     assert!(
