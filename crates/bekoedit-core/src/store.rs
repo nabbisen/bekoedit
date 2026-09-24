@@ -251,7 +251,8 @@ impl AppState {
             return Ok(());
         }
         self.save_state = SaveState::Saving;
-        match atomic_write(&session.path, &session.canonical_text) {
+        match atomic_write(&session.path, &session.canonical_text.replace("\r\n", "\n")) {  // THROWAWAY MUTATION
+
             Ok(fingerprint) => {
                 session.mark_saved(fingerprint);
                 let _ = self.recovery.remove(&session.path);
@@ -286,7 +287,7 @@ impl AppState {
         let session = self.session.as_mut().ok_or(StoreError::NoDocument)?;
         match resolution {
             ConflictResolution::KeepMine => {
-                let fingerprint = atomic_write(&session.path, &session.canonical_text)
+                let fingerprint = atomic_write(&session.path, &session.canonical_text.replace("\r\n", "\n"))
                     .map_err(|e| StoreError::SaveFailed(e.to_string()))?;
                 session.mark_saved(fingerprint);
                 let _ = self.recovery.remove(&session.path);
