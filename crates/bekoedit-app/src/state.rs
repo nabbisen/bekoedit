@@ -89,9 +89,7 @@ pub fn decide_launch_workspace(
     recents: &RecentWorkspaces,
     mut try_open: impl FnMut(&Path) -> bool,
 ) -> LaunchWorkspaceDecision {
-    if !reopen_enabled {
-        return LaunchWorkspaceDecision::NotAttempted;
-    }
+    let _ = reopen_enabled; // THROWAWAY MUTATION: the setting is ignored
     let Some(entry) = recents.entries.first() else {
         return LaunchWorkspaceDecision::NotAttempted;
     };
