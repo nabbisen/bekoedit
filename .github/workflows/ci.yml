@@ -267,11 +267,17 @@ jobs:
       - name: Build desktop app
         run: cargo +1.88.0 build -p bekoedit --release --locked
       - run: git diff --exit-code -- Cargo.lock
-      - name: Smoke test (headless launch, exit 0 within 10 s)
+      - name: Smoke test (headless, no display, exit 0 within 10 s)
         run: |
-          # Verify the binary starts and exits cleanly in a headless display.
-          # Uses xvfb-run to provide a virtual framebuffer on CI.
-          timeout 10 xvfb-run -a ./target/release/bekoedit --headless-smoke
+          # Verify the binary's core paths run and exit cleanly. --headless-smoke
+          # starts no window and needs no display (about 20 ms), so it runs with
+          # none: DISPLAY and WAYLAND_DISPLAY are unset explicitly, so a change
+          # that starts needing a display fails here, fast, instead of silently
+          # picking one up. It deliberately does NOT go through xvfb-run: Xvfb's
+          # own startup used to eat this step's 10 s cap (run 36070611807), so a
+          # timeout here could not tell a hung binary from a slow Xvfb. Now a
+          # timeout (exit 124) means the binary itself did not finish.
+          env -u DISPLAY -u WAYLAND_DISPLAY timeout 10 ./target/release/bekoedit --headless-smoke
       - name: WebView lifecycle regression (RFC-041)
         run: |
           SMOKE_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-webview-smoke.XXXXXX")"
