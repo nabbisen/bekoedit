@@ -49,9 +49,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   this fix, a file with CRLF line endings was rewritten with LF endings when you
   saved it after an edit, and also when you switched between modes without
   editing anything at all (autosave then wrote the change). Now every line you
-  did not touch keeps its own ending, in files with all-CRLF, all-LF, mixed or
-  old Mac (CR) endings. The outline panel also now jumps to the right heading in
-  documents that contain CRLF line endings or non-ASCII text.
+  did not touch keeps its own ending: files with one consistent line ending
+  keep it on every line, and in files that mix endings an edit keeps the
+  endings of the lines it does not touch (see *Source preservation* in the
+  documentation for one limit on replace-all). The outline panel also now
+  jumps to the right heading in documents that contain CRLF line endings or
+  non-ASCII text.
 
 ### Security
 - Updated `rustls` to 0.23.45, resolving RUSTSEC-2026-0285.
