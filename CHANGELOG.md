@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.16.0] - 2026-09-22
+## [0.16.0] - 2026-09-25
 
 ### Added
 - **Reopen last workspace on launch.** The Settings checkbox of that name now
@@ -118,7 +118,8 @@ Accessibility work in this release covers the shell: file tree, menus, mode
 tabs, conflict banner, Recovery, and Settings. **Form Mode block editing does
 not yet expose accessibility metadata** and is tracked by RFC-042 slice 5.
 
-[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.15.0...HEAD
+[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.16.0...HEAD
+[0.16.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.16.0
 [0.15.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.15.0
 [0.14.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.14.0
 
