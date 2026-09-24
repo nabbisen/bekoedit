@@ -15,12 +15,30 @@ use self::transport::{MessageKind, PhaseCompletion, PhaseMessage, SMOKE_PROTOCOL
 use self::transport::{PinnedExchange, run_driver_phase as run_transport_phase};
 
 mod protocol;
+mod release_checks;
 mod shell_behaviour;
 mod transport;
 mod trusted_click;
 
+pub use release_checks::WebViewReleaseChecksDriver;
 pub use shell_behaviour::WebViewShellBehaviourDriver;
 pub use trusted_click::WebViewTrustedClickDriver;
+
+/// How many times the Start Screen component has mounted this launch, counted
+/// only in a release-checks run (task 026 §2). The one smoke-gated production
+/// observation hook: a driver injected after first render cannot see a mount
+/// that already came and went, but this counter can.
+static START_SCREEN_MOUNTS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+pub fn note_start_screen_mounted() {
+    if launch_config().release_checks.is_some() {
+        START_SCREEN_MOUNTS.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+fn start_screen_mounts() -> usize {
+    START_SCREEN_MOUNTS.load(Ordering::SeqCst)
+}
 
 const PROFILE_PREFIX: &str = "bekoedit-webview-smoke-";
 const MARKER: &str = "RFC041_WEBVIEW_SMOKE_MARKER";
@@ -52,6 +70,9 @@ pub enum RunMode {
     /// supplement's §B/§C via real XTEST clicks -- a separate profile,
     /// driver and phase set from either of the other two runs.
     WebViewTrustedClick(PathBuf),
+    /// Task 026: the fourth run, one launch per scenario, covering the release
+    /// walkthrough's phase-1 checks #2, #3, #4 and #8.
+    WebViewReleaseChecks(PathBuf, release_checks::ReleaseScenario),
 }
 
 impl RunMode {
@@ -79,6 +100,21 @@ impl RunMode {
             }
             return Ok(Self::WebViewTrustedClick(PathBuf::from(&args[1])));
         }
+        if let Some(index) = args
+            .iter()
+            .position(|arg| arg == "--webview-release-checks")
+        {
+            if index != 0 || args.len() != 3 {
+                return Err(
+                    "--webview-release-checks requires a profile root and one scenario".into(),
+                );
+            }
+            let scenario = release_checks::ReleaseScenario::parse(&args[2].to_string_lossy())?;
+            return Ok(Self::WebViewReleaseChecks(
+                PathBuf::from(&args[1]),
+                scenario,
+            ));
+        }
         let Some(index) = args.iter().position(|arg| arg == "--webview-smoke") else {
             return Ok(Self::Normal);
         };
@@ -96,12 +132,14 @@ pub struct LaunchConfig {
     terminal: Option<Arc<SmokeTerminal>>,
     pub shell_behaviour: Option<Arc<shell_behaviour::ShellBehaviourTerminal>>,
     pub trusted_click: Option<Arc<trusted_click::TrustedClickTerminal>>,
+    pub release_checks: Option<Arc<release_checks::ReleaseChecksTerminal>>,
 }
 
 enum SmokeRunKind {
     Smoke(Arc<SmokeTerminal>),
     ShellBehaviour(Arc<shell_behaviour::ShellBehaviourTerminal>),
     TrustedClick(Arc<trusted_click::TrustedClickTerminal>),
+    ReleaseChecks(Arc<release_checks::ReleaseChecksTerminal>),
 }
 
 impl SmokeRunKind {
@@ -110,6 +148,7 @@ impl SmokeRunKind {
             Self::Smoke(terminal) => terminal.succeeded(),
             Self::ShellBehaviour(terminal) => terminal.succeeded(),
             Self::TrustedClick(terminal) => terminal.succeeded(),
+            Self::ReleaseChecks(terminal) => terminal.succeeded(),
         }
     }
 
@@ -126,6 +165,9 @@ impl SmokeRunKind {
             }
             Self::TrustedClick(_) => {
                 "bekoedit task 023 trusted-click run FAILED: no validated terminal success"
+            }
+            Self::ReleaseChecks(_) => {
+                "bekoedit task 026 release-checks run FAILED: no validated terminal success"
             }
         }
     }
@@ -179,6 +221,7 @@ pub fn prepare_launch(run_mode: RunMode) -> Result<Option<SmokeRun>, String> {
                 terminal: None,
                 shell_behaviour: None,
                 trusted_click: None,
+                release_checks: None,
             },
             None,
         ),
@@ -191,6 +234,7 @@ pub fn prepare_launch(run_mode: RunMode) -> Result<Option<SmokeRun>, String> {
                 terminal: Some(terminal.clone()),
                 shell_behaviour: None,
                 trusted_click: None,
+                release_checks: None,
             };
             let run = SmokeRun {
                 profile_root: Some(profile.root),
@@ -209,6 +253,7 @@ pub fn prepare_launch(run_mode: RunMode) -> Result<Option<SmokeRun>, String> {
                 terminal: None,
                 shell_behaviour: Some(terminal.clone()),
                 trusted_click: None,
+                release_checks: None,
             };
             let run = SmokeRun {
                 profile_root: Some(profile.root),
@@ -225,10 +270,28 @@ pub fn prepare_launch(run_mode: RunMode) -> Result<Option<SmokeRun>, String> {
                 terminal: None,
                 shell_behaviour: None,
                 trusted_click: Some(terminal.clone()),
+                release_checks: None,
             };
             let run = SmokeRun {
                 profile_root: Some(profile.root),
                 kind: SmokeRunKind::TrustedClick(terminal),
+            };
+            (config, Some(run))
+        }
+        RunMode::WebViewReleaseChecks(requested_root, scenario) => {
+            let (profile, terminal) = release_checks::prepare(&requested_root, scenario)?;
+            let terminal = Arc::new(terminal);
+            let config = LaunchConfig {
+                persistence: profile.persistence.clone(),
+                webview_smoke: false,
+                terminal: None,
+                shell_behaviour: None,
+                trusted_click: None,
+                release_checks: Some(terminal.clone()),
+            };
+            let run = SmokeRun {
+                profile_root: Some(profile.root),
+                kind: SmokeRunKind::ReleaseChecks(terminal),
             };
             (config, Some(run))
         }

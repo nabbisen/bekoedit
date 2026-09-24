@@ -76,7 +76,7 @@ use phase::{EXPECTED_MILESTONES, TERMINAL_STAGE, TrustedClickPhase};
 mod settle;
 use settle::{SETTLE_GATE, unsettled_lifecycle_state, wait_until_settled};
 
-mod xtest;
+pub(in crate::webview_smoke) mod xtest;
 use xtest::perform_trusted_clicks;
 
 const MARKER: &str = "TASK023_TRUSTED_CLICK_MARKER";

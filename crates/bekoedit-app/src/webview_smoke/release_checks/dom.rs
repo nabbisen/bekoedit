@@ -1,0 +1,56 @@
+//! One-shot DOM reads for the release-checks driver: a single `document::eval`
+//! that returns a value, joined -- never a bare send then drop (the Dioxus
+//! 0.7.9 hazard `transport.rs` documents).
+
+use std::time::Duration;
+
+use dioxus::prelude::*;
+use serde::Deserialize;
+
+const EVAL_TIMEOUT: Duration = Duration::from_secs(3);
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct DomSnapshot {
+    pub start_screen: bool,
+    pub tree_rows: usize,
+}
+
+async fn returned<T: serde::de::DeserializeOwned>(expression: &str) -> Result<T, String> {
+    let script = format!("return (async () => ({expression}))();");
+    tokio::time::timeout(EVAL_TIMEOUT, document::eval(&script).join::<T>())
+        .await
+        .map_err(|_| format!("the page did not answer {expression} within {EVAL_TIMEOUT:?}"))?
+        .map_err(|error| format!("reading {expression} failed: {error}"))
+}
+
+/// What is on screen: whether the Start Screen is rendered, and how many
+/// workspace-tree rows there are.
+pub(super) async fn snapshot() -> Result<DomSnapshot, String> {
+    returned(
+        "({ startScreen: document.querySelector('.start-screen') !== null, \
+         treeRows: document.querySelectorAll('[data-tree-row]').length })",
+    )
+    .await
+}
+
+/// The source editor is mounted, focused, and not showing a status marker
+/// (the same condition task 023's driver waits on).
+pub(super) async fn editor_focused() -> Result<bool, String> {
+    returned(
+        "Boolean(window.__bk?._view && window.__bk._view.dom?.isConnected && \
+         window.__bk._view.hasFocus && \
+         !document.querySelector('[data-source-focus-launch-region=\"text\"] .source-editor-status'))",
+    )
+    .await
+}
+
+/// Whether the editor's own text contains `needle` -- used only to wait for a
+/// typed edit to have arrived, never for the byte comparison.
+pub(super) async fn editor_contains(needle: &str) -> Result<bool, String> {
+    let needle = serde_json::to_string(needle).map_err(|error| error.to_string())?;
+    returned(&format!(
+        "Boolean(window.__bk?._view?.state.doc.toString().includes({needle}))"
+    ))
+    .await
+}

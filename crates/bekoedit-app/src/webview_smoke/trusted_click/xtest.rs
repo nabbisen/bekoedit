@@ -172,7 +172,7 @@ async fn locate_click_target(
 /// thread -- the X events `xdotool` itself was sending could not be
 /// processed until it returned, and nothing else in the app could run
 /// either.
-async fn run_xdotool(args: &[&str]) -> Result<(), String> {
+pub(in crate::webview_smoke) async fn run_xdotool(args: &[&str]) -> Result<(), String> {
     let output = tokio::process::Command::new("xdotool")
         .args(args)
         .output()
@@ -203,7 +203,7 @@ async fn run_xdotool(args: &[&str]) -> Result<(), String> {
 /// fails the run over it -- a real XTEST click is still delivered to
 /// whatever window is under the pointer regardless. Idempotent; called
 /// before every phase's clicks.
-pub(super) fn activate_window(desktop: &DesktopContext) {
+pub(in crate::webview_smoke) fn activate_window(desktop: &DesktopContext) {
     desktop.window.set_focus();
     println!(
         "  trusted click: window focus requested, is_focused={}",
@@ -214,7 +214,7 @@ pub(super) fn activate_window(desktop: &DesktopContext) {
 /// Locates one element, then sends a real XTEST click at its centre
 /// through `xdotool` -- the one new CI dependency task 023 §3.4 allows.
 /// Never a synthetic `.click()`: that is the entire point of this run.
-async fn click_via_xtest(
+pub(in crate::webview_smoke) async fn click_via_xtest(
     desktop: &DesktopContext,
     selector: &str,
     text_includes: Option<&str>,

@@ -26,6 +26,8 @@ pub fn StartScreen() -> Element {
     let mode = use_context::<Signal<EditorMode>>();
     let toasts = use_context::<Signal<Vec<Toast>>>();
     let lang = *use_context::<Signal<Lang>>().read();
+    // Task 026: counts this mount in a release-checks run; a no-op otherwise.
+    use_hook(crate::webview_smoke::note_start_screen_mounted);
 
     let recents: Vec<_> = state
         .read()

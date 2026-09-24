@@ -394,6 +394,44 @@ jobs:
           if [ "${OUTCOME}" != "success" ]; then
             echo "::warning title=Task 023 trusted-click run did not pass::outcome=${OUTCOME}; see that step's log"
           fi
+      - name: Task 026 release walkthrough by machine (phase-1 checks #2, #3, #4, #8)
+        # NON-BLOCKING (task 026 §3): a new run, so continue-on-error applies to
+        # this step alone; the RFC-041, RFC-044 and trusted-click steps above
+        # are untouched. Four scenarios, each its own process launch on the
+        # release binary (launch-time behaviours must not share state): the
+        # reopen setting on with a usable recent (#2, and that the Start Screen
+        # never mounts), on with the folder renamed away (#3: the Start Screen,
+        # one Warning toast, no older entry opened), off (#4), and one edit
+        # saved through the app over a mixed-CRLF file, diffed on bytes (#8).
+        # Every workspace is seeded through the profile; no native dialog.
+        #
+        # Soak: 10 consecutive green runs on `main`, read from the outcome
+        # line below (never from this step's masked conclusion), as task
+        # 023's was. Promotion to blocking is a separate, later decision.
+        id: release_checks
+        continue-on-error: true
+        run: |
+          failed=0
+          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes; do
+            RELEASE_CHECKS_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-release-checks.XXXXXX")"
+            echo "release-checks scenario: $scenario"
+            timeout 90 xvfb-run -a -s "-screen 0 1280x1024x24" \
+              env NO_AT_BRIDGE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
+              ./target/release/bekoedit \
+              --webview-release-checks "$RELEASE_CHECKS_PARENT/bekoedit-webview-smoke-profile" "$scenario" \
+              || { echo "release-checks scenario FAILED: $scenario"; failed=1; }
+            rm -rf "$RELEASE_CHECKS_PARENT"
+          done
+          exit "$failed"
+      - name: Task 026 release-checks outcome (unmasked)
+        if: always()
+        env:
+          OUTCOME: ${{ steps.release_checks.outcome }}
+        run: |
+          echo "Task 026 release-checks outcome: ${OUTCOME}"
+          if [ "${OUTCOME}" != "success" ]; then
+            echo "::warning title=Task 026 release-checks run did not pass::outcome=${OUTCOME}; see that step's log"
+          fi
       - name: Check binary links and size
         run: |
           file target/release/bekoedit

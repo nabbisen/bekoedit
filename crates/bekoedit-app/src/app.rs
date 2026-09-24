@@ -38,7 +38,8 @@ use crate::state::{
     OpenMenuState, OutlineOpen, SearchOpen, SettingsOpen, create_app_state, now_ms,
 };
 use crate::webview_smoke::{
-    WebViewShellBehaviourDriver, WebViewSmokeDriver, WebViewTrustedClickDriver, launch_config,
+    WebViewReleaseChecksDriver, WebViewShellBehaviourDriver, WebViewSmokeDriver,
+    WebViewTrustedClickDriver, launch_config,
 };
 
 pub(crate) const STYLE_SOURCE: &str = include_str!("../assets/style.css");
@@ -59,6 +60,7 @@ pub fn App() -> Element {
     let webview_smoke = launch.webview_smoke;
     let webview_shell_behaviour = launch.shell_behaviour.is_some();
     let webview_trusted_click = launch.trusted_click.is_some();
+    let webview_release_checks = launch.release_checks.is_some();
 
     use_context_provider(|| persistence.clone());
     // RFC-043: the workspace may already be open in `initial_state` when
@@ -271,6 +273,9 @@ pub fn App() -> Element {
         }
         if webview_trusted_click {
             WebViewTrustedClickDriver {}
+        }
+        if webview_release_checks {
+            WebViewReleaseChecksDriver {}
         }
         ToastLayer {}
         div {
