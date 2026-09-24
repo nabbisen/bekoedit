@@ -121,6 +121,27 @@ Two constraints, because conversion is asynchronous:
     a table. Any other raw HTML, or a `<br>` outside a table row, still fails the
     corpus test.
 
+    **How the test decides, amended the same day on upstream's answer (§6.2)** ·
+    **[Binding]**. The check is **structural, not textual**:
+
+    - Parse the converted Markdown with the document's own GFM options.
+    - Every `Html` and `InlineHtml` event must be exactly `<br>`, and must occur
+      **inside a `TableCell`**.
+    - Any other HTML event fails the test, naming it and the fixture.
+
+    A line scan for `|` or for `<…>` is prohibited, because it gets both of
+    upstream's two shapes wrong:
+
+    - a table inside a blockquote or a list item, where the row starts with `> `
+      or an indent rather than `|`;
+    - `Vec<i32>` in a code span or fenced block, which is code content and not
+      HTML. The parser reports it as `Code` or `Text`, so the structural check
+      never sees it.
+
+    The parser is a **dev-dependency** of the converter crate, since
+    `pulldown-cmark` is already in the workspace. The shipped crate stays at
+    `mdka` + `thiserror`.
+
 ### 5.4 When bekoedit falls back to plain text · **[Binding]**
 
 The `text/plain` flavour kept in §5.1 is inserted instead, through the same
@@ -184,6 +205,10 @@ used to announce. So:
   does not, raises no toast. Detecting that means counting outermost tables in
   the HTML, which needs an HTML parser outside `mdka`, and §5.3 keeps one out of
   this crate. Revisit if the corpus shows mixed pastes are common.
+  - **The same gap covers a nested table** (upstream, 2026-09-24). The outer table
+    falls back to paragraphs, but the inner table still converts as a table, so
+    the output contains a table and no toast is raised. This is `mdka`'s documented
+    behaviour: a nested table is analysed on its own terms.
 
 ### 5.5 Pasting plain text on purpose
 
@@ -391,6 +416,24 @@ did not have, which is the class of defect our item 3 was. The text is kept.
 
 **Measurements.** §8's timings and §6's table were taken against 2.2.1. Slice 1
 re-measures against 2.5.1, replacing §6.1's "re-measure against 2.4.0".
+
+**Upstream's answer to our raw-HTML question**
+(`.git-exclude/upstream/mdka/receive/2026-09-24c-raw-html-in-minimal.md`):
+
+- In `Minimal`, the only raw HTML `mdka` 2.5.1 emits is `<br>`, and only inside a
+  table cell.
+- A `<br>` outside a table becomes two trailing spaces.
+- A literal `<` in prose is escaped.
+
+They checked this over 56 corpus documents plus targeted probes, including
+unknown and custom elements, `<svg>`, `<math>`, `<iframe>` and `<video>`.
+
+**Their claim is not our test.** It is why we expect §5.3's structural check to
+pass. The check still runs over our own fixtures, so a future pin bump that
+breaks the claim fails it.
+
+They also named two shapes that a line-based check would get wrong, and §5.3's
+test rule now handles both by parsing.
 
 **Scheduling.** The upstream wait is over. RFC-046 is now gated only on this
 project's own queue: the 0.16.0 release, then slice 2's two preconditions (§9).
