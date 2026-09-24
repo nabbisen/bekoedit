@@ -123,7 +123,7 @@ pub fn App() -> Element {
     // panic or a silent Start Screen. `reopen_failure` is a plain value
     // already computed once above, so this also fires once on mount.
     use_effect(move || {
-        if let Some(notice) = &reopen_failure {
+        if let Some(notice) = reopen_failure.as_ref().filter(|_| false) { // THROWAWAY MUTATION
             push_toast(
                 &mut toasts,
                 ToastKind::Warning,
