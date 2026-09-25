@@ -26,6 +26,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [0.16.0] - 2026-09-25
 
+### Highlights
+- Reopen your last workspace on launch (turn it on in Settings).
+- Text Mode keeps Windows (CRLF) line endings; earlier versions could rewrite
+  them as LF on save or on a mode switch.
+- Windows: no console window at startup, and a clear message if the WebView2
+  Runtime is missing.
+- Focus lands in the editor after opening from the tree, a backlink, search or
+  a menu, and clicks made while the editor switches modes are no longer lost.
+- Release archives include the platform helper script.
+- Security: `rustls` updated (RUSTSEC-2026-0285).
+
 ### Added
 - **Reopen last workspace on launch.** The Settings checkbox of that name now
   works: when enabled, bekoedit opens your most recent workspace before the

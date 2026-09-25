@@ -237,6 +237,20 @@ jobs:
           pattern = rf"^## \[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}$"
           if not re.search(pattern, changelog, re.MULTILINE):
               raise SystemExit(f"CHANGELOG.md has no dated {version} heading")
+          # docs/src/changelog-policy.md: each release's section opens with
+          # a short Highlights list, and that list is not empty.
+          heading = re.search(pattern, changelog, re.MULTILINE)
+          body = changelog[heading.end():]
+          next_version = re.search(r"^## \[", body, re.MULTILINE)
+          section = body[: next_version.start()] if next_version else body
+          first = re.search(r"^### (.+)$", section, re.MULTILINE)
+          if not first or first.group(1).strip() != "Highlights":
+              raise SystemExit(f"CHANGELOG.md {version} does not open with ### Highlights")
+          highlights = section[first.end():]
+          after = re.search(r"^### ", highlights, re.MULTILINE)
+          highlights = highlights[: after.start()] if after else highlights
+          if not re.search(r"^- \S", highlights, re.MULTILINE):
+              raise SystemExit(f"CHANGELOG.md {version} has an empty Highlights list")
           PY
           git diff --exit-code -- Cargo.lock
       - name: Download all target archives
@@ -261,6 +275,9 @@ jobs:
       - name: Publish verified release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
+          # docs/src/changelog-policy.md: the page only links to CHANGELOG.md,
+          # pinned to this tag, where this version is the first section.
+          body: "Release notes: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ env.EXPECTED_VERSION }}/CHANGELOG.md)"
           files: |
             dist/bekoedit-${{ env.EXPECTED_VERSION }}-x86_64-unknown-linux-gnu.tar.gz
             dist/bekoedit-${{ env.EXPECTED_VERSION }}-x86_64-unknown-linux-gnu.tar.gz.sha256
