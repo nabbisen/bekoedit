@@ -250,6 +250,13 @@ jobs:
         run: git diff --exit-code -- crates/bekoedit-app/assets/editor-bundle.js crates/bekoedit-app/assets/focus-guard-bundle.js
       - name: Test desktop application
         run: cargo +1.88.0 test -p bekoedit --locked
+      - name: Opener stubs test, output shown (task 035)
+        # tests/link_opener_stubs.rs already ran, quietly, in the step above. It
+        # calls the real `webbrowser::open`, so it runs only where CI is set,
+        # and libtest hides a passing test's output, so a skip and a run look
+        # alike in that log. Run it once more with --nocapture, and only it, so
+        # the log always holds its own SKIPPED or RAN line (0.2 s, already built).
+        run: cargo +1.88.0 test -p bekoedit --locked --test link_opener_stubs -- --nocapture
       - name: Parse-check emitted eval scripts (RFC-042 slice 3 C1)
         shell: bash
         run: |
@@ -428,6 +435,10 @@ jobs:
         # browser` (a click on every kind of link in Preview; only http(s)
         # and mailto reach a stub opener). This step's phase set changed, so
         # its soak RESTARTS at 0 of 10 from the run that first contains it.
+        # Task 035 then added a final stage to that scenario (the guard is
+        # removed from the page, to prove Dioxus's own link route on its own),
+        # so the soak RESTARTS again at 0 of 10 from the run that first
+        # contains that stage.
         id: release_checks
         continue-on-error: true
         run: |

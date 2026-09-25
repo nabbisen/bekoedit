@@ -128,4 +128,8 @@ fn stubs_are_the_only_openers_and_see_the_urls_the_scenario_expects() {
             );
         }
     }
+    // Only reached when the test ran: a skip returns at the top. CI runs this
+    // test once more with `--nocapture` (task 035), so this line, or the
+    // SKIPPED one, is always in the log.
+    println!("link_opener_stubs: RAN under CI; all three cases passed.");
 }

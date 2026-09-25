@@ -7,6 +7,9 @@
 //! after the last. The stub and its log are made by
 //! `scripts/webview-link-opener-stubs.sh`, which CI runs before the launch and
 //! whose log path arrives in `BEKOEDIT_LINK_OPENER_LOG`.
+//!
+//! Then stage 2 (task 035, `link_layer_two.rs`) removes the guard from the page
+//! and clicks three more times, to prove layer 2 alone.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -24,6 +27,7 @@ use super::dom;
 use super::link_judge::{
     ClickObservation, NAME, NOTE_FILE, Observation, RenderedLink, STEPS, judge,
 };
+use super::link_layer_two::{CONTROL_TEXT, REL_TEXT, StageTwo, judge_layer_two};
 use super::save::wait_until;
 
 /// After a click, how long the toast layer and the stub log are watched. The
@@ -138,5 +142,39 @@ pub(super) async fn run(
     // After the last click, one more window: the assertion is on the whole file.
     tokio::time::sleep(SETTLE_WINDOW).await;
     observation.final_log = read_log(log)?;
-    judge(lang, &observation)
+    // The five clicks are judged exactly as before, and first: stage 2 adds a
+    // line to the stub file, which the whole-file rule above must not see.
+    let mut passed = judge(lang, &observation)?;
+    let lines_before = observation.final_log.len();
+    passed.extend(layer_two(desktop, toasts, &mut seen, log, lines_before).await?);
+    Ok(passed)
+}
+
+/// Task 035: the guard is taken out of the page and three more clicks are
+/// watched. See `link_layer_two.rs` for what each must do.
+async fn layer_two(
+    desktop: &DesktopContext,
+    toasts: Signal<Vec<Toast>>,
+    seen: &mut BTreeSet<u64>,
+    log: &Path,
+    mut lines_before: usize,
+) -> Result<Vec<String>, String> {
+    let mut stage = StageTwo {
+        guard_removed: dom::remove_link_guard().await?,
+        ..Default::default()
+    };
+    let mut clicks = Vec::new();
+    for text in [REL_TEXT, REL_TEXT, CONTROL_TEXT] {
+        click_via_xtest(desktop, "article.preview a", Some(text), 0).await?;
+        let click = watch(toasts, seen, log, lines_before).await?;
+        lines_before += click.opener_lines.len();
+        clicks.push(click);
+    }
+    let [gone, isolated, control]: [_; 3] = clicks.try_into().expect("three clicks were made");
+    stage.gone = gone;
+    stage.isolated = isolated;
+    stage.control = control;
+    tokio::time::sleep(SETTLE_WINDOW).await;
+    stage.final_log = read_log(log)?;
+    judge_layer_two(&stage)
 }

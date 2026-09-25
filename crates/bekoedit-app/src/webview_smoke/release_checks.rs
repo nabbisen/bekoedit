@@ -35,6 +35,7 @@ mod dom;
 mod launch;
 mod link_clicks;
 mod link_judge;
+mod link_layer_two;
 mod mode_switch;
 mod save;
 mod seed;
@@ -182,6 +183,8 @@ pub fn WebViewReleaseChecksDriver() -> Element {
     rsx! {}
 }
 
+#[cfg(test)]
+mod layer_two_tests;
 #[cfg(test)]
 mod link_tests;
 #[cfg(test)]

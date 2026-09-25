@@ -96,3 +96,16 @@ pub(super) async fn inject_preview_anchor(text: &str, href: &str) -> Result<bool
     ))
     .await
 }
+
+/// Removes the link guard's own listeners from the page (task 035), the same
+/// two calls task 032's JS test makes. `false` if there was no guard to remove.
+pub(super) async fn remove_link_guard() -> Result<bool, String> {
+    returned(
+        "(() => { const guard = window.__bk_link_guard; \
+         if (typeof guard !== 'function') return false; \
+         window.removeEventListener('click', guard, true); \
+         window.removeEventListener('auxclick', guard, true); \
+         return true; })()",
+    )
+    .await
+}
