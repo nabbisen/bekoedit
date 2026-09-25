@@ -89,6 +89,9 @@ class FakeElement {
 /** Runs the script the way `document::eval` does: `window` and `dioxus` in
  * scope, inside an async function. It never settles; that is intended. */
 function install(win, dioxus) {
+  if (!("interpreter" in win)) {
+    win.interpreter = { intercept_link_redirects: true };
+  }
   const run = new Function("window", "dioxus", `return (async () => {${source}})();`);
   run(win, dioxus);
 }
@@ -96,12 +99,21 @@ function install(win, dioxus) {
 function setup() {
   const win = new FakeWindow();
   const sent = [];
+  const traces = [];
+  const messages = [];
   const browserOpens = [];
-  install(win, { send: (message) => sent.push(message) });
+  install(win, {
+    send: (message) => {
+      messages.push(message);
+      if (message.kind === "click") sent.push(message.href);
+      else traces.push(message.detail);
+    },
+  });
   // Dioxus's interpreter, as read in dioxus-interpreter-js 0.7.9
   // `handleClickNavigate`: a bubble-phase click listener that cancels the
   // click and sends the raw href of the enclosing <a> for `browser_open`.
   win.root.addEventListener("click", (event) => {
+    if (!win.interpreter.intercept_link_redirects) return;
     const anchor = event.target?.closest?.("a");
     if (anchor) {
       event.preventDefault();
@@ -109,7 +121,7 @@ function setup() {
       if (href) browserOpens.push(href);
     }
   });
-  return { win, sent, browserOpens };
+  return { win, sent, traces, messages, browserOpens };
 }
 
 const anchor = (href) => new FakeElement("a", href === undefined ? {} : { href });
@@ -178,10 +190,53 @@ test("installing again replaces the guard instead of doubling it", () => {
   const win = new FakeWindow();
   const first = [];
   const second = [];
-  install(win, { send: (message) => first.push(message) });
-  install(win, { send: (message) => second.push(message) });
+  install(win, { send: (message) => first.push(message.href) });
+  install(win, { send: (message) => second.push(message.href) });
   assert.equal(win.listeners.filter((l) => l.type === "click").length, 1);
   win.dispatch({ type: "click", target: anchor("a.md") });
   assert.deepEqual(first, []);
   assert.deepEqual(second, ["a.md"]);
+});
+
+test("a click is reported as { kind: 'click', href }, and nothing else is sent", () => {
+  const { win, messages } = setup();
+  win.dispatch({ type: "click", target: anchor("other.md") });
+  assert.deepEqual(messages, [{ kind: "click", href: "other.md" }]);
+});
+
+test("installing switches the interpreter's own link route off", () => {
+  const { win, traces } = setup();
+  assert.equal(win.interpreter.intercept_link_redirects, false);
+  assert.deepEqual(traces, [], "nothing to report when it worked");
+});
+
+test("with the guard's listener gone, a click still produces no browser_open", () => {
+  const { win, browserOpens } = setup();
+  // What if the capture-phase ordering differs on some WebView: the
+  // interpreter's route is off, so it does nothing.
+  win.removeEventListener("click", win.__bk_link_guard, true);
+  win.dispatch({ type: "click", target: anchor("other.md") });
+  assert.deepEqual(browserOpens, []);
+  // Control: the same click does reach the interpreter if its route is on,
+  // so the assertion above is able to see a leak.
+  win.interpreter.intercept_link_redirects = true;
+  win.dispatch({ type: "click", target: anchor("other.md") });
+  assert.deepEqual(browserOpens, ["other.md"]);
+});
+
+test("a missing interpreter or a changed field is reported, not silent", () => {
+  for (const interpreter of [undefined, {}, { intercept_link_redirects: "yes" }]) {
+    const win = new FakeWindow();
+    win.interpreter = interpreter;
+    const messages = [];
+    install(win, { send: (message) => messages.push(message) });
+    assert.equal(messages.length, 1, JSON.stringify(interpreter));
+    assert.equal(messages[0].kind, "trace");
+    assert.match(messages[0].detail, /link route/);
+    // Layer 1 still holds.
+    assert.equal(win.listeners.filter((l) => l.capture).length, 2);
+    if (interpreter && "intercept_link_redirects" in interpreter) {
+      assert.equal(interpreter.intercept_link_redirects, "yes", "left as found");
+    }
+  }
 });

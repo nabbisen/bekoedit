@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use bekoedit_core::{LinkAction, LinkRefusal, decide_link_click};
 
-use super::{LINK_GUARD_JS, LinkEffect, link_effect};
+use super::{GuardMessage, LINK_GUARD_JS, LinkEffect, link_effect, parse_guard_message};
 use crate::i18n::{Lang, tr};
 
 const EVERY_REFUSAL: [LinkRefusal; 9] = [
@@ -127,4 +127,32 @@ fn the_script_cancels_before_dioxus_can_and_reports_only_clicks() {
     assert!(LINK_GUARD_JS.contains("addEventListener(\"auxclick\", guard, true)"));
     assert!(LINK_GUARD_JS.contains("event.stopPropagation()"));
     assert!(LINK_GUARD_JS.contains("dioxus.send("));
+    // The second layer: the interpreter's own route is switched off.
+    assert!(LINK_GUARD_JS.contains("interpreter.intercept_link_redirects = false"));
+}
+
+#[test]
+fn the_scripts_two_messages_are_read_and_anything_else_is_ignored() {
+    use serde_json::json;
+    assert_eq!(
+        parse_guard_message(json!({"kind": "click", "href": "other.md"})),
+        Some(GuardMessage::Click {
+            href: "other.md".into()
+        })
+    );
+    assert_eq!(
+        parse_guard_message(json!({"kind": "trace", "detail": "x"})),
+        Some(GuardMessage::Trace { detail: "x".into() })
+    );
+    // A bare string is the old shape; it must not be taken for a click.
+    for other in [
+        json!("other.md"),
+        json!(null),
+        json!({"kind": "click"}),
+        json!({"kind": "click", "href": 3}),
+        json!({"kind": "open", "href": "x"}),
+        json!({}),
+    ] {
+        assert_eq!(parse_guard_message(other.clone()), None, "{other}");
+    }
 }
