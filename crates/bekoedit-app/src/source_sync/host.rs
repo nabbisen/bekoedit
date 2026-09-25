@@ -383,7 +383,11 @@ fn dispatch_request_js(payload: &str, fallback: Option<&str>, relay_generation: 
     let version = BRIDGE_SCHEMA_VERSION;
     let relay = SOURCE_RELAY;
     let generation = relay_generation;
+    // Task 031: the payload is a string literal the page parses with
+    // `JSON.parse` (`editor.js`'s `dispatch`), not JavaScript source.
+    let payload = bridge::js_string_literal(payload);
     if let Some(fallback) = fallback {
+        let fallback = bridge::js_string_literal(fallback);
         format!(
             r#"
             (async () => {{
@@ -399,7 +403,7 @@ fn dispatch_request_js(payload: &str, fallback: Option<&str>, relay_generation: 
                 const relay = window.{relay};
                 if (typeof relay === "function"
                     && relay.__bkGeneration === {generation}) {{
-                    relay(JSON.stringify({fallback}));
+                    relay({fallback});
                 }}
             }})();
             "#,

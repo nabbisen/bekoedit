@@ -48,7 +48,7 @@ pub(super) async fn editor_focused() -> Result<bool, String> {
 /// Whether the editor's own text contains `needle` -- used only to wait for a
 /// typed edit to have arrived, never for the byte comparison.
 pub(super) async fn editor_contains(needle: &str) -> Result<bool, String> {
-    let needle = serde_json::to_string(needle).map_err(|error| error.to_string())?;
+    let needle = crate::bridge::js_string_literal(needle);
     returned(&format!(
         "Boolean(window.__bk?._view?.state.doc.toString().includes({needle}))"
     ))

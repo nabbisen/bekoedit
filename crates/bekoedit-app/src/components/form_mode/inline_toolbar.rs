@@ -38,7 +38,7 @@ pub fn InlineToolbar(field_id: String, block_id: BlockId, revision: u64, lang: L
                             window.__bk_form_relay?.(JSON.stringify({{s:s,e:e}}));
                         }})();
                         "#,
-                        id = serde_json::to_string(&fid).unwrap()
+                        id = crate::bridge::js_string_literal(&fid)
                     );
                     // Receive the selection asynchronously then dispatch.
                     let bid   = block_id;
