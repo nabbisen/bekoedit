@@ -20,6 +20,7 @@ pub mod block;
 pub mod destination;
 pub mod fingerprint;
 pub mod form;
+pub mod gfm;
 pub mod index;
 pub mod island;
 pub mod patch;
@@ -35,6 +36,7 @@ pub use form::{
     FormBlock, FormBlockDisplay, FormBlockEdit, FormEditCommand, FormEditError, FormListItem,
     FormProjection, InlineFormat,
 };
+pub use gfm::has_gfm_table;
 pub use index::{MarkdownDiagnostic, MarkdownIndex};
 pub use island::{RawIsland, RawIslandEditPolicy, RawIslandType};
 pub use patch::{PatchError, PatchOrigin, PatchResult, SourcePatch};

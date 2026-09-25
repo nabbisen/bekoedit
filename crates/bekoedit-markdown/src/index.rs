@@ -88,7 +88,7 @@ impl MarkdownIndex {
 /// Parser feature policy for MVP (requirements §25.3): CommonMark core plus
 /// tables (to detect and preserve them as islands), task lists, strikethrough,
 /// footnotes (preserved as islands), and math (preserved as islands).
-fn parse_options() -> Options {
+pub(crate) fn parse_options() -> Options {
     Options::ENABLE_TABLES
         | Options::ENABLE_TASKLISTS
         | Options::ENABLE_STRIKETHROUGH

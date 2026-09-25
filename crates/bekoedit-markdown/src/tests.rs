@@ -7,6 +7,7 @@
 mod adversarial_tests;
 mod destination_tests;
 mod form_tests;
+mod gfm_tests;
 mod index_tests;
 mod patch_tests;
 mod preservation_tests;
