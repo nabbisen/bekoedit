@@ -61,7 +61,8 @@ code.
     projection rule; the document's bytes are never changed.
 11. **Only web and mail destinations ever reach an OS opener.** A click on
     a link is cancelled in the page before Dioxus's own link handling can
-    send its raw `href` to `webbrowser::open`, and `decide_link_click`
+    send its raw `href` to `webbrowser::open` (and Dioxus's own link route is
+    switched off as a second layer), and `decide_link_click`
     (`bekoedit-core`) decides what it does instead. Only `http:`, `https:`
     and `mailto:` yield an `ExternalUrl`, the one type the single
     `webbrowser::open` call in `link_guard.rs` takes. A `#fragment` stays in
