@@ -7,6 +7,9 @@
 //! injecting it into the DOM here cannot execute document-controlled
 //! scripts, and the exception and the allowlist are that renderer's, not
 //! this component's.
+//!
+//! Clicks on links in this HTML never reach an OS opener directly:
+//! `link_guard` cancels them and `decide_link_click` decides (invariant 11).
 
 use dioxus::prelude::*;
 

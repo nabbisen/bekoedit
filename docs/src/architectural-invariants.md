@@ -59,6 +59,19 @@ code.
     `data:image/svg+xml`, is dropped,
     and the link text or image alt text stays as plain text. This is a
     projection rule; the document's bytes are never changed.
+11. **Only web and mail destinations ever reach an OS opener.** A click on
+    a link is cancelled in the page before Dioxus's own link handling can
+    send its raw `href` to `webbrowser::open`, and `decide_link_click`
+    (`bekoedit-core`) decides what it does instead. Only `http:`, `https:`
+    and `mailto:` yield an `ExternalUrl`, the one type the single
+    `webbrowser::open` call in `link_guard.rs` takes. A `#fragment` stays in
+    the page. A relative path is resolved against the open document's
+    directory, canonicalised (so a symlink cannot lead out), and must be an
+    existing Markdown file inside the workspace root; it is never handed to
+    the OS. Every other click, including an absolute path, a network-path
+    reference and any other scheme, is refused with a notice. The render
+    policy of invariant 10 and this click policy read destinations through
+    one classifier, `bekoedit_markdown::classify_destination`.
 
 ## Layering
 

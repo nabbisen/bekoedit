@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   paths and `#fragments`, `mailto:` for links, and PNG, JPEG, GIF and WebP
   `data:` images); anything else, including network paths such as `//host/x`
   and `\\host\share`, is shown as its plain text and is never clickable. Your Markdown file is not changed.
+- Clicking a link in Preview no longer hands a path to the operating system.
+  Only web (`http:`, `https:`) and email (`mailto:`) links open, in your
+  browser or mail client. A relative link such as `other.md`, or a
+  `#section` link, used to be passed to the system's opener as a path relative
+  to the folder bekoedit was started from; it now opens nothing outside the
+  app. A link that is not followed shows a short notice saying why. Following
+  a link to another document from Preview is not supported yet.
 
 ### Fixed
 - A `<br>` inside a line, for example in a table cell, now shows as a line break
