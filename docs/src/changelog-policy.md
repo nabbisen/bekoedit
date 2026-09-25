@@ -67,10 +67,12 @@ tag, including every GitHub Release link, are not affected.
 | The released version has a dated section | `release.yml`, before anything is built | in place |
 | That section opens with `### Highlights` | `release.yml`, same step | in place |
 | The GitHub Release page links to `CHANGELOG.md` at the tag | `release.yml` sets the page text | in place |
-| Each version appears exactly once across `CHANGELOG.md` and `changelog/` | a changelog check in CI | **planned** |
-| Every archive file is linked from `CHANGELOG.md`, and every link resolves | same check | **planned** |
-| No file in the repository links to a section that has moved | same check | **planned** |
-| `CHANGELOG.md` holds only the current series | same check | **planned** |
+| Each version appears exactly once across `CHANGELOG.md` and `changelog/` | `scripts/check-changelog.sh`, in CI | in place |
+| Every archive file is linked from `CHANGELOG.md`, and every link resolves | same check | in place |
+| No file in the repository links to a section that has moved | same check | in place |
+| `CHANGELOG.md` holds only the current series | same check | in place |
 
-**No section moves until the planned check exists.** The first move, of 0.1–0.9,
-is done together with it.
+The check also names an archive file that is misnamed or holds another series,
+and a version's link definition left behind in the other file. Its own tests
+(`scripts/test-check-changelog.sh`) run in CI too, and break each rule on a
+throwaway tree to show it fails by name.
