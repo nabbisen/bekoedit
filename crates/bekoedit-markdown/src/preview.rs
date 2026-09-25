@@ -27,40 +27,8 @@
 
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd, html};
 
+use crate::destination::{is_network_path, normalized, scheme};
 use crate::index::detect_front_matter;
-
-/// The destination as a browser's URL parser sees it before looking for a
-/// scheme: leading C0 control characters and spaces are stripped, and ASCII
-/// tab and newlines are removed everywhere. (The destination arrives here
-/// already entity-decoded, so `&#106;avascript:` is `javascript:`.)
-fn normalized(destination: &str) -> String {
-    destination
-        .trim_start_matches(|c: char| c.is_ascii_control() || c == ' ')
-        .chars()
-        .filter(|c| !matches!(c, '\t' | '\n' | '\r'))
-        .collect()
-}
-
-/// The lowercase scheme, or `None` for a relative path or a `#fragment`.
-fn scheme(normalized: &str) -> Option<String> {
-    let name = &normalized[..normalized.find(':')?];
-    let mut chars = name.chars();
-    let valid = chars.next().is_some_and(|c| c.is_ascii_alphabetic())
-        && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
-    valid.then(|| name.to_ascii_lowercase())
-}
-
-/// A destination with no scheme that begins with two slashes of either kind
-/// (`//`, `\\`, `/\` or `\/`, after normalisation) is a network-path
-/// reference, not a relative path: a browser reads it as a host, and on Windows
-/// `\\host\share` is a UNC path, which opening makes the OS contact over SMB.
-fn is_network_path(normalized: &str) -> bool {
-    let mut chars = normalized.chars();
-    matches!(
-        (chars.next(), chars.next()),
-        (Some('/' | '\\'), Some('/' | '\\'))
-    )
-}
 
 fn link_destination_allowed(destination: &str) -> bool {
     let normalized = normalized(destination);

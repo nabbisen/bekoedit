@@ -96,6 +96,7 @@ pub fn App() -> Element {
     });
     let mut toasts = use_context_provider(|| Signal::new(Vec::<Toast>::new()));
     let source_sync = use_context_provider(|| Signal::new(SourceSyncState::default()));
+    crate::link_guard::use_link_guard();
     let recovery_pending_at_launch = use_signal(|| has_pending_recovery(&state.read()));
     let recovery_dismissed = use_signal(|| false);
 

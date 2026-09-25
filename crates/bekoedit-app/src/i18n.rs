@@ -115,6 +115,23 @@ fn tr_en(key: &str) -> &'static str {
         "backlinks.empty" => "No backlinks to this document.",
         "backlinks.label" => "Documents linking here",
         "backlinks.count_suffix" => " links",
+        "link.not_followed" => {
+            "Link not opened: following links to other documents from Preview is not supported yet. Open it from the file tree."
+        }
+        "link.no_target" => "This link has no destination.",
+        "link.unsupported_scheme" => "Link not opened: only web and email links can be opened.",
+        "link.network_path" => "Link not opened: it points to another computer.",
+        "link.absolute_path" => {
+            "Link not opened: it is a full file path, not a path inside the workspace."
+        }
+        "link.invalid_path" => "Link not opened: its path is not valid.",
+        "link.no_base" => {
+            "Link not opened: open a document in a workspace to follow links to files."
+        }
+        "link.outside_workspace" => "Link not opened: it points outside the workspace.",
+        "link.not_found" => "Link not opened: the file does not exist.",
+        "link.not_a_document" => "Link not opened: it is not a Markdown file.",
+        "link.open_failed" => "Could not open the link in your browser.",
         "history.title" => "History",
         "history.empty" => "No history entries.",
         "history.label" => "Document history",
@@ -290,6 +307,25 @@ fn tr_ja(key: &str) -> &'static str {
         "backlinks.empty" => "このドキュメントへのリンクはありません。",
         "backlinks.label" => "ここへリンクしているドキュメント",
         "backlinks.count_suffix" => "件のリンク",
+        "link.not_followed" => {
+            "リンクを開きませんでした: プレビューから他のドキュメントへのリンクをたどる機能は、まだありません。ファイルツリーから開いてください。"
+        }
+        "link.no_target" => "このリンクには移動先がありません。",
+        "link.unsupported_scheme" => {
+            "リンクを開きませんでした: 開けるのはウェブとメールのリンクだけです。"
+        }
+        "link.network_path" => "リンクを開きませんでした: 他のコンピュータを指しています。",
+        "link.absolute_path" => {
+            "リンクを開きませんでした: ワークスペース内のパスではなく、完全なファイルパスです。"
+        }
+        "link.invalid_path" => "リンクを開きませんでした: パスが正しくありません。",
+        "link.no_base" => {
+            "リンクを開きませんでした: ファイルへのリンクをたどるには、ワークスペース内のドキュメントを開いてください。"
+        }
+        "link.outside_workspace" => "リンクを開きませんでした: ワークスペースの外を指しています。",
+        "link.not_found" => "リンクを開きませんでした: ファイルが見つかりません。",
+        "link.not_a_document" => "リンクを開きませんでした: Markdownファイルではありません。",
+        "link.open_failed" => "ブラウザーでリンクを開けませんでした。",
         "history.title" => "履歴",
         "history.empty" => "履歴はありません。",
         "history.label" => "ドキュメント履歴",

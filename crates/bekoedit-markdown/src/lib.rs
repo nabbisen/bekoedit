@@ -17,6 +17,7 @@
 //!   they are never silently rewritten.
 
 pub mod block;
+pub mod destination;
 pub mod fingerprint;
 pub mod form;
 pub mod index;
@@ -28,6 +29,7 @@ pub mod sections;
 pub mod trivia;
 
 pub use block::{BlockKind, BlockNode, EditablePolicy, HeadingNode, ListItemNode};
+pub use destination::{DestinationKind, classify_destination, normalized as normalize_destination};
 pub use fingerprint::{BlockFingerprint, BlockId};
 pub use form::{
     FormBlock, FormBlockDisplay, FormBlockEdit, FormEditCommand, FormEditError, FormListItem,

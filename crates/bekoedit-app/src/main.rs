@@ -13,6 +13,7 @@ mod bridge;
 mod components;
 mod error_keys;
 mod i18n;
+mod link_guard;
 mod menu_entry;
 mod persistence;
 mod settings;

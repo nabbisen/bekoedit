@@ -13,11 +13,13 @@
 
 pub mod conflict;
 pub mod editor_text;
+pub mod link_click;
 pub mod save;
 pub mod session;
 pub mod store;
 
 pub use conflict::{ConflictResolution, ConflictState};
+pub use link_click::{ExternalUrl, LinkAction, LinkRefusal, decide_link_click};
 pub use save::{AutosaveScheduler, SaveState};
 pub use session::{DocumentSession, SessionError};
 pub use store::{AppState, StoreError};
