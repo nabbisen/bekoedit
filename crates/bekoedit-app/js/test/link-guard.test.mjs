@@ -1,9 +1,9 @@
 // link_guard.js (task 032): the interception point, on a small DOM fake.
 //
 // The fake models what matters: `window` capture listeners run first, then
-// the "interpreter" (a bubble listener, standing for Dioxus's
-// `handleClickNavigate`), and `stopPropagation` in the capture phase means
-// the bubble listener never runs. The interpreter records a `browser_open`
+// the "interpreter" (a bubble listener on the inner root, standing for
+// Dioxus's `handleClickNavigate`), and `stopPropagation` in the capture phase
+// means the bubble listener never runs. The interpreter records a `browser_open`
 // the way the real one sends it, so "a click on a relative link does not
 // produce a `browser_open` for it" is asserted on the same ordering.
 //
@@ -20,7 +20,8 @@ const source = readFileSync(
   "utf8",
 );
 
-class FakeWindow {
+/** A listener list with a capture and a bubble side. */
+class FakeTarget {
   constructor() {
     this.listeners = [];
   }
@@ -32,7 +33,17 @@ class FakeWindow {
       (l) => !(l.type === type && l.handler === handler && l.capture === (capture === true)),
     );
   }
-  /** Capture listeners, then bubble listeners, unless propagation stops. */
+}
+
+/** `window` above `root`, as in the page: Dioxus's interpreter listens on
+ * `root` (bubble phase), so a listener on `window` runs before it only if it
+ * is a capture listener. Order: window capture, root capture, root bubble,
+ * window bubble. Stopping propagation ends the rest. */
+class FakeWindow extends FakeTarget {
+  constructor() {
+    super();
+    this.root = new FakeTarget();
+  }
   dispatch(event) {
     let stopped = false;
     event.stopPropagation = () => {
@@ -42,8 +53,14 @@ class FakeWindow {
     event.preventDefault = () => {
       event.defaultPrevented = true;
     };
-    for (const phase of [true, false]) {
-      for (const l of [...this.listeners]) {
+    const steps = [
+      [this, true],
+      [this.root, true],
+      [this.root, false],
+      [this, false],
+    ];
+    for (const [target, phase] of steps) {
+      for (const l of [...target.listeners]) {
         if (stopped) return event;
         if (l.type === event.type && l.capture === phase) l.handler(event);
       }
@@ -84,7 +101,7 @@ function setup() {
   // Dioxus's interpreter, as read in dioxus-interpreter-js 0.7.9
   // `handleClickNavigate`: a bubble-phase click listener that cancels the
   // click and sends the raw href of the enclosing <a> for `browser_open`.
-  win.addEventListener("click", (event) => {
+  win.root.addEventListener("click", (event) => {
     const anchor = event.target?.closest?.("a");
     if (anchor) {
       event.preventDefault();

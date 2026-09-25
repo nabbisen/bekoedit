@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use crate::link_click::{LinkAction, LinkRefusal, decide_link_click};
 
 /// A workspace `root/` holding `a.md`, `sub/b.md`, `sub/notes.txt` and
-/// `sub/folder/`, beside `outside/secret.md`, which is not in the workspace.
+/// `sub/folder/` and `sub/dir.md/`, beside `outside/secret.md`, which is not in the workspace.
 struct Fixture {
     _dir: tempfile::TempDir,
     root: PathBuf,
@@ -23,6 +23,8 @@ fn fixture() -> Fixture {
     let root = base.join("root");
     let outside = base.join("outside");
     std::fs::create_dir_all(root.join("sub/folder")).unwrap();
+    // A directory that is named like a document.
+    std::fs::create_dir_all(root.join("sub/dir.md")).unwrap();
     std::fs::create_dir_all(&outside).unwrap();
     std::fs::write(root.join("a.md"), "# a\n").unwrap();
     std::fs::write(root.join("sub/b.md"), "# b\n").unwrap();
@@ -252,6 +254,7 @@ fn only_an_existing_markdown_file_opens() {
     assert_eq!(refused(&fixture, "missing.md"), LinkRefusal::NotFound);
     assert_eq!(refused(&fixture, "notes.txt"), LinkRefusal::NotADocument);
     assert_eq!(refused(&fixture, "folder"), LinkRefusal::NotADocument);
+    assert_eq!(refused(&fixture, "dir.md"), LinkRefusal::NotADocument);
     assert_eq!(refused(&fixture, "."), LinkRefusal::NotADocument);
 }
 
