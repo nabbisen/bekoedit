@@ -93,6 +93,11 @@ d=$(fixture fenced)
 printf '\n```\n[x](../CHANGELOG.md#nope) and [y](../changelog/gone.md)\n```\n' >>"$d/docs/a.md"
 expect_pass "links inside a fenced code block are ignored" "$d"
 
+d=$(fixture inline-code)
+printf '\nAn example, `[text](../changelog/gone.md#nope)`, is not a link.\n' >>"$d/docs/a.md"
+printf '\nAn example, `[text](./path.md)`, is not a link either.\n' >>"$d/changelog/0.1-0.9.md"
+expect_pass "links inside inline code spans are ignored" "$d"
+
 d=$(fixture no-archive)
 rm -rf "$d/changelog"
 sed -i '/^Older releases:/,$d; /^\[0.1 to 0.9\]/d' "$d/CHANGELOG.md"

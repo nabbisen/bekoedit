@@ -40,7 +40,8 @@
 #   "### Added"                 ->  #added   (a second one: #added-1)
 #   "## Keeping it *short*"     ->  #keeping-it-short
 #
-# Links inside fenced code blocks are illustrations, not links, and are skipped.
+# Links inside fenced code blocks and inline code spans are illustrations, not
+# links, and are skipped.
 
 set -u
 export LC_ALL=C
@@ -265,7 +266,8 @@ REPO_URL='https://github.com/nabbisen/bekoedit/blob/(main|HEAD)/'
 # link_targets <file>: every link target in a file, outside fenced code blocks:
 # inline `](target)` and reference definitions `[label]: target`.
 link_targets() {
-  unfenced "$1" | grep -oE '\]\([^)]+\)' | sed 's|^](||; s|)$||'
+  # Inline code spans are examples, not links (`[text](./path.md)`).
+  unfenced "$1" | sed 's/`[^`]*`//g' | grep -oE '\]\([^)]+\)' | sed 's|^](||; s|)$||'
   unfenced "$1" | grep -E '^\[[^]]+\]:[ \t]+[^ \t]+' | sed -E 's/^\[[^]]+\]:[ \t]+([^ \t]+).*/\1/'
 }
 
