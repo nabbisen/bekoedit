@@ -14,6 +14,13 @@
 //!    `UNEXPECTED-OPENER`, so nothing can open a real browser around the stub.
 //!
 //! One test in this file, because it sets process environment variables.
+//!
+//! **It runs only under `CI`.** It calls the real `webbrowser::open`, and its
+//! third case relies on every fallback opener being shimmed. If one is ever
+//! not (a `webbrowser` upgrade that adds an opener, a desktop nobody read for,
+//! the WSL or Flatpak branch), running it on a developer's own desktop would
+//! open a real browser there. That is the same class of risk as code that
+//! initialises a display, so it is CI-only: the Linux CI jobs set `CI`.
 
 #![cfg(target_os = "linux")]
 
@@ -47,6 +54,13 @@ fn on_wsl_or_flatpak() -> bool {
 
 #[test]
 fn stubs_are_the_only_openers_and_see_the_urls_the_scenario_expects() {
+    if std::env::var_os("CI").is_none() {
+        println!(
+            "link_opener_stubs: SKIPPED. It calls the real webbrowser::open, so it runs \
+             only where CI is set (task 033 review, 2026-09-25)."
+        );
+        return;
+    }
     let scripts = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../scripts");
     let dir = tempfile::tempdir().unwrap();
     let stubs = dir.path().join("stubs");
