@@ -36,6 +36,12 @@ pub fn note_start_screen_mounted() {
     }
 }
 
+/// Task 029: keeps the source editor's page traces for a trusted-click run's
+/// failure message; a no-op in every other run.
+pub fn record_source_trace(event: &str, details: &str) {
+    trusted_click::record_source_trace(event, details);
+}
+
 fn start_screen_mounts() -> usize {
     START_SCREEN_MOUNTS.load(Ordering::SeqCst)
 }
