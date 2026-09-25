@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+- Preview no longer renders `javascript:` and similar link destinations as live
+  links. Links and images now pass an allowlist (`http:`, `https:`, relative
+  paths and `#fragments`, `mailto:` for links, and PNG, JPEG, GIF and WebP
+  `data:` images); anything else is shown as its plain text and is never
+  clickable. Your Markdown file is not changed.
+
+### Fixed
+- A `<br>` inside a line, for example in a table cell, now shows as a line break
+  in Preview instead of as the literal text `<br>`.
+
 ## [0.16.0] - 2026-09-25
 
 ### Added

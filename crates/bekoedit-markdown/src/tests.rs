@@ -9,4 +9,5 @@ mod form_tests;
 mod index_tests;
 mod patch_tests;
 mod preservation_tests;
+mod preview_policy_tests;
 mod preview_tests;

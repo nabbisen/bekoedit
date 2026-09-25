@@ -46,8 +46,17 @@ code.
    is compared (`bekoedit_core::conflict::detect`); external changes pause
    autosave and require an explicit user decision. Neither version is
    ever lost silently.
-10. **Preview never executes document HTML.** `render_preview_html`
-    converts every raw HTML event to escaped text.
+10. **Preview never executes document content.** `render_preview_html`
+    shows raw HTML as escaped text, with one stated exception: an inline
+    event that is exactly a bare `<br>`, `<br/>` or `<br />` (ASCII
+    case-insensitive, nothing else) becomes a line break. An HTML *block*
+    is always escaped, even one that is only `<br>`. Link and image
+    destinations pass an allowlist: `http:`, `https:`, relative paths and
+    `#fragments` for both, `mailto:` for links only, and `data:image/png`,
+    `jpeg`, `gif` or `webp` for images only. Any other destination, such as
+    `javascript:`, `vbscript:`, `file:` or `data:image/svg+xml`, is dropped,
+    and the link text or image alt text stays as plain text. This is a
+    projection rule; the document's bytes are never changed.
 
 ## Layering
 
