@@ -143,6 +143,11 @@ fn a_percent_encoded_path_is_decoded_before_it_is_resolved() {
         click(&fixture, "my%20file%20%C3%A9.md"),
         LinkAction::OpenDocument(PathBuf::from("sub/my file é.md"))
     );
+    // An escape at the very end of the destination decodes too.
+    assert_eq!(
+        click(&fixture, "b.m%64"),
+        LinkAction::OpenDocument(PathBuf::from("sub/b.md"))
+    );
     // Decoding must not smuggle a separator past the checks.
     assert_eq!(
         refused(&fixture, "..%2F..%2Foutside%2Fsecret.md"),
