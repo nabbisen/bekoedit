@@ -423,15 +423,29 @@ jobs:
         # Soak: 10 consecutive green runs on `main`, read from the outcome
         # line below (never from this step's masked conclusion), as task
         # 023's was. Promotion to blocking is a separate, later decision.
+        #
+        # Task 033 added a seventh scenario, `link_clicks_reach_only_the_
+        # browser` (a click on every kind of link in Preview; only http(s)
+        # and mailto reach a stub opener). This step's phase set changed, so
+        # its soak RESTARTS at 0 of 10 from the run that first contains it.
         id: release_checks
         continue-on-error: true
         run: |
           failed=0
-          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes; do
+          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser; do
             RELEASE_CHECKS_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-release-checks.XXXXXX")"
             echo "release-checks scenario: $scenario"
+            # Task 033: only this scenario gets stub openers. $BROWSER is the
+            # stub that logs the URL it is given, every other opener
+            # `webbrowser` can fall back to is shimmed on PATH to log
+            # UNEXPECTED-OPENER, and the app is told where the log is.
+            opener_env=()
+            if [ "$scenario" = link_clicks_reach_only_the_browser ]; then
+              STUBS="$(bash scripts/webview-link-opener-stubs.sh "$RELEASE_CHECKS_PARENT/opener-stubs")"
+              opener_env=("BROWSER=$STUBS/browser-stub" "PATH=$STUBS:$PATH" "BEKOEDIT_LINK_OPENER_LOG=$STUBS/opener.log")
+            fi
             timeout 90 xvfb-run -a -s "-screen 0 1280x1024x24" \
-              env NO_AT_BRIDGE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
+              env NO_AT_BRIDGE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 "${opener_env[@]}" \
               ./target/release/bekoedit \
               --webview-release-checks "$RELEASE_CHECKS_PARENT/bekoedit-webview-smoke-profile" "$scenario" \
               || { echo "release-checks scenario FAILED: $scenario"; failed=1; }

@@ -174,8 +174,9 @@ pub(super) fn judge(
         }
         ReleaseScenario::SavePreservesBytes
         | ReleaseScenario::SavePreservesCrlfBytes
-        | ReleaseScenario::ModeSwitchPreservesBytes => {
-            unreachable!("save.rs and mode_switch.rs run these scenarios")
+        | ReleaseScenario::ModeSwitchPreservesBytes
+        | ReleaseScenario::LinkClicksReachOnlyTheBrowser => {
+            unreachable!("save.rs, mode_switch.rs and link_clicks.rs run these scenarios")
         }
     }
     Ok(passed)

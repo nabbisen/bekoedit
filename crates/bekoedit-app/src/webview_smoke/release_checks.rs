@@ -33,6 +33,8 @@ use crate::i18n::Lang;
 mod bytes;
 mod dom;
 mod launch;
+mod link_clicks;
+mod link_judge;
 mod mode_switch;
 mod save;
 mod seed;
@@ -49,6 +51,9 @@ pub enum ReleaseScenario {
     /// Task 027: open a CRLF file in Text Mode, make no edit, switch to
     /// Preview, wait past autosave: the bytes must not change.
     ModeSwitchPreservesBytes,
+    /// Task 033: only `http(s):` and `mailto:` links ever reach an OS opener,
+    /// on the release binary, with a stub opener.
+    LinkClicksReachOnlyTheBrowser,
 }
 
 impl ReleaseScenario {
@@ -60,6 +65,7 @@ impl ReleaseScenario {
             Self::SavePreservesBytes => "save_preserves_bytes",
             Self::SavePreservesCrlfBytes => "save_preserves_crlf_bytes",
             Self::ModeSwitchPreservesBytes => "mode_switch_preserves_bytes",
+            Self::LinkClicksReachOnlyTheBrowser => link_judge::NAME,
         }
     }
 
@@ -71,6 +77,7 @@ impl ReleaseScenario {
             Self::SavePreservesBytes,
             Self::SavePreservesCrlfBytes,
             Self::ModeSwitchPreservesBytes,
+            Self::LinkClicksReachOnlyTheBrowser,
         ]
         .into_iter()
         .find(|scenario| scenario.name() == name)
@@ -78,7 +85,8 @@ impl ReleaseScenario {
             format!(
                 "unknown release-checks scenario {name:?}; expected reopen_usable, \
                  reopen_missing, reopen_disabled, save_preserves_bytes, \
-                 save_preserves_crlf_bytes or mode_switch_preserves_bytes"
+                 save_preserves_crlf_bytes, mode_switch_preserves_bytes or \
+                 link_clicks_reach_only_the_browser"
             )
         })
     }
@@ -95,6 +103,9 @@ pub struct Expectation {
     /// `save_preserves_bytes`: the seeded file and its exact original bytes.
     pub file: Option<std::path::PathBuf>,
     pub original: Vec<u8>,
+    /// `link_clicks_reach_only_the_browser`: the opener stub's log, whose path
+    /// CI passes in `BEKOEDIT_LINK_OPENER_LOG`.
+    pub opener_log: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug)]
@@ -149,6 +160,9 @@ pub fn WebViewReleaseChecksDriver() -> Element {
                 ReleaseScenario::ModeSwitchPreservesBytes => {
                     mode_switch::run(&terminal, &desktop, state).await
                 }
+                ReleaseScenario::LinkClicksReachOnlyTheBrowser => {
+                    link_clicks::run(&terminal, &desktop, toasts, lang).await
+                }
                 _ => launch::run(&terminal, state, toasts, lang).await,
             };
             match outcome.and_then(|checks| terminal.accept().map(|()| checks)) {
@@ -168,5 +182,7 @@ pub fn WebViewReleaseChecksDriver() -> Element {
     rsx! {}
 }
 
+#[cfg(test)]
+mod link_tests;
 #[cfg(test)]
 mod tests;

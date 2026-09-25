@@ -26,6 +26,7 @@ fn expectation() -> Expectation {
         older_workspace: Some(PathBuf::from("/ws/older")),
         file: None,
         original: Vec::new(),
+        opener_log: None,
     }
 }
 
@@ -63,6 +64,7 @@ fn scenarios_parse_by_name_and_reject_anything_else() {
         "save_preserves_bytes",
         "save_preserves_crlf_bytes",
         "mode_switch_preserves_bytes",
+        "link_clicks_reach_only_the_browser",
     ] {
         assert_eq!(ReleaseScenario::parse(name).unwrap().name(), name);
     }

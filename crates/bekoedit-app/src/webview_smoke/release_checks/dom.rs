@@ -62,3 +62,37 @@ pub(super) async fn preview_selected() -> Result<bool, String> {
     )
     .await
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub(super) struct PreviewLink {
+    pub text: String,
+    pub href: String,
+}
+
+/// Every anchor in the rendered Preview, with its text and its `href`
+/// attribute exactly as the page holds it.
+pub(super) async fn preview_links() -> Result<Vec<PreviewLink>, String> {
+    returned(
+        "Array.from(document.querySelectorAll('article.preview a')).map((a) => \
+         ({ text: a.textContent, href: a.getAttribute('href') ?? '' }))",
+    )
+    .await
+}
+
+/// Adds `<p><a href=…>text</a></p>` to the Preview article, so a click can be
+/// sent to a link the renderer would never produce (task 033: a network-path
+/// `href`, which task 030 drops at render time). `false` if there is no
+/// Preview article.
+pub(super) async fn inject_preview_anchor(text: &str, href: &str) -> Result<bool, String> {
+    let text = crate::bridge::js_string_literal(text);
+    let href = crate::bridge::js_string_literal(href);
+    returned(&format!(
+        "(() => {{ const root = document.querySelector('article.preview'); \
+         if (!root) return false; \
+         const p = document.createElement('p'); \
+         const a = document.createElement('a'); \
+         a.setAttribute('href', {href}); a.textContent = {text}; \
+         p.appendChild(a); root.appendChild(p); return true; }})()"
+    ))
+    .await
+}

@@ -10,9 +10,14 @@ use bekoedit_ui_contract::EditorMode;
 use crate::settings::AppSettings;
 use crate::webview_smoke::SmokeProfile;
 
+use super::link_judge::{NOTE, NOTE_FILE, OTHER_FILE};
 use super::{Expectation, ReleaseChecksTerminal, ReleaseScenario};
 
 pub(super) const SAVE_FILE: &str = "note.md";
+
+/// CI creates the opener stubs and their log before the launch, and tells the
+/// app where the log is with this variable (`link_clicks_reach_only_the_browser`).
+pub(super) const OPENER_LOG_ENV: &str = "BEKOEDIT_LINK_OPENER_LOG";
 
 /// Typed into the seeded file by the save scenario. Absent from the original.
 pub(super) const EDIT_MARKER: &str = "ZQ7";
@@ -112,6 +117,18 @@ pub(in crate::webview_smoke) fn prepare(
                 None,
             )
         }
+        ReleaseScenario::LinkClicksReachOnlyTheBrowser => (
+            // `other.md` really exists, so a relative link that leaked would
+            // have a target for the opener to be given.
+            make_workspace(
+                &root,
+                "link-project",
+                &[(NOTE_FILE, NOTE.as_bytes()), (OTHER_FILE, b"# other\n")],
+            )?,
+            "Link Project".to_string(),
+            Vec::new(),
+            None,
+        ),
         ReleaseScenario::SavePreservesBytes
         | ReleaseScenario::SavePreservesCrlfBytes
         | ReleaseScenario::ModeSwitchPreservesBytes => {
@@ -131,7 +148,12 @@ pub(in crate::webview_smoke) fn prepare(
         reopen_last_workspace: scenario != ReleaseScenario::ReopenDisabled,
         // Same reason as `shell_behaviour::prepare`: the save scenario needs a
         // CodeMirror text view to type into.
-        default_mode: EditorMode::Text,
+        default_mode: if scenario == ReleaseScenario::LinkClicksReachOnlyTheBrowser {
+            // The links are clicked in the rendered note.
+            EditorMode::Preview
+        } else {
+            EditorMode::Text
+        },
         ..Default::default()
     };
     profile
@@ -149,12 +171,24 @@ pub(in crate::webview_smoke) fn prepare(
             .map_err(|error| format!("cannot rename the seeded workspace away: {error}"))?;
     }
 
+    let opener_log = if scenario == ReleaseScenario::LinkClicksReachOnlyTheBrowser {
+        Some(std::env::var_os(OPENER_LOG_ENV).map(PathBuf::from).ok_or_else(|| {
+            format!(
+                "{}: {OPENER_LOG_ENV} is not set; run scripts/webview-link-opener-stubs.sh first \
+                 and pass its log path and BROWSER through the environment",
+                scenario.name()
+            )
+        })?)
+    } else {
+        None
+    };
     let expectation = Expectation {
         workspace,
         display_name,
         older_workspace,
         file,
         original,
+        opener_log,
     };
     Ok((profile, ReleaseChecksTerminal::new(scenario, expectation)))
 }
