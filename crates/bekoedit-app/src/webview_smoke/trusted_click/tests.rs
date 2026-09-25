@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use super::*;
 use crate::webview_smoke::transport::{MessageKind, PhaseMessage, SMOKE_PROTOCOL_VERSION};
 

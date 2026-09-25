@@ -333,11 +333,21 @@ async fn arm_focus_guard(
         removal_policy: origin.removal_policy,
     };
     let payload = serde_json::to_string(&request).ok()?;
-    let mut eval = document::eval(&format!(
+    let mut eval = document::eval(&arm_focus_guard_js(&payload));
+    let payload = eval.recv::<String>().await.ok()?;
+    decode_guard_acknowledgement(&payload)
+}
+
+/// The script that arms a focus guard. `payload` is the serialized
+/// `ArmRequest`; it reaches the page as a string literal the script
+/// `JSON.parse`s (task 031), not as JavaScript source.
+fn arm_focus_guard_js(payload: &str) -> String {
+    let payload = crate::bridge::js_string_literal(payload);
+    format!(
         r#"
         {FOCUS_GUARD_BOOTSTRAP}
         (async () => {{
-            const request = {payload};
+            const request = JSON.parse({payload});
             const guards = window.__bkFocusGuards;
             if (!guards
                 || guards.protocolVersion !== {FOCUS_GUARD_PROTOCOL_VERSION}
@@ -353,9 +363,7 @@ async fn arm_focus_guard(
             return null;
         }})();
         "#,
-    ));
-    let payload = eval.recv::<String>().await.ok()?;
-    decode_guard_acknowledgement(&payload)
+    )
 }
 
 fn decode_guard_acknowledgement(payload: &str) -> Option<GuardArmed> {
@@ -376,14 +384,21 @@ pub(crate) fn cancel_focus_guards_through(token: u64) {
 
 pub(crate) fn consume_focus_guard(token: u64, identity: EditorIdentity, fingerprint: &str) {
     let identity = serde_json::to_string(&identity).expect("editor identity serializes");
-    let fingerprint = serde_json::to_string(fingerprint).expect("focus fingerprint serializes");
-    document::eval(&format!(
+    document::eval(&consume_focus_guard_js(token, &identity, fingerprint));
+}
+
+/// The script that consumes a focus guard: the identity (serialized JSON)
+/// and the fingerprint reach the page as string literals (task 031).
+fn consume_focus_guard_js(token: u64, identity: &str, fingerprint: &str) -> String {
+    let identity = crate::bridge::js_string_literal(identity);
+    let fingerprint = crate::bridge::js_string_literal(fingerprint);
+    format!(
         r#"
         if (window.__bk && typeof window.__bk.consumeFocusGuard === "function") {{
-            window.__bk.consumeFocusGuard({{ token: {token}, identity: {identity}, fingerprint: {fingerprint} }});
+            window.__bk.consumeFocusGuard({{ token: {token}, identity: JSON.parse({identity}), fingerprint: {fingerprint} }});
         }}
         "#,
-    ));
+    )
 }
 
 fn mode_name(mode: EditorMode) -> &'static str {

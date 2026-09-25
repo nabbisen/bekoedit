@@ -366,13 +366,22 @@ jobs:
         # separate, later review decision -- this comment only starts the
         # clock.
         #
-        # Known, unexplained flake (2026-09-23 review §2): run 35810114012
-        # timed out at tree_row_focus after 97 retries (a real 10 s
-        # internal deadline, not the as_str() bug above -- tree_row_focus
-        # is never the terminal phase, so its own name was never wrong); a
-        # rerun of the identical commit passed cleanly. Not root-caused,
-        # has not recurred since. Read the soak against this, not in
-        # ignorance of it.
+        # Known flake, not yet explained, seen three times with one
+        # signature: an XTEST click on child.md's tree row, about 95 `ok=true`
+        # pending exchanges, then `timed out at
+        # tree_row_trusted_click_focused_editor` at the driver's own 10 s
+        # deadline (tree_row_focus is never the terminal phase, so this is
+        # not the as_str() bug above). The sightings, by run id:
+        #   35810114012  the original (a rerun of the same commit passed);
+        #   36008866139  a throwaway run (a mutation that cannot touch it);
+        #   36077020607  `main`, task 028's merge push.
+        # Everything up to the click was identical in the failing and the
+        # passing runs (window focus, target rect, screen point, xdotool
+        # status, timing), so "the click missed" has no support. Task 029
+        # makes the timeout say what the page and the app looked like, and
+        # the next sighting names the case. The soak was RESET on 2026-09-25
+        # and stays at 0 of 10 until task 029 concludes; the records below
+        # are history, from before the reset.
         # Soak record (append here, do not replace):
         # 1/10 green -- 35847306100 (2026-09-23), the merge push itself
         # (task 023, 56b2f46).

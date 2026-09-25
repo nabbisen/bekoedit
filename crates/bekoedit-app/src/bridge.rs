@@ -17,6 +17,23 @@ pub fn trace(event: &str, details: impl Display) {
     }
 }
 
+/// A JavaScript **string literal** for `text`, safe to paste into evaluated
+/// source (task 031). The one helper every Rust-to-page interpolation of JSON
+/// goes through: serialize the payload, pass *that string* here, and have the
+/// page `JSON.parse` it -- so the payload reaches the page as data, not as
+/// program text the JavaScript parser must tokenize.
+///
+/// `serde_json` escapes `"`, `\` and the C0 controls, but leaves U+2028 and
+/// U+2029 literal. ES2019 made both legal inside string literals, so that is
+/// correct on today's engines only by an engine-version detail; they are
+/// emitted as `\u2028` and `\u2029` so correctness does not depend on it.
+pub fn js_string_literal(text: &str) -> String {
+    serde_json::to_string(text)
+        .expect("a string serializes")
+        .replace('\u{2028}', "\\u2028")
+        .replace('\u{2029}', "\\u2029")
+}
+
 /// JavaScript that installs a named relay function and keeps the eval
 /// context alive. `relay_name` is the `window` property to set
 /// (e.g. `"__bk_relay"` or `"__bk_shortcut_relay"`).
@@ -87,5 +104,17 @@ mod tests {
         assert!(install.contains("relayGenerationReady"));
         assert!(clear.contains("relay.__bkGeneration === 41"));
         assert!(clear.contains("delete window.__test_relay"));
+    }
+
+    #[test]
+    fn a_literal_escapes_both_line_separators_and_round_trips() {
+        let text = "a\u{2028}b\u{2029}c \"q\" \\ </script> \u{1} é日本🙂\r\n";
+        let literal = js_string_literal(text);
+        assert!(literal.starts_with('"') && literal.ends_with('"'));
+        assert!(literal.contains("\\u2028") && literal.contains("\\u2029"));
+        assert!(!literal.contains('\u{2028}') && !literal.contains('\u{2029}'));
+        // A JSON parser (which follows the same escape rules as a JS string
+        // literal for these) recovers the original exactly.
+        assert_eq!(serde_json::from_str::<String>(&literal).unwrap(), text);
     }
 }

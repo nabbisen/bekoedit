@@ -50,28 +50,30 @@
 //! on -- so `TreeRowFocus`'s click is a real, first-ever open, not a
 //! reopen of whatever the harness starts with.
 
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::Duration;
 
 use dioxus::desktop::DesktopContext;
 use dioxus::prelude::*;
 
-use bekoedit_fs::RecentWorkspaces;
+use bekoedit_core::AppState;
 use bekoedit_ui_contract::EditorMode;
 
-use crate::persistence::AppPersistence;
-use crate::settings::AppSettings;
 use crate::source_sync::SourceSyncState;
 
-use super::SmokeProfile;
 use super::transport::{
     self, CompletedProbe, DriverResult, MessageKind, PhaseMessage, PinnedExchange,
     SMOKE_PROTOCOL_VERSION, reject_with_reason,
 };
 
+mod diagnose;
+pub(super) use diagnose::record_source_trace;
+
 mod phase;
 use phase::{EXPECTED_MILESTONES, TERMINAL_STAGE, TrustedClickPhase};
+
+mod seed;
+pub(in crate::webview_smoke) use seed::prepare;
 
 mod settle;
 use settle::{SETTLE_GATE, unsettled_lifecycle_state, wait_until_settled};
@@ -246,61 +248,6 @@ impl TrustedClickTerminal {
     }
 }
 
-pub(super) struct PreparedTrustedClick {
-    pub(super) root: PathBuf,
-    pub(super) persistence: AppPersistence,
-}
-
-/// Creates an isolated profile and seeds the two-file fixture: `parent.md`
-/// links to `child.md`, so `find_backlinks` reports `parent.md` once
-/// `child.md` is open and the backlinks panel is asked to scan. Neither
-/// file is opened here -- `TreeRowFocus`'s click is the first open, same
-/// as `shell_behaviour.rs`'s `EnterOpens` contract relies on.
-pub(super) fn prepare(requested_root: &std::path::Path) -> Result<PreparedTrustedClick, String> {
-    let profile = SmokeProfile::create(requested_root)?;
-
-    let workspace = profile
-        .persistence
-        .isolated_paths()
-        .expect("trusted-click persistence is always Isolated")
-        .root()
-        .join("workspace");
-    std::fs::create_dir(&workspace)
-        .map_err(|error| format!("cannot create trusted-click workspace: {error}"))?;
-    std::fs::write(workspace.join("child.md"), "# child\n")
-        .map_err(|error| format!("cannot seed trusted-click child.md: {error}"))?;
-    std::fs::write(
-        workspace.join("parent.md"),
-        "# parent\n\nSee [child](./child.md) for details.\n",
-    )
-    .map_err(|error| format!("cannot seed trusted-click parent.md: {error}"))?;
-
-    let settings = AppSettings {
-        reopen_last_workspace: true,
-        // See shell_behaviour.rs's `prepare`: AppState's real default is
-        // Form (settings.rs), but §B's two phases need a CodeMirror text
-        // view to assert focus into. §C then switches into Form itself as
-        // its own setup click, so this only has to be right for §B.
-        default_mode: EditorMode::Text,
-        ..Default::default()
-    };
-    profile
-        .persistence
-        .save_settings(&settings)
-        .map_err(|error| format!("cannot seed trusted-click settings: {error}"))?;
-
-    let mut recents = RecentWorkspaces::default();
-    recents.record(workspace, "workspace".to_string(), 1);
-    recents
-        .save(&profile.persistence.recents_file())
-        .map_err(|error| format!("cannot seed trusted-click recents: {error}"))?;
-
-    Ok(PreparedTrustedClick {
-        root: profile.root,
-        persistence: profile.persistence,
-    })
-}
-
 /// Adapts the shared transport to this run's own phase semantics, the
 /// same shape as `shell_behaviour.rs`'s own adapter.
 async fn run_trusted_click_phase(
@@ -318,6 +265,7 @@ async fn run_trusted_click_sequence(
     desktop: &DesktopContext,
     terminal: &TrustedClickTerminal,
     mut busy_state: impl FnMut() -> Option<String>,
+    mut describe_app: impl FnMut() -> String,
 ) -> Result<DriverResult, String> {
     let mut machine = TrustedClickMachine::new();
     let mut exchange_id = 1_u64;
@@ -338,6 +286,7 @@ async fn run_trusted_click_sequence(
         wait_until_settled(phase, SETTLE_GATE, &mut busy_state).await?;
         if clicked_for != Some(phase) {
             perform_trusted_clicks(desktop, phase).await?;
+            diagnose::note(&format!("{}: click sent", phase.as_str()));
             clicked_for = Some(phase);
         }
         // Timed and logged unconditionally, success or failure -- this is
@@ -364,7 +313,9 @@ async fn run_trusted_click_sequence(
         )?;
         machine.apply_completed(exchange_id, &completed.message)?;
         release = Some(completed.pin);
-        if let Some(result) = completed.message.result {
+        if let Some(mut result) = completed.message.result {
+            // Task 029: a failure carries what the app knew, not only the page.
+            diagnose::enrich_failure(&mut result, &describe_app());
             terminal.accept(&result)?;
             return Ok(result);
         }
@@ -379,6 +330,8 @@ async fn run_trusted_click_sequence(
 pub fn WebViewTrustedClickDriver() -> Element {
     let desktop: DesktopContext = consume_context();
     let sync = use_context::<Signal<SourceSyncState>>();
+    let app_state = use_context::<Signal<AppState>>();
+    let mode = use_context::<Signal<EditorMode>>();
     let terminal = super::launch_config()
         .trusted_click
         .clone()
@@ -387,6 +340,8 @@ pub fn WebViewTrustedClickDriver() -> Element {
         let terminal = terminal.clone();
         let desktop = desktop.clone();
         async move {
+            diagnose::start_clock();
+            let describe_app = diagnose::describer(app_state, mode, sync);
             println!("bekoedit task 023 trusted-click run: §B/§C via real XTEST clicks");
             // A peek, not a read: the gate must not subscribe this
             // component to the controller (`shell_behaviour.rs`'s own
@@ -399,7 +354,7 @@ pub fn WebViewTrustedClickDriver() -> Element {
                 Ok(state) => unsettled_lifecycle_state(&state),
                 Err(_) => Some("borrowed elsewhere".to_string()),
             };
-            match run_trusted_click_sequence(&desktop, &terminal, busy_state).await {
+            match run_trusted_click_sequence(&desktop, &terminal, busy_state, describe_app).await {
                 Ok(result) => {
                     for milestone in &result.milestones {
                         println!("  ✓ {milestone}");

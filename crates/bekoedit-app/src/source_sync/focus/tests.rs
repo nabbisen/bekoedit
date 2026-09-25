@@ -137,3 +137,27 @@ fn eager_guard_bundle_owns_arm_and_cancel_before_editor_bootstrap() {
     assert!(!FOCUS_GUARD_BOOTSTRAP.contains("CodeMirror"));
     assert_eq!(FOCUS_GUARD_PROTOCOL_VERSION, 2);
 }
+
+// ---- Task 031: the focus scripts carry their JSON as string literals ------
+
+#[test]
+fn the_arm_script_parses_its_request_from_a_string_literal() {
+    let request = serde_json::json!({ "token": 3, "launchId": "tree:a\u{2028}b\u{2029}c\"d\\e" });
+    let script = arm_focus_guard_js(&serde_json::to_string(&request).unwrap());
+    assert!(script.contains("const request = JSON.parse(\""), "{script}");
+    assert!(script.contains("\\u2028") && script.contains("\\u2029"));
+    assert!(!script.contains('\u{2028}') && !script.contains('\u{2029}'));
+    assert!(!script.contains("const request = {"));
+}
+
+#[test]
+fn the_consume_script_parses_its_identity_and_quotes_its_fingerprint() {
+    let identity = serde_json::to_string(&serde_json::json!({ "epoch": 2 })).unwrap();
+    let script = consume_focus_guard_js(7, &identity, "fp\u{2028}\"\\");
+    assert!(script.contains("identity: JSON.parse(\""), "{script}");
+    assert!(
+        script.contains("fingerprint: \"fp\\u2028\\\"\\\\\""),
+        "{script}"
+    );
+    assert!(!script.contains('\u{2028}'));
+}

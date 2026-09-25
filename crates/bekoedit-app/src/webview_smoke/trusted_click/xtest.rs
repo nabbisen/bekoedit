@@ -73,10 +73,13 @@ struct LocateResponse {
 /// own repeated polling happened to land after layout settled) -- a
 /// single nonzero reading is not evidence the layout has finished.
 fn render_locate_script(payload: &str) -> String {
+    // Task 031: the request is a string literal the script `JSON.parse`s,
+    // like every other Rust-to-page payload.
+    let payload = crate::bridge::js_string_literal(payload);
     format!(
         r#"
         return (async () => {{
-            const request = {payload};
+            const request = JSON.parse({payload});
             const deadline = performance.now() + request.timeoutMs;
             const sameRect = (a, b) =>
                 a !== null && b !== null &&
