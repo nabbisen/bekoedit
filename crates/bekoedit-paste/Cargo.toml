@@ -1,0 +1,21 @@
+[package]
+name        = "bekoedit-paste"
+description = "Clipboard HTML to Markdown for bekoedit's paste path: a pure converter with size, panic and time guards (RFC-046)."
+readme      = "../../README.md"
+version.workspace       = true
+edition.workspace       = true
+rust-version.workspace  = true
+license.workspace       = true
+authors.workspace       = true
+repository.workspace    = true
+
+[dependencies]
+# Exactly this, and nothing else (RFC-046 §5.3, §6.2). An exact pin, not a caret:
+# two consecutive patch releases of mdka changed our output. A bump is a
+# deliberate change, re-run against the fixture corpus.
+mdka                        = { version = "=2.5.1", default-features = false }
+thiserror                   = { workspace = true }
+
+[dev-dependencies]
+# For the structural raw-HTML test only (RFC-046 §5.3). Never shipped.
+pulldown-cmark              = { workspace = true }

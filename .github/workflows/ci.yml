@@ -58,6 +58,7 @@ jobs:
               "bekoedit-core": "1.88",
               "bekoedit-fs": None,
               "bekoedit-markdown": "1.88",
+              "bekoedit-paste": "1.88",
               "bekoedit-ui-contract": None,
           }
           if actual != expected:

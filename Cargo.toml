@@ -5,6 +5,7 @@ members = [
     "crates/bekoedit-core",
     "crates/bekoedit-fs",
     "crates/bekoedit-markdown",
+    "crates/bekoedit-paste",
     "crates/bekoedit-ui-contract",
 ]
 # GUI crate is excluded from default builds so core logic stays testable headlessly.
@@ -12,6 +13,7 @@ default-members = [
     "crates/bekoedit-core",
     "crates/bekoedit-fs",
     "crates/bekoedit-markdown",
+    "crates/bekoedit-paste",
     "crates/bekoedit-ui-contract",
 ]
 
@@ -27,6 +29,7 @@ repository              = "https://github.com/nabbisen/bekoedit"
 bekoedit-core               = { version = "0.16.1", path = "crates/bekoedit-core" }
 bekoedit-fs                 = { version = "0.16.1", path = "crates/bekoedit-fs" }
 bekoedit-markdown           = { version = "0.16.1", path = "crates/bekoedit-markdown" }
+bekoedit-paste              = { version = "0.16.1", path = "crates/bekoedit-paste" }
 bekoedit-ui-contract        = { version = "0.16.1", path = "crates/bekoedit-ui-contract" }
 
 dioxus                      = "0.7"

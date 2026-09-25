@@ -1,1 +1,4 @@
 packaging/** linguist-detectable=false
+
+# RFC-046 slice 1: fixture bytes are kept as written (a checkout must not rewrite line endings)
+crates/bekoedit-paste/tests/fixtures/** -text

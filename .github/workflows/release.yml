@@ -214,10 +214,11 @@ jobs:
               "bekoedit-core",
               "bekoedit-fs",
               "bekoedit-markdown",
+              "bekoedit-paste",
               "bekoedit-ui-contract",
           }
           names = [package["name"] for package in packages]
-          if len(packages) != 5 or set(names) != expected_names or len(names) != len(set(names)):
+          if len(packages) != 6 or set(names) != expected_names or len(names) != len(set(names)):
               raise SystemExit(f"unexpected workspace packages: {sorted(names)}")
           wrong = sorted(
               f'{package["name"]}={package["version"]}'
