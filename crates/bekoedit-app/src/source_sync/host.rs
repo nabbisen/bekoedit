@@ -69,7 +69,8 @@ pub fn SourceEditorControllerHost() -> Element {
                             *focus_token,
                             focus_guard_diagnostic.as_ref(),
                         );
-                        crate::webview_smoke::record_source_trace(event, &details);
+                        // Reaches the trusted-click log through `bridge::trace`
+                        // (task 036), so it is recorded once, not twice.
                         bridge::trace(event, details);
                     }
                     let active_focus_token = sync.read().active_command_focus_token();

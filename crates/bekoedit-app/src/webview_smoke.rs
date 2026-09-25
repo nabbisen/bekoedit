@@ -36,10 +36,20 @@ pub fn note_start_screen_mounted() {
     }
 }
 
-/// Task 029: keeps the source editor's page traces for a trusted-click run's
-/// failure message; a no-op in every other run.
-pub fn record_source_trace(event: &str, details: &str) {
+/// Task 029, extended by task 036: keeps the source editor's focus traces, the
+/// page's and the Rust side's (`bridge::trace`), for a trusted-click run; a
+/// no-op in every other run, and it formats nothing there.
+pub fn record_source_trace(event: &str, details: impl std::fmt::Display) {
     trusted_click::record_source_trace(event, details);
+}
+
+/// Whether this process is a trusted-click run. Unlike `launch_config()`, it
+/// does not panic when no configuration was installed (unit tests, and any
+/// caller that runs before `main` installs it).
+fn in_trusted_click_run() -> bool {
+    LAUNCH_CONFIG
+        .get()
+        .is_some_and(|config| config.trusted_click.is_some())
 }
 
 fn start_screen_mounts() -> usize {

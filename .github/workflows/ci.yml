@@ -373,7 +373,7 @@ jobs:
         # separate, later review decision -- this comment only starts the
         # clock.
         #
-        # Known flake, not yet explained, seen three times with one
+        # Known flake, not yet explained, seen four times with one
         # signature: an XTEST click on child.md's tree row, about 95 `ok=true`
         # pending exchanges, then `timed out at
         # tree_row_trusted_click_focused_editor` at the driver's own 10 s
@@ -381,12 +381,17 @@ jobs:
         # not the as_str() bug above). The sightings, by run id:
         #   35810114012  the original (a rerun of the same commit passed);
         #   36008866139  a throwaway run (a mutation that cannot touch it);
-        #   36077020607  `main`, task 028's merge push.
+        #   36077020607  `main`, task 028's merge push;
+        #   36133119925  `main`, task 035's merge push, the first with task 029's
+        #                diagnosis: it narrowed to "the focus claim was not made
+        #                or not reported" (case d), and could not say which.
         # Everything up to the click was identical in the failing and the
         # passing runs (window focus, target rect, screen point, xdotool
         # status, timing), so "the click missed" has no support. Task 029
         # makes the timeout say what the page and the app looked like, and
-        # the next sighting names the case. The soak was RESET on 2026-09-25
+        # the next sighting names the case. Task 036 adds the Rust side's own
+        # focus traces to that log and prints it on EVERY run, pass or fail,
+        # under `trusted-click focus trace (N entries):`. The soak was RESET on 2026-09-25
         # and stays at 0 of 10 until task 029 concludes; the records below
         # are history, from before the reset.
         # Soak record (append here, do not replace):

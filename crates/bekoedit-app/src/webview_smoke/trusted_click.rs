@@ -354,7 +354,11 @@ pub fn WebViewTrustedClickDriver() -> Element {
                 Ok(state) => unsettled_lifecycle_state(&state),
                 Err(_) => Some("borrowed elsewhere".to_string()),
             };
-            match run_trusted_click_sequence(&desktop, &terminal, busy_state, describe_app).await {
+            let outcome =
+                run_trusted_click_sequence(&desktop, &terminal, busy_state, describe_app).await;
+            // Task 036: the focus trace, on every run, before the verdict line.
+            diagnose::print_final_trace();
+            match outcome {
                 Ok(result) => {
                     for milestone in &result.milestones {
                         println!("  ✓ {milestone}");

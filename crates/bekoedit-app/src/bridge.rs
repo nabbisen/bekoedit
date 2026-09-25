@@ -12,6 +12,10 @@ use std::fmt::Display;
 const SOURCE_TRACE_ENV: &str = "BEKOEDIT_SOURCE_TRACE";
 
 pub fn trace(event: &str, details: impl Display) {
+    // Task 036: in a trusted-click run, `source.focus.*` events also go to that
+    // run's log (a no-op, and no formatting, in every other run), so the whole
+    // focus path is visible, not only the half the page reports.
+    crate::webview_smoke::record_source_trace(event, &details);
     if std::env::var_os(SOURCE_TRACE_ENV).is_some() {
         eprintln!("[bekoedit-source-trace] {event} {details}");
     }
