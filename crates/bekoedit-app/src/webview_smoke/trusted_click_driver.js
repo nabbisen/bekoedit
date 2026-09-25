@@ -111,6 +111,64 @@ return (async () => {
     );
   };
 
+  // Task 029: what the page looks like, in one line, so a timeout can say
+  // which of "the click never landed", "no document opened", "the editor never
+  // became ready", "focus was refused" or "focus was lost" it was. Read only
+  // by `observe` and `timeoutMessage`; it changes nothing on the page.
+  const describeElement = (element) => {
+    if (!element) return "none";
+    const tag = String(element.tagName ?? "element").toLowerCase();
+    const id = element.id ? `#${element.id}` : "";
+    const classes = element.className
+      ? `.${String(element.className).trim().split(/\s+/).join(".")}`
+      : "";
+    return `${tag}${id}${classes}`;
+  };
+  const describeState = () => {
+    const view = window.__bk?._view;
+    const host = document.querySelector('[data-source-focus-launch-region="text"]');
+    const active = document.activeElement ?? null;
+    const fileName = document.querySelector(".file-name")?.textContent?.trim() ?? null;
+    const rows = [...(document.querySelectorAll?.(".tree-row.tree-file") ?? [])]
+      .map((row) => `${row.textContent?.trim()}(selected=${row.getAttribute?.("aria-selected")})`)
+      .join(",");
+    const modeTabs = [...(document.querySelectorAll?.('[role="tab"][aria-selected="true"]') ?? [])]
+      .map((tab) => tab.getAttribute?.("data-source-focus-launch"))
+      .join(",");
+    const status = host?.querySelector?.(".source-editor-status")?.textContent?.trim() ?? null;
+    return [
+      `document.hasFocus()=${document.hasFocus?.()}`,
+      `activeElement=${describeElement(active)} inEditorHost=${Boolean(active && host?.contains?.(active))}`,
+      `openFile=${fileName} treeRows=[${rows}] selectedModeTab=${modeTabs || "none"}`,
+      `editor: view=${Boolean(view)} connected=${view?.dom?.isConnected} hasFocus=${view?.hasFocus} ` +
+        `host=${Boolean(host)} statusMarker=${status}`,
+    ].join("; ");
+  };
+  // Records the state at the first poll after a phase's click, and the first
+  // time it differs, so a timeout can say where the wait started and where it
+  // ended. Keyed by phase, so each phase starts its own record.
+  const observe = () => {
+    const now = describeState();
+    const watch = state.watch;
+    if (watch?.phase !== requestedPhase) {
+      state.watch = { phase: requestedPhase, firstAt: performance.now(), first: now, changedAt: null, changed: null };
+    } else if (watch.changedAt === null && now !== watch.first) {
+      watch.changedAt = performance.now();
+      watch.changed = now;
+    }
+  };
+  const timeoutMessage = (stage) => {
+    const watch = state.watch;
+    const changed =
+      watch?.changedAt == null
+        ? "no change in the whole wait"
+        : `first change ${Math.round(watch.changedAt - watch.firstAt)} ms after the first poll, to: ${watch.changed}`;
+    return (
+      `timed out at ${stage}. At the first poll after the click: ${watch?.first ?? "not recorded"}. ` +
+      `At the timeout: ${describeState()}. ${changed}`
+    );
+  };
+
   const createState = () => {
     const state = {
       protocolVersion: 1,
@@ -169,6 +227,7 @@ return (async () => {
         `phase mismatch: requested ${requestedPhase}, current ${state.phase}`,
       );
     }
+    observe();
 
     if (requestedPhase === "proof_of_trust") {
       // The Rust side has already sent a real XTEST click at
@@ -176,7 +235,7 @@ return (async () => {
       // requested. A synthetic click would not do this: browsers withhold
       // the default focus action from an untrusted, script-dispatched
       // click event, so document.activeElement would not move.
-      if (timedOut()) throw new Error("timed out at trusted_click_focused_default_target");
+      if (timedOut()) throw new Error(timeoutMessage("trusted_click_focused_default_target"));
       const trigger = document.getElementById("app-menu-trigger");
       if (document.activeElement !== trigger) {
         outgoing = { kind: "pending" };
@@ -191,7 +250,7 @@ return (async () => {
     } else if (requestedPhase === "tree_row_focus") {
       // Rust has already sent a real XTEST click at child.md's tree-row
       // rect. §B item 1: the editor takes focus.
-      if (timedOut()) throw new Error("timed out at tree_row_trusted_click_focused_editor");
+      if (timedOut()) throw new Error(timeoutMessage("tree_row_trusted_click_focused_editor"));
       if (!editorFocused("child.md")) {
         outgoing = { kind: "pending" };
       } else {
@@ -206,7 +265,7 @@ return (async () => {
       // Rust has already opened the backlinks panel and sent a real XTEST
       // click at the backlink button's rect. §B item 2: the editor takes
       // focus, on parent.md (the backlink's source document).
-      if (timedOut()) throw new Error("timed out at backlink_trusted_click_focused_editor");
+      if (timedOut()) throw new Error(timeoutMessage("backlink_trusted_click_focused_editor"));
       if (!editorFocused("parent.md")) {
         outgoing = { kind: "pending" };
       } else {
@@ -223,7 +282,7 @@ return (async () => {
       // XTEST click, then sent a second real XTEST click at the Text
       // mode tab's rect. §C, the check this file exists for: the editor
       // takes focus. Terminal.
-      if (timedOut()) throw new Error("timed out at mode_tab_trusted_click_focused_editor");
+      if (timedOut()) throw new Error(timeoutMessage("mode_tab_trusted_click_focused_editor"));
       const active = document.querySelector(
         '[data-source-focus-launch="mode-text"].active[aria-selected="true"]',
       );

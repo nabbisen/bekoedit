@@ -31,8 +31,15 @@ export class FakeElement {
     nodeType = 1, // Node.ELEMENT_NODE
     dispatchResult = true,
     textContent = "",
+    tagName = "DIV",
+    id = "",
+    className = "",
   } = {}) {
     this.nodeType = nodeType;
+    this.tagName = tagName;
+    this.id = id;
+    this.className = className;
+    this._descendants = new Set();
     this.dispatchResult = dispatchResult;
     this.textContent = textContent;
     this.dispatchedEvents = [];
@@ -52,6 +59,17 @@ export class FakeElement {
 
   getAttribute(name) {
     return this._attributes.get(name) ?? null;
+  }
+
+  /** Makes `element.contains(node)` true for `node` (and for the element
+   * itself), for task 029's "is the active element inside the editor host". */
+  withDescendant(node) {
+    this._descendants.add(node);
+    return this;
+  }
+
+  contains(node) {
+    return node === this || this._descendants.has(node);
   }
 
   /** Counts the click and runs `onClick`, standing in for the app's handler. */
@@ -113,6 +131,8 @@ export class FakeDom {
   constructor() {
     this.elements = new Map();
     this.elementsById = new Map();
+    this.elementLists = new Map();
+    this.hasFocusValue = true;
     this.active = null;
     this.time = 0;
     this.observerCallback = null;
@@ -145,6 +165,8 @@ export class FakeDom {
       documentElement: {},
       querySelector: (selector) => this.elements.get(selector) ?? null,
       getElementById: (id) => this.elementsById.get(id) ?? null,
+      querySelectorAll: (selector) => this.elementLists.get(selector) ?? [],
+      hasFocus: () => this.hasFocusValue,
       get activeElement() {
         return self.active;
       },
@@ -155,6 +177,19 @@ export class FakeDom {
    * `null`, the default, if never set). */
   setElement(selector, element) {
     this.elements.set(selector, element ?? null);
+    return this;
+  }
+
+  /** `document.querySelectorAll(selector)` will return `elements` (an empty
+   * list, the default, if never set). Task 029. */
+  setElements(selector, elements) {
+    this.elementLists.set(selector, elements);
+    return this;
+  }
+
+  /** `document.hasFocus()` will return `value` (true by default). */
+  setDocumentHasFocus(value) {
+    this.hasFocusValue = value;
     return this;
   }
 

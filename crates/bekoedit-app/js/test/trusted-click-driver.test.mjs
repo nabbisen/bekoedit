@@ -411,3 +411,138 @@ test(
     assert.equal(window.__bkTrustedClickEvalPin.current, occupant);
   },
 );
+
+// ---- Task 029: a timeout says what the page looked like ------------------
+//
+// The `tree_row_focus` timeout was seen three times with the same one-line
+// message. These tests stage each case the fakes can (a: the click never
+// landed; b: it reached the row but no document opened; c: the document
+// opened but the editor never became ready; d: the editor is ready and focus
+// was refused) and one mid-wait change (how e, focus lost after it landed,
+// would surface), and assert the message tells them apart. Case e itself
+// cannot be staged: any poll that sees focus in the editor on child.md
+// reports success, so a timeout can only show it as a *change*.
+
+const TREE_ROWS = ".tree-row.tree-file";
+const ROW_CLASS = "tree-row tree-file";
+
+function treeRow(name, selected, { active = false } = {}) {
+  const row = new FakeElement({ tagName: "BUTTON", className: ROW_CLASS, textContent: name })
+    .withAttribute("aria-selected", String(selected));
+  row.isActiveRow = active;
+  return row;
+}
+
+/** Drives proof_of_trust to completion, then polls tree_row_focus once at
+ * `firstPollAt`; returns the `next(atMs)` that polls again at that time. */
+async function pollTreeRow(dom, firstPollAt = 100) {
+  const trigger = new FakeElement({ tagName: "BUTTON", id: "app-menu-trigger" });
+  dom.setElementById("app-menu-trigger", trigger);
+  dom.setActiveElement(trigger);
+  dom.setTime(0);
+  await exchange("proof_of_trust", 1);
+  dom.setTime(firstPollAt);
+  let exchangeId = 2;
+  let release = { exchangeId: 1, phase: "proof_of_trust" };
+  const next = async (atMs) => {
+    dom.setTime(atMs);
+    const report = await exchange("tree_row_focus", exchangeId, release);
+    release = { exchangeId, phase: "tree_row_focus" };
+    exchangeId += 1;
+    return report;
+  };
+  await next(firstPollAt);
+  return { trigger, next };
+}
+
+async function timeoutMessageAfter(dom, next) {
+  const report = await next(10000);
+  assert.equal(report.kind, "terminal");
+  assert.match(report.result.error, /^Error: timed out at tree_row_trusted_click_focused_editor\./);
+  return report.result.error;
+}
+
+test("timeout, case a: the click never landed (focus still on the menu trigger, no file, no editor)", { concurrency: false }, async () => {
+  const dom = new FakeDom();
+  dom.install();
+  dom.setElements(TREE_ROWS, [treeRow("child.md", false)]);
+  const { next } = await pollTreeRow(dom);
+  const message = await timeoutMessageAfter(dom, next);
+  assert.match(message, /activeElement=button#app-menu-trigger inEditorHost=false/);
+  assert.match(message, /openFile=null treeRows=\[child\.md\(selected=false\)\]/);
+  assert.match(message, /editor: view=false/);
+  assert.match(message, /no change in the whole wait/);
+});
+
+test("timeout, case b: the click reached the row (it holds focus) but no document opened", { concurrency: false }, async () => {
+  const dom = new FakeDom();
+  dom.install();
+  const row = treeRow("child.md", false);
+  row.className = ROW_CLASS;
+  dom.setElements(TREE_ROWS, [row]);
+  const { next } = await pollTreeRow(dom);
+  dom.setActiveElement(row);
+  const message = await timeoutMessageAfter(dom, next);
+  assert.match(message, /activeElement=button\.tree-row\.tree-file inEditorHost=false/);
+  assert.match(message, /openFile=null treeRows=\[child\.md\(selected=false\)\]/);
+});
+
+test("timeout, case c: the document opened (row selected, file named) but the editor never became ready", { concurrency: false }, async () => {
+  const dom = new FakeDom();
+  dom.install();
+  dom.setElements(TREE_ROWS, [treeRow("child.md", true)]);
+  dom.setElement(".file-name", new FakeElement({ textContent: "child.md" }));
+  dom.setElement(
+    '[data-source-focus-launch-region="text"]',
+    new FakeElement().withChild(".source-editor-status", new FakeElement({ textContent: "Loading editor" })),
+  );
+  const { next } = await pollTreeRow(dom);
+  const message = await timeoutMessageAfter(dom, next);
+  assert.match(message, /openFile=child\.md treeRows=\[child\.md\(selected=true\)\]/);
+  assert.match(message, /editor: view=false connected=undefined hasFocus=undefined host=true statusMarker=Loading editor/);
+});
+
+test("timeout, case d: the editor is ready on child.md but focus was refused (it stays on the tree row)", { concurrency: false }, async () => {
+  const dom = new FakeDom();
+  dom.install();
+  const row = treeRow("child.md", true);
+  dom.setElements(TREE_ROWS, [row]);
+  dom.setElement(".file-name", new FakeElement({ textContent: "child.md" }));
+  dom.setElement('[data-source-focus-launch-region="text"]', new FakeElement());
+  dom.setEditorView(new FakeEditorView({ connected: true, hasFocus: false }));
+  const { next } = await pollTreeRow(dom);
+  dom.setActiveElement(row);
+  const message = await timeoutMessageAfter(dom, next);
+  assert.match(message, /activeElement=button\.tree-row\.tree-file inEditorHost=false/);
+  assert.match(message, /openFile=child\.md treeRows=\[child\.md\(selected=true\)\]/);
+  assert.match(message, /editor: view=true connected=true hasFocus=false host=true statusMarker=null/);
+});
+
+test("timeout: the document not having focus is reported, so a backgrounded window is not mistaken for a refused claim", { concurrency: false }, async () => {
+  const dom = new FakeDom();
+  dom.install();
+  dom.setElements(TREE_ROWS, [treeRow("child.md", false)]);
+  const { next } = await pollTreeRow(dom);
+  dom.setDocumentHasFocus(false);
+  const message = await timeoutMessageAfter(dom, next);
+  assert.match(message, /At the first poll after the click: document\.hasFocus\(\)=true;/);
+  assert.match(message, /At the timeout: document\.hasFocus\(\)=false;/);
+});
+
+test("timeout: a change mid-wait is reported with its time, and shows both where the wait started and ended", { concurrency: false }, async () => {
+  // How case e would surface: what the page looked like at the first poll,
+  // the first moment it differed, and how long after.
+  const dom = new FakeDom();
+  dom.install();
+  const row = treeRow("child.md", false);
+  dom.setElements(TREE_ROWS, [row]);
+  const { next } = await pollTreeRow(dom, 100);
+  row.withAttribute("aria-selected", "true");
+  dom.setElement(".file-name", new FakeElement({ textContent: "child.md" }));
+  const pending = await next(400);
+  assert.equal(pending.kind, "pending");
+  const message = await timeoutMessageAfter(dom, next);
+  assert.match(message, /At the first poll after the click: (?:(?!At the).)*?openFile=null treeRows=\[child\.md\(selected=false\)\]/);
+  assert.match(message, /At the timeout: (?:(?!At the).)*?openFile=child\.md treeRows=\[child\.md\(selected=true\)\]/);
+  assert.match(message, /first change 300 ms after the first poll, to: (?:(?!At the).)*?openFile=child\.md/);
+});

@@ -64,14 +64,13 @@ pub fn SourceEditorControllerHost() -> Element {
                         ..
                     } = &event
                     {
-                        bridge::trace(
-                            event,
-                            format_trace_details(
-                                *instance_id,
-                                *focus_token,
-                                focus_guard_diagnostic.as_ref(),
-                            ),
+                        let details = format_trace_details(
+                            *instance_id,
+                            *focus_token,
+                            focus_guard_diagnostic.as_ref(),
                         );
+                        crate::webview_smoke::record_source_trace(event, &details);
+                        bridge::trace(event, details);
                     }
                     let active_focus_token = sync.read().active_command_focus_token();
                     let handled = {
