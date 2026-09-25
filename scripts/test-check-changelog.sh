@@ -172,6 +172,10 @@ sed -i '/^\[0.9.0\]:/d' "$d/changelog/0.1-0.9.md"
 sed -i 's|^\[0.11.0\]:.*|&\n[0.9.0]: https://example.invalid/releases/0.9.0|' "$d/CHANGELOG.md"
 expect_fail "a link definition left behind in the other file" definition-placement "$d"
 
+d=$(fixture dup-def)
+printf '[0.11.0]: https://example.invalid/again\n' >>"$d/CHANGELOG.md"
+expect_fail "a link definition given twice" definition-placement "$d"
+
 d=$(fixture slug)
 printf '\n## Keeping it *short* (and `sweet`)!\n' >>"$d/CHANGELOG.md"
 echo '[slug](../CHANGELOG.md#keeping-it-short-and-sweet)' >>"$d/docs/a.md"
