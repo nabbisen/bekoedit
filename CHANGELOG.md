@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-09-25
+
+### Highlights
+- Security: clicking a link in Preview now opens only web and email links.
+  Other links, including relative paths and network paths such as
+  `\\host\share`, no longer reach your operating system. In earlier versions
+  on Windows, clicking a network-path link could make the computer contact
+  another machine over the network.
+- Security: Preview no longer shows `javascript:` and similar links as
+  clickable.
+- A `<br>` in a table cell now shows as a line break in Preview.
+
 ### Security
 - Preview no longer renders `javascript:` and similar link destinations as live
   links. Links and images now pass an allowlist (`http:`, `https:`, relative
@@ -147,7 +159,8 @@ Accessibility work in this release covers the shell: file tree, menus, mode
 tabs, conflict banner, Recovery, and Settings. **Form Mode block editing does
 not yet expose accessibility metadata** and is tracked by RFC-042 slice 5.
 
-[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.16.0...HEAD
+[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.16.1...HEAD
+[0.16.1]: https://github.com/nabbisen/bekoedit/releases/tag/0.16.1
 [0.16.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.16.0
 [0.15.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.15.0
 [0.14.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.14.0
