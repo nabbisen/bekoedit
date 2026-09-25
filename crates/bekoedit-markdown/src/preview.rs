@@ -16,7 +16,8 @@
 //! |---|---|---|
 //! | `http:`, `https:` | allowed | allowed |
 //! | `mailto:` | allowed | dropped |
-//! | relative path, `#fragment` | allowed | allowed |
+//! | relative path (not `//` or `\\`), `#fragment` | allowed | allowed |
+//! | network-path reference: `//`, `\\`, `/\`, `\/` prefix | dropped | dropped |
 //! | `data:image/png`, `jpeg`, `gif`, `webp` | dropped | allowed |
 //! | anything else | dropped | dropped |
 //!
@@ -49,9 +50,23 @@ fn scheme(normalized: &str) -> Option<String> {
     valid.then(|| name.to_ascii_lowercase())
 }
 
+/// A destination with no scheme that begins with two slashes of either kind
+/// (`//`, `\\`, `/\` or `\/`, after normalisation) is a network-path
+/// reference, not a relative path: a browser reads it as a host, and on Windows
+/// `\\host\share` is a UNC path, which opening makes the OS contact over SMB.
+fn is_network_path(normalized: &str) -> bool {
+    let mut chars = normalized.chars();
+    matches!(
+        (chars.next(), chars.next()),
+        (Some('/' | '\\'), Some('/' | '\\'))
+    )
+}
+
 fn link_destination_allowed(destination: &str) -> bool {
-    match scheme(&normalized(destination)).as_deref() {
-        None | Some("http" | "https" | "mailto") => true,
+    let normalized = normalized(destination);
+    match scheme(&normalized).as_deref() {
+        None => !is_network_path(&normalized),
+        Some("http" | "https" | "mailto") => true,
         Some(_) => false,
     }
 }
@@ -59,7 +74,8 @@ fn link_destination_allowed(destination: &str) -> bool {
 fn image_destination_allowed(destination: &str) -> bool {
     let normalized = normalized(destination);
     match scheme(&normalized).as_deref() {
-        None | Some("http" | "https") => true,
+        None => !is_network_path(&normalized),
+        Some("http" | "https") => true,
         Some("data") => {
             let media_type = normalized["data:".len()..]
                 .split([';', ','])

@@ -259,3 +259,63 @@ fn other_inline_html_stays_escaped_beside_a_bare_br() {
         "<p>a<br />\n&lt;script&gt;alert(1)&lt;/script&gt;b</p>\n"
     );
 }
+
+// ---- network-path references (review of task 030, §3) ---------------------
+
+/// The four two-character prefixes, as *decoded* destinations. In Markdown
+/// source a backslash is an escape, so `link_source`/`image_source` double it.
+const NETWORK_PATHS: [&str; 4] = ["//host/x", "\\\\host\\share", "/\\host/x", "\\/host/x"];
+
+fn link_source(destination: &str) -> String {
+    format!("[x](<{}>)", destination.replace('\\', "\\\\"))
+}
+
+fn image_source(destination: &str) -> String {
+    format!("![alt](<{}>)", destination.replace('\\', "\\\\"))
+}
+
+#[test]
+fn a_network_path_reference_is_dropped_from_a_link_in_each_spelling() {
+    for destination in NETWORK_PATHS {
+        assert_link_dropped(&link_source(destination), "x");
+    }
+}
+
+#[test]
+fn a_network_path_reference_is_dropped_from_an_image_in_each_spelling() {
+    for destination in NETWORK_PATHS {
+        assert_image_dropped(&image_source(destination));
+    }
+}
+
+#[test]
+fn normalisation_does_not_hide_a_network_path_reference() {
+    // Leading control characters and spaces are stripped, and a tab between
+    // the two slashes is removed, exactly as a browser's URL parser does.
+    for destination in [
+        "\u{1}//host/x",
+        " \\\\host\\share",
+        "/\t/host/x",
+        "\\\t\\host\\share",
+    ] {
+        assert_link_dropped(&link_source(destination), "x");
+        assert_image_dropped(&image_source(destination));
+    }
+}
+
+#[test]
+fn a_single_slash_and_an_inner_double_slash_are_still_relative_paths() {
+    assert_link_kept("[x](/notes/other.md)", "/notes/other.md");
+    assert_link_kept("[x](notes//other.md)", "notes//other.md");
+    assert_link_kept("[x](./a//b.md)", "./a//b.md");
+    assert_image_kept("![alt](/img/i.png)", "/img/i.png");
+    assert_image_kept("![alt](img//i.png)", "img//i.png");
+}
+
+#[test]
+fn a_network_path_link_keeps_its_text_and_an_allowed_image_inside_stays() {
+    assert_eq!(
+        render("[![alt](https://a.example/i.png)](<//host/x>)"),
+        "<p><img src=\"https://a.example/i.png\" alt=\"alt\" /></p>\n"
+    );
+}

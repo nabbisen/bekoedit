@@ -51,10 +51,12 @@ code.
     event that is exactly a bare `<br>`, `<br/>` or `<br />` (ASCII
     case-insensitive, nothing else) becomes a line break. An HTML *block*
     is always escaped, even one that is only `<br>`. Link and image
-    destinations pass an allowlist: `http:`, `https:`, relative paths and
+    destinations pass an allowlist: `http:`, `https:`, relative paths (but
+    not network-path references, which start `//`, `\\`, `/\` or `\/`) and
     `#fragments` for both, `mailto:` for links only, and `data:image/png`,
     `jpeg`, `gif` or `webp` for images only. Any other destination, such as
-    `javascript:`, `vbscript:`, `file:` or `data:image/svg+xml`, is dropped,
+    `javascript:`, `vbscript:`, `file:`, `//host/x`, `\\host\share` or
+    `data:image/svg+xml`, is dropped,
     and the link text or image alt text stays as plain text. This is a
     projection rule; the document's bytes are never changed.
 
