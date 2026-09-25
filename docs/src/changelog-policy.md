@@ -60,6 +60,9 @@ with links to them.
 `CHANGELOG.md` on `main` stops working when that series moves. Links pinned to a
 tag, including every GitHub Release link, are not affected.
 
+A downloaded release archive contains only `CHANGELOG.md`, so its `Older releases:`
+link works on GitHub and in the repository, not offline.
+
 ## What checks this
 
 | Rule | Checked by | Status |
