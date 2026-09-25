@@ -187,24 +187,22 @@ fn a_path_that_climbs_out_of_the_workspace_is_refused() {
 #[test]
 fn an_absolute_path_is_refused_even_inside_the_workspace() {
     let fixture = fixture();
-    let inside = format!("{}", fixture.root.join("a.md").display());
-    for href in [
-        "/etc/passwd",
-        "/a.md",
-        "\\Windows\\win.ini",
-        inside.as_str(),
-    ] {
-        let reason = refused(&fixture, href);
-        assert!(
-            matches!(
-                reason,
-                LinkRefusal::AbsolutePath | LinkRefusal::UnsupportedScheme
-            ),
-            "{href}: {reason:?}"
-        );
+    // Rooted paths, in either separator, are absolute on every platform.
+    for href in ["/etc/passwd", "/a.md", "\\Windows\\win.ini", "\\a.md"] {
+        assert_eq!(refused(&fixture, href), LinkRefusal::AbsolutePath, "{href}");
     }
-    assert_eq!(refused(&fixture, "/a.md"), LinkRefusal::AbsolutePath);
-    assert_eq!(refused(&fixture, "\\a.md"), LinkRefusal::AbsolutePath);
+    // The full path of a file that is inside the workspace. It is refused, but
+    // the reason depends on how the platform spells a canonical path: on
+    // Windows it is the verbatim `\\?\C:\...`, which begins with two
+    // backslashes and so reads as a network-path reference (Windows CI,
+    // 2026-09-25, found this); elsewhere it is rooted at `/`.
+    let inside = fixture.root.join("a.md").display().to_string();
+    let expected = if cfg!(windows) {
+        LinkRefusal::NetworkPath
+    } else {
+        LinkRefusal::AbsolutePath
+    };
+    assert_eq!(refused(&fixture, &inside), expected, "{inside}");
 }
 
 #[test]
