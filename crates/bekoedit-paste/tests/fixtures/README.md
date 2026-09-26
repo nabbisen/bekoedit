@@ -34,6 +34,7 @@ ending. `synthetic-19` holds real `\r\n` bytes on purpose.
 | 20, 23, 24 | `data:` links and images, including nested in a link, and an SVG one with spaces, quotes and parentheses |
 | 21 | a plain document, as a baseline |
 | 25–29 | what `mdka` 3.0.0 changed from 2.5.1 (task 037): a superscript with a Unicode form (25) and without one, which gets a visible `^(…)` (26); a subscript, with `_(…)` where there is no Unicode form (27); a citation marker, which is left as it is (28); and emphasis that opens a bold element (29) |
+| 30 | ordinals: `1<sup>st</sup>` becomes `1ˢᵗ` under 3.0.0. **Pinned, and questioned upstream** (a search for "1st" no longer finds it; flattening it never changed its meaning). It is here so that any upstream change to it fails a fixture instead of slipping in; the suggestion to `mdka` is drafted as `.git-exclude/upstream/mdka/send/draft/2026-09-26-re-3.0.0-ordinals.md` |
 
 ## Accepted limitations, recorded as expectations (RFC-046 §6.2)
 
