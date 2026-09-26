@@ -2765,9 +2765,9 @@ dependencies = [
 
 [[package]]
 name = "mdka"
-version = "2.5.1"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "230c264c37ed60c8696ad247931e32c865c0d1edb8d002792d5ef79e03b5ad05"
+checksum = "a31444d06c379d8af2953a91ca19e0512faebe8f411ec97992194c3e771e6d69"
 dependencies = [
  "ego-tree",
  "scraper",

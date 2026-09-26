@@ -6,7 +6,7 @@
 //! than the one asked for. Nothing here touches the app: the paste handler,
 //! the toast and the editor transaction are slice 2.
 //!
-//! Conversion is `mdka` 2.5.1 in `ConversionMode::Minimal` with default
+//! Conversion is `mdka` 3.0.0 in `ConversionMode::Minimal` with default
 //! features off (RFC-046 §5.3, §6.2). Around it:
 //!
 //! - **Too large** (`MAX_HTML_BYTES`), measured before `mdka` is called.
