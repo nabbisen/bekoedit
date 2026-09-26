@@ -386,7 +386,11 @@ fn a_malformed_construct_is_left_alone_and_never_panics() {
 /// process would go down with `mdka`. Nothing sets it; this keeps it so.
 #[test]
 fn no_profile_in_the_workspace_aborts_on_panic() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    // At run time, not `env!`: that is fixed into the binary when it is compiled, so
+    // a test binary reused from a deleted worktree (a shared `target/`) would look
+    // in a directory that no longer exists. Cargo sets this when it runs a test.
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("run by cargo test");
+    let root = std::path::Path::new(&manifest_dir);
     for manifest in [root.join("Cargo.toml"), root.join("../../Cargo.toml")] {
         let text = std::fs::read_to_string(&manifest).unwrap();
         let squeezed: String = text.chars().filter(|c| !c.is_whitespace()).collect();

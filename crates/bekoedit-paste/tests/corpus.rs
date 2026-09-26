@@ -28,8 +28,12 @@ fn document_options() -> Options {
         | Options::ENABLE_MATH
 }
 
+/// At run time, not `env!`: that is fixed into the binary when it is compiled, so
+/// a test binary reused from a deleted worktree (a shared `target/`) would look in
+/// a directory that no longer exists. Cargo sets this when it runs a test.
 fn fixtures_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("run by cargo test");
+    Path::new(&manifest_dir).join("tests/fixtures")
 }
 
 fn fixture_names() -> Vec<String> {
