@@ -65,6 +65,7 @@ fn scenarios_parse_by_name_and_reject_anything_else() {
         "save_preserves_crlf_bytes",
         "mode_switch_preserves_bytes",
         "link_clicks_reach_only_the_browser",
+        "paste_probe",
     ] {
         assert_eq!(ReleaseScenario::parse(name).unwrap().name(), name);
     }

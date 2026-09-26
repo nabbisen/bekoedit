@@ -37,6 +37,8 @@ mod link_clicks;
 mod link_judge;
 mod link_layer_two;
 mod mode_switch;
+mod paste_probe;
+mod paste_report;
 mod save;
 mod seed;
 pub(super) use seed::prepare;
@@ -55,6 +57,9 @@ pub enum ReleaseScenario {
     /// Task 033: only `http(s):` and `mailto:` links ever reach an OS opener,
     /// on the release binary, with a stub opener.
     LinkClicksReachOnlyTheBrowser,
+    /// RFC-046 slice 2, part A: what the WebView does with a real paste. Reports;
+    /// asserts no product behaviour.
+    PasteProbe,
 }
 
 impl ReleaseScenario {
@@ -67,6 +72,7 @@ impl ReleaseScenario {
             Self::SavePreservesCrlfBytes => "save_preserves_crlf_bytes",
             Self::ModeSwitchPreservesBytes => "mode_switch_preserves_bytes",
             Self::LinkClicksReachOnlyTheBrowser => link_judge::NAME,
+            Self::PasteProbe => paste_probe::NAME,
         }
     }
 
@@ -79,6 +85,7 @@ impl ReleaseScenario {
             Self::SavePreservesCrlfBytes,
             Self::ModeSwitchPreservesBytes,
             Self::LinkClicksReachOnlyTheBrowser,
+            Self::PasteProbe,
         ]
         .into_iter()
         .find(|scenario| scenario.name() == name)
@@ -86,8 +93,8 @@ impl ReleaseScenario {
             format!(
                 "unknown release-checks scenario {name:?}; expected reopen_usable, \
                  reopen_missing, reopen_disabled, save_preserves_bytes, \
-                 save_preserves_crlf_bytes, mode_switch_preserves_bytes or \
-                 link_clicks_reach_only_the_browser"
+                 save_preserves_crlf_bytes, mode_switch_preserves_bytes link_clicks_reach_only_the_browser or \
+                 paste_probe"
             )
         })
     }
@@ -164,6 +171,7 @@ pub fn WebViewReleaseChecksDriver() -> Element {
                 ReleaseScenario::LinkClicksReachOnlyTheBrowser => {
                     link_clicks::run(&terminal, &desktop, toasts, lang).await
                 }
+                ReleaseScenario::PasteProbe => paste_probe::run(&terminal, &desktop).await,
                 _ => launch::run(&terminal, state, toasts, lang).await,
             };
             match outcome.and_then(|checks| terminal.accept().map(|()| checks)) {
@@ -187,5 +195,7 @@ pub fn WebViewReleaseChecksDriver() -> Element {
 mod layer_two_tests;
 #[cfg(test)]
 mod link_tests;
+#[cfg(test)]
+mod paste_report_tests;
 #[cfg(test)]
 mod tests;

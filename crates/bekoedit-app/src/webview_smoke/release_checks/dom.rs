@@ -109,3 +109,17 @@ pub(super) async fn remove_link_guard() -> Result<bool, String> {
     )
     .await
 }
+
+/// Runs `script` as a function body (it may `return` a value), joined like the
+/// other reads here. For a whole script rather than one expression.
+pub(super) async fn run_script<T: serde::de::DeserializeOwned>(script: &str) -> Result<T, String> {
+    tokio::time::timeout(EVAL_TIMEOUT, document::eval(script).join::<T>())
+        .await
+        .map_err(|_| format!("the page did not finish the script within {EVAL_TIMEOUT:?}"))?
+        .map_err(|error| format!("running the script failed: {error}"))
+}
+
+/// One expression's JSON value, for the paste probe's calls (`paste_probe.js`).
+pub(super) async fn value_of(expression: &str) -> Result<serde_json::Value, String> {
+    returned(expression).await
+}

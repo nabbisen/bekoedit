@@ -131,7 +131,8 @@ pub(in crate::webview_smoke) fn prepare(
         ),
         ReleaseScenario::SavePreservesBytes
         | ReleaseScenario::SavePreservesCrlfBytes
-        | ReleaseScenario::ModeSwitchPreservesBytes => {
+        | ReleaseScenario::ModeSwitchPreservesBytes
+        | ReleaseScenario::PasteProbe => {
             let original = if scenario == ReleaseScenario::SavePreservesCrlfBytes {
                 original_crlf_note()
             } else {

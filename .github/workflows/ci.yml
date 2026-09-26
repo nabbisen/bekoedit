@@ -246,7 +246,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
-            libxdo-dev libssl-dev xvfb xdotool
+            libxdo-dev libssl-dev xvfb xdotool python3-gi gir1.2-gtk-3.0
       - name: Install JS dependencies
         run: cd crates/bekoedit-app/js && npm ci
       - name: Test source-editor JavaScript adapter
@@ -451,11 +451,15 @@ jobs:
         # removed from the page, to prove Dioxus's own link route on its own),
         # so the soak RESTARTS again at 0 of 10 from the run that first
         # contains that stage.
+        # RFC-046 slice 2 part A then added `paste_probe`, which REPORTS what the
+        # WebView does with a real Ctrl+V and Ctrl+Shift+V and asserts no product
+        # behaviour; the soak RESTARTS at 0 of 10 again from the run that first
+        # contains it.
         id: release_checks
         continue-on-error: true
         run: |
           failed=0
-          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser; do
+          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe; do
             RELEASE_CHECKS_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-release-checks.XXXXXX")"
             echo "release-checks scenario: $scenario"
             # Task 033: only this scenario gets stub openers. $BROWSER is the
@@ -466,6 +470,12 @@ jobs:
             if [ "$scenario" = link_clicks_reach_only_the_browser ]; then
               STUBS="$(bash scripts/webview-link-opener-stubs.sh "$RELEASE_CHECKS_PARENT/opener-stubs")"
               opener_env=("BROWSER=$STUBS/browser-stub" "PATH=$STUBS:$PATH" "BEKOEDIT_LINK_OPENER_LOG=$STUBS/opener.log")
+            fi
+            # RFC-046 slice 2, part A: the probe starts this helper itself (it
+            # owns the clipboard with text/html AND text/plain, which xclip cannot
+            # offer at once) under this scenario's own Xvfb, and only here.
+            if [ "$scenario" = paste_probe ]; then
+              opener_env=("BEKOEDIT_PASTE_PROBE_CLIPBOARD_OWNER=$PWD/scripts/webview-clipboard-owner.py")
             fi
             timeout 90 xvfb-run -a -s "-screen 0 1280x1024x24" \
               env NO_AT_BRIDGE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 "${opener_env[@]}" \
