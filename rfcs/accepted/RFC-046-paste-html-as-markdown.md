@@ -11,7 +11,7 @@ start.
 **Date:** 2026-09-16
 **Related RFCs:** [RFC-011](../done/RFC-011-text-mode-with-codemirror-6.md), [RFC-015](../done/RFC-015-sourcepatch-engine-and-source-preserving-mutation.md), [RFC-016](../done/RFC-016-form-mode-mvp-surface-and-safe-editable-blocks.md), [RFC-017](../done/RFC-017-raw-markdown-islands.md), [RFC-038](../done/RFC-038-advanced-markdown-extension-policy.md), [RFC-041](../done/RFC-041-source-editor-lifecycle-and-synchronization-controller.md), [RFC-044](../done/RFC-044-shell-behaviour-regression-coverage.md)
 **Upstream:** [`mdka`](https://github.com/nabbisen/mdka-rs), maintained by the project owner
-**Upstream pin:** `mdka = "=2.5.1"`, since 2026-09-24 (§6.2)
+**Upstream pin:** `mdka = "=3.0.0"`, since 2026-09-26 (§6.3); `=2.5.1` from 2026-09-24 (§6.2)
 
 ---
 
@@ -94,6 +94,9 @@ Two constraints, because conversion is asynchronous:
   discarded. If `adapter.isHeld()` is true at insertion time, the existing
   transaction filter would drop the change anyway; the paste is discarded rather
   than retried on a timer.
+  - **Amended 2026-09-26 (slice 2 handoff §3.3):** a discarded paste raises one
+    Warning notice. It is not dropped silently, following RFC-047's rule that a
+    user's action is either done or reported.
 
 ### 5.3 Conversion in Rust
 
@@ -111,6 +114,11 @@ Two constraints, because conversion is asynchronous:
   - `data:` URI images are replaced by their alt text. A pasted screenshot must not
     put megabytes of base64 into the document.
   - Output is normalised to the document's line ending.
+    - **Amended 2026-09-26 (slice 2 handoff §3.3):** the paste path converts
+      with LF, because the editor speaks editor form. Task 027's reconciliation
+      then gives every inserted line break the file's own ending, so a `Mixed`
+      file needs no special mapping. The converter's `LineEnding` parameter
+      remains for any other caller.
   - The output must contain no raw HTML. A test enforces it over the fixture
     corpus (§7).
 
@@ -438,6 +446,36 @@ test rule now handles both by parsing.
 **Scheduling.** The upstream wait is over. RFC-046 is now gated only on this
 project's own queue: the 0.16.0 release, then slice 2's two preconditions (§9).
 
+### 6.3 `mdka` 3.0.0, 2026-09-26 · **the pin is `=3.0.0`**
+
+Upstream released 2.6.0 to 3.0.0 and wrote to us
+(`.git-exclude/upstream/mdka/receive/2026-09-26-3.0.0-and-what-it-means-for-you.md`).
+
+- **The string API we use is unchanged:** `ConversionOptions::for_mode(Minimal)`
+  and `html_to_markdown_with`.
+- **3.0.0 removed** the alias modes, the inert options and the file-API result
+  type. None of them was used here.
+- **Two output changes, both fixes:**
+  - `<sup>` and `<sub>` keep their meaning (`10⁻⁹`, `H₂O`, or a visible `^(…)`
+    where no Unicode form exists);
+  - emphasis that opens a bold element is kept (`***q*a**`).
+
+**Moved in task 037** (merged as `a8dca63`), with this evidence:
+
+- no existing fixture moved;
+- five new fixtures pin the two changes, and four of them fail under 2.5.1;
+- 26 further probes found no change outside the two that were announced;
+- the lock delta is `mdka` alone, `cargo audit` is unchanged, and timings are
+  within noise.
+
+**One visible side effect, questioned upstream:** ordinals. `1<sup>st</sup>`
+becomes `1ˢᵗ`, so a search for "1st" no longer finds it. A fixture pins the
+current output, and a suggestion was drafted to upstream
+(`.git-exclude/upstream/mdka/send/draft/2026-09-26-re-3.0.0-ordinals.md`).
+
+Item 4, Google Docs bold through `font-weight:700`, is still not done upstream
+and is not scheduled.
+
 ## 7. Testing
 
 - **Rust, headless.** A fixture corpus of real clipboard HTML from browsers, Google
@@ -476,10 +514,28 @@ Measured by resolving `mdka` 2.2.1 against this workspace's `Cargo.lock`:
 - `rust-version` 1.88, matching this workspace. License Apache-2.0, matching.
 - It builds with `cargo +1.88.0` and `default-features = false`.
 
+**Re-measured 2026-09-25 and 26, on `mdka` 2.5.1 and 3.0.0** (slice 1 and task
+037). **The "43 of 49 already present" above no longer holds by version.**
+
+- The lock gains **7 new names**: the six above, plus `mdka`.
+- It also gains **15 second versions of crates already present**, because
+  `mdka` needs a newer HTML-parser stack than the WebView's:
+  - `html5ever` 0.39 beside 0.29;
+  - `selectors` 0.38 beside 0.24;
+  - `cssparser`, `markup5ever`, `string_cache`, `tendril`, `servo_arc`,
+    `derive_more`, and the `phf` family, each beside its older version.
+- The 2.5.1 to 3.0.0 move changed only `mdka` itself.
+- Conversion takes about **37 ms for 1 MiB**, and about **185 ms for 5 MiB**
+  called directly, in a release build, against the 2 s budget.
+- **The cost to the shipped binary**, in size and clean-build time, is measured
+  in slice 2, when the app first depends on the crate.
+
 ## 9. Slices
 
 1. **The converter.** The new crate, Minimal mode, §5.3 guards, §5.4 fallback
-   rules, and the fixture corpus. Headless; no UI change.
+   rules, and the fixture corpus. Headless; no UI change. **Done:**
+   `rfcs/handoffs/046-paste-html-as-markdown/slice-1-the-converter.md`, merged
+   as `cdf486b` (2026-09-26), then moved to `mdka` `=3.0.0` (`a8dca63`).
 2. **The paste path.** §5.1's handler, the §5.6 message, §5.2's mapping and
    discard rules, §5.5's plain-paste chord, and §5.4's fallback toasts. Leads with
    the §7 gating assumption.
@@ -494,6 +550,10 @@ Measured by resolving `mdka` 2.2.1 against this workspace's `Cargo.lock`:
      `.git-exclude/governance/2026-09-16-bridge-payload-js-interpolation-finding.md`.
 
    Slice 1 is unaffected and may proceed ahead of either.
+
+   **Both are done (2026-09-25):**
+   - the link-scheme filter is task 030, with task 032's click guard;
+   - the payload encoding is task 031.
 3. **Surfacing.** Documentation and the manual walkthrough items. No settings
    work: §10 Q1 is settled as "no toggle".
 
