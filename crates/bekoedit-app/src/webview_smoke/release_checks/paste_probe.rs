@@ -24,7 +24,9 @@ use crate::webview_smoke::trusted_click::xtest::{activate_window, click_via_xtes
 
 use super::ReleaseChecksTerminal;
 use super::dom;
-use super::paste_report::{Case, Constructed, Helper, Observation, Taken, answers};
+use super::paste_report::{
+    Case, ClipboardControl, Constructed, Helper, Observation, Taken, answers,
+};
 use super::save::wait_until;
 use super::seed::SAVE_FILE;
 
@@ -122,6 +124,69 @@ async fn start_clipboard_owner(
     )
 }
 
+/// Runs `xclip` reading the CLIPBOARD selection, outside the WebView entirely.
+/// Never returns before checking `status`, following `run_xdotool`'s own shape.
+async fn run_xclip(program: &str, args: &[&str]) -> Result<String, String> {
+    let output = tokio::process::Command::new(program)
+        .args(args)
+        .output()
+        .await
+        .map_err(|error| format!("cannot spawn {program} {args:?}: {error}"))?;
+    println!(
+        "  {program} {args:?} -> {} stdout={:?} stderr={:?}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    if !output.status.success() {
+        return Err(format!(
+            "{program} {args:?} exited with {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+const XCLIP: &str = "xclip";
+
+/// Part A2: what the owner serves, read back with `xclip`, entirely outside the
+/// WebView -- the control that makes a `NO` on the WebView side unambiguous.
+/// Skipped (and clearly marked so) if the owner never became ready: there would
+/// be nothing on the selection for `xclip` to read.
+async fn read_clipboard_control(owner_ready: bool, program: &str) -> ClipboardControl {
+    if !owner_ready {
+        return ClipboardControl::default();
+    }
+    let mut control = ClipboardControl {
+        attempted: true,
+        ..Default::default()
+    };
+    match run_xclip(program, &["-o", "-selection", "clipboard", "-t", "TARGETS"]).await {
+        Ok(out) => control.targets = out.lines().map(str::to_string).collect(),
+        Err(error) => control.targets_error = Some(error),
+    }
+    match run_xclip(
+        program,
+        &["-o", "-selection", "clipboard", "-t", "text/html"],
+    )
+    .await
+    {
+        Ok(out) => control.html = Some(out),
+        Err(error) => control.html_error = Some(error),
+    }
+    match run_xclip(
+        program,
+        &["-o", "-selection", "clipboard", "-t", "text/plain"],
+    )
+    .await
+    {
+        Ok(out) => control.plain = Some(out),
+        Err(error) => control.plain_error = Some(error),
+    }
+    control
+}
+
 async fn take() -> Result<Taken, String> {
     let value = dom::value_of("window.__pasteProbe.take()").await?;
     serde_json::from_value(value).map_err(|error| format!("{NAME}: unreadable recording: {error}"))
@@ -176,6 +241,9 @@ pub(super) async fn run(
         "  {NAME}: clipboard owner ready: {} {}",
         helper.ready, helper.note
     );
+    // Read back with xclip, entirely outside the WebView, before anything is
+    // sent to the editor: it must never be read as "the WebView withheld one".
+    let control = read_clipboard_control(helper.ready, XCLIP).await;
 
     let ctrl_v = press(desktop, "ctrl+v").await?;
     let chord = press(desktop, "ctrl+shift+v").await?;
@@ -188,6 +256,7 @@ pub(super) async fn run(
 
     Ok(answers(&Observation {
         helper,
+        control,
         ctrl_v,
         chord,
         constructed,
@@ -300,5 +369,98 @@ mod tests {
             "{}",
             helper.note
         );
+    }
+
+    // ---- part A2: reading the clipboard outside the WebView (the control) ----
+
+    /// Writes an executable stand-in for `xclip`: a shebang script that runs
+    /// `body` through Python, on `PATH`-free footing (an absolute path). Unix
+    /// only, matching where this scenario's own tests run (the Linux CI job);
+    /// the surrounding code must still compile on every platform.
+    #[cfg(unix)]
+    fn xclip_stub(dir: &Path, body: &str) -> String {
+        use std::os::unix::fs::PermissionsExt;
+        let script_path = dir.join("xclip-stub.py");
+        std::fs::write(&script_path, body).unwrap();
+        let shim = dir.join("xclip");
+        std::fs::write(
+            &shim,
+            format!("#!/bin/sh\nexec python3 {script_path:?} \"$@\"\n"),
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&shim).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&shim, perms).unwrap();
+        shim.to_string_lossy().into_owned()
+    }
+
+    /// A stand-in `xclip`: reads back `TARGETS`, `text/html` and `text/plain`
+    /// with fixed content; anything else exits non-zero.
+    const XCLIP_STUB_BODY: &str = r#"
+import sys
+args = sys.argv[1:]
+target = args[args.index('-t') + 1] if '-t' in args else None
+if target == 'TARGETS':
+    sys.stdout.write('text/html\ntext/plain\n')
+elif target == 'text/html':
+    sys.stdout.write('<h1>Probe heading</h1><p>Some <b>bold</b> text.</p>')
+elif target == 'text/plain':
+    sys.stdout.write('Probe heading')
+else:
+    sys.exit(9)
+"#;
+
+    #[cfg(unix)]
+    #[test]
+    fn a_ready_owner_is_read_back_on_all_three_targets() {
+        let dir = tempfile::tempdir().unwrap();
+        let xclip = xclip_stub(dir.path(), XCLIP_STUB_BODY);
+        let control = run(read_clipboard_control(true, &xclip));
+        assert!(control.attempted);
+        assert_eq!(control.targets, vec!["text/html", "text/plain"]);
+        assert_eq!(
+            control.html.as_deref(),
+            Some("<h1>Probe heading</h1><p>Some <b>bold</b> text.</p>")
+        );
+        assert_eq!(control.plain.as_deref(), Some("Probe heading"));
+        assert!(
+            control.targets_error.is_none()
+                && control.html_error.is_none()
+                && control.plain_error.is_none()
+        );
+    }
+
+    #[test]
+    fn an_owner_that_is_not_ready_is_never_read_and_is_left_at_defaults() {
+        let dir = tempfile::tempdir().unwrap();
+        // A path that is not executable at all: if this were ever invoked, the
+        // spawn itself would fail loudly, not silently succeed.
+        let never = dir.path().join("must-not-run");
+        let control = run(read_clipboard_control(false, &never.to_string_lossy()));
+        assert!(!control.attempted);
+        assert!(control.targets.is_empty() && control.html.is_none() && control.plain.is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_target_that_fails_is_reported_as_an_error_and_does_not_stop_the_others() {
+        let dir = tempfile::tempdir().unwrap();
+        let body = XCLIP_STUB_BODY.replace(
+            "elif target == 'text/html':\n    sys.stdout.write('<h1>Probe heading</h1><p>Some <b>bold</b> text.</p>')",
+            "elif target == 'text/html':\n    sys.stderr.write('target not available')\n    sys.exit(1)",
+        );
+        let xclip = xclip_stub(dir.path(), &body);
+        let control = run(read_clipboard_control(true, &xclip));
+        assert!(control.html.is_none());
+        assert!(
+            control
+                .html_error
+                .as_deref()
+                .is_some_and(|error| error.contains("target not available")),
+            "{:?}",
+            control.html_error
+        );
+        assert_eq!(control.targets, vec!["text/html", "text/plain"]);
+        assert_eq!(control.plain.as_deref(), Some("Probe heading"));
     }
 }

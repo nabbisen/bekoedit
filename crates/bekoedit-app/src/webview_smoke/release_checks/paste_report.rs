@@ -70,9 +70,28 @@ pub(super) struct Helper {
     pub note: String,
 }
 
+/// Part A2: what the clipboard owner serves, read back with `xclip`, **outside**
+/// the WebView -- so a `NO` on the WebView side can never again be read as "the
+/// owner never offered it" when it might instead be "the WebView withheld it".
+#[derive(Debug, Clone, Default)]
+pub(super) struct ClipboardControl {
+    /// Whether this ran at all (skipped if the owner never became ready).
+    pub attempted: bool,
+    /// `xclip -o -t TARGETS`, one target per line.
+    pub targets: Vec<String>,
+    pub targets_error: Option<String>,
+    /// `xclip -o -t text/html`.
+    pub html: Option<String>,
+    pub html_error: Option<String>,
+    /// `xclip -o -t text/plain`.
+    pub plain: Option<String>,
+    pub plain_error: Option<String>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub(super) struct Observation {
     pub helper: Helper,
+    pub control: ClipboardControl,
     pub ctrl_v: Case,
     pub chord: Case,
     pub constructed: Constructed,
@@ -180,6 +199,55 @@ fn kinds(case: &Case) -> String {
     }
 }
 
+/// The first 80 characters, for a report line -- the same head length the page
+/// script keeps (`paste_probe.js`'s own `head`).
+fn head(text: &str) -> String {
+    text.chars().take(80).collect()
+}
+
+/// One line per reading, then the control's own verdict.
+fn control_lines(control: &ClipboardControl) -> Vec<String> {
+    if !control.attempted {
+        return vec![
+            "CONTROL: not attempted (the clipboard owner never became ready)".to_string(),
+            "VERDICT CONTROL: the owner serves both text/html and text/plain, read outside the WebView: NO".to_string(),
+        ];
+    }
+    let mut lines = vec![match &control.targets_error {
+        Some(error) => format!("CONTROL targets served (xclip -o -t TARGETS): FAILED: {error}"),
+        None => format!(
+            "CONTROL targets served (xclip -o -t TARGETS): {:?}",
+            control.targets
+        ),
+    }];
+    for (flavour, value, error) in [
+        (HTML, &control.html, &control.html_error),
+        (PLAIN, &control.plain, &control.plain_error),
+    ] {
+        lines.push(match (value, error) {
+            (Some(read_back), _) => format!(
+                "CONTROL {flavour} read back outside the WebView: {} chars (starts {:?})",
+                read_back.chars().count(),
+                head(read_back)
+            ),
+            (None, Some(error)) => {
+                format!("CONTROL {flavour} read back outside the WebView: FAILED: {error}")
+            }
+            (None, None) => format!("CONTROL {flavour} read back outside the WebView: not read"),
+        });
+    }
+    let served_both = control.html.as_deref().is_some_and(|text| !text.is_empty())
+        && control
+            .plain
+            .as_deref()
+            .is_some_and(|text| !text.is_empty());
+    lines.push(format!(
+        "VERDICT CONTROL: the owner serves both text/html and text/plain, read outside the WebView: {}",
+        yes(served_both)
+    ));
+    lines
+}
+
 fn describe_paste(event: &ProbeEvent) -> String {
     format!(
         "clipboardData present: {}; types {:?}; text/html {} chars (starts {:?}); text/plain {} chars (starts {:?}); target {:?}; trusted: {}",
@@ -212,6 +280,7 @@ pub(super) fn answers(observation: &Observation) -> Vec<String> {
             format!(" ({})", helper.note)
         }
     ));
+    lines.extend(control_lines(&observation.control));
 
     // 1. A real Ctrl+V.
     let ctrl_v = &observation.ctrl_v;
@@ -273,6 +342,17 @@ pub(super) fn answers(observation: &Observation) -> Vec<String> {
 
     // The verdicts.
     let q1 = q1_event.is_some_and(has_both);
+    let control_served_both = observation.control.attempted
+        && observation
+            .control
+            .html
+            .as_deref()
+            .is_some_and(|text| !text.is_empty())
+        && observation
+            .control
+            .plain
+            .as_deref()
+            .is_some_and(|text| !text.is_empty());
     let q3_reaches = built
         .reached
         .iter()
@@ -281,6 +361,17 @@ pub(super) fn answers(observation: &Observation) -> Vec<String> {
         "VERDICT 1: a real Ctrl+V reaches a paste listener with BOTH flavours: {}",
         yes(q1)
     ));
+    if !q1 {
+        lines.push(if control_served_both {
+            "NOTE on VERDICT 1: the CONTROL shows the owner served both, so the WebView withheld one \
+             -- this NO is real, not the earlier ambiguity"
+                .to_string()
+        } else {
+            "NOTE on VERDICT 1: ambiguous -- the CONTROL did not confirm the owner served both, so \
+             this NO may still be the empty-clipboard case; see CONTROL above"
+                .to_string()
+        });
+    }
     lines.push(format!(
         "VERDICT 2: Ctrl+Shift+V dispatches a paste event at all: {}; its keydown is visible: {}",
         yes(q2_event.is_some()),

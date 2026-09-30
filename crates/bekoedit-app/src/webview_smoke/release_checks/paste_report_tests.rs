@@ -1,7 +1,9 @@
 // The report half of the paste probe (RFC-046 slice 2, part A): what it says about
 // each shape of observation, and that the page's field names and Rust's agree.
 
-use super::paste_report::{Case, Constructed, Helper, Observation, ProbeEvent, Taken, answers};
+use super::paste_report::{
+    Case, ClipboardControl, Constructed, Helper, Observation, ProbeEvent, Taken, answers,
+};
 
 fn key(kind: &str, shift: bool) -> ProbeEvent {
     ProbeEvent {
@@ -64,6 +66,23 @@ fn verdict(observation: &Observation, number: u8) -> String {
         .into_iter()
         .find(|line| line.starts_with(&format!("VERDICT {number}:")))
         .unwrap_or_else(|| panic!("no VERDICT {number} line"))
+}
+
+fn verdict_control(observation: &Observation) -> String {
+    answers(observation)
+        .into_iter()
+        .find(|line| line.starts_with("VERDICT CONTROL:"))
+        .expect("no VERDICT CONTROL line")
+}
+
+fn served_both() -> ClipboardControl {
+    ClipboardControl {
+        attempted: true,
+        targets: vec!["text/html".into(), "text/plain".into(), "TARGETS".into()],
+        html: Some("<h1>Probe heading</h1><p>Some <b>bold</b> text.</p>".into()),
+        plain: Some("Probe heading\nSome bold text.".into()),
+        ..Default::default()
+    }
 }
 
 #[test]
@@ -369,6 +388,136 @@ fn every_field_the_report_reads_is_written_by_the_page_script() {
                 || script.contains(&format!("{{ {name}"))
                 || script.contains(&format!("{name},")),
             "paste_probe.js never writes {name:?}"
+        );
+    }
+}
+
+// ---- part A2: the outside-the-WebView control --------------------------------
+
+#[test]
+fn control_not_attempted_says_so_and_is_verdict_no() {
+    let observation = Observation::default();
+    let all = text(&observation);
+    assert!(
+        all.contains("CONTROL: not attempted (the clipboard owner never became ready)"),
+        "{all}"
+    );
+    assert!(
+        verdict_control(&observation).ends_with("NO"),
+        "{}",
+        verdict_control(&observation)
+    );
+}
+
+#[test]
+fn control_that_served_both_quotes_targets_and_both_readbacks_and_is_verdict_yes() {
+    let observation = Observation {
+        control: served_both(),
+        ..Default::default()
+    };
+    let all = text(&observation);
+    assert!(all.contains("CONTROL targets served (xclip -o -t TARGETS): [\"text/html\", \"text/plain\", \"TARGETS\"]"), "{all}");
+    assert!(
+        all.contains("CONTROL text/html read back outside the WebView: 51 chars"),
+        "{all}"
+    );
+    assert!(
+        all.contains("CONTROL text/plain read back outside the WebView: 29 chars"),
+        "{all}"
+    );
+    assert!(
+        verdict_control(&observation).ends_with("YES"),
+        "{}",
+        verdict_control(&observation)
+    );
+}
+
+#[test]
+fn control_where_a_flavour_failed_to_read_back_says_the_error_and_is_verdict_no() {
+    let mut control = served_both();
+    control.html = None;
+    control.html_error =
+        Some("xclip [...] exited with exit status: 1: target not available".into());
+    let observation = Observation {
+        control,
+        ..Default::default()
+    };
+    let all = text(&observation);
+    assert!(
+        all.contains("CONTROL text/html read back outside the WebView: FAILED: xclip"),
+        "{all}"
+    );
+    assert!(verdict_control(&observation).ends_with("NO"));
+}
+
+#[test]
+fn control_where_a_flavour_reads_back_empty_is_not_served() {
+    let mut control = served_both();
+    control.html = Some(String::new());
+    let observation = Observation {
+        control,
+        ..Default::default()
+    };
+    assert!(verdict_control(&observation).ends_with("NO"));
+}
+
+#[test]
+fn verdict_one_no_is_disambiguated_by_the_control() {
+    // The control confirms both were served: this NO is real.
+    let real_no = Observation {
+        control: served_both(),
+        ctrl_v: case(vec![paste(&["text/plain"], 0, 40)], "a", "a"),
+        ..Default::default()
+    };
+    assert!(verdict(&real_no, 1).ends_with("NO"));
+    let all = text(&real_no);
+    assert!(
+        all.contains("NOTE on VERDICT 1: the CONTROL shows the owner served both, so the WebView withheld one"),
+        "{all}"
+    );
+
+    // The control never confirmed anything (the owner never started): ambiguous.
+    let ambiguous = Observation {
+        control: ClipboardControl::default(),
+        ctrl_v: case(vec![paste(&["text/plain"], 0, 40)], "a", "a"),
+        ..Default::default()
+    };
+    let all = text(&ambiguous);
+    assert!(
+        all.contains("NOTE on VERDICT 1: ambiguous -- the CONTROL did not confirm"),
+        "{all}"
+    );
+}
+
+#[test]
+fn verdict_one_yes_carries_no_note() {
+    let observation = Observation {
+        control: served_both(),
+        ctrl_v: both_flavours_case(),
+        ..Default::default()
+    };
+    assert!(verdict(&observation, 1).ends_with("YES"));
+    assert!(
+        !text(&observation).contains("NOTE on VERDICT 1"),
+        "{}",
+        text(&observation)
+    );
+}
+
+/// If the CONTROL block is ever removed or its result ignored, VERDICT 1's `NO`
+/// must not silently start claiming certainty it does not have.
+#[test]
+fn a_no_verdict_one_always_carries_a_note_either_way() {
+    for control in [ClipboardControl::default(), served_both()] {
+        let observation = Observation {
+            control,
+            ctrl_v: case(vec![paste(&["text/plain"], 0, 40)], "a", "a"),
+            ..Default::default()
+        };
+        assert!(
+            text(&observation).contains("NOTE on VERDICT 1"),
+            "{}",
+            text(&observation)
         );
     }
 }
