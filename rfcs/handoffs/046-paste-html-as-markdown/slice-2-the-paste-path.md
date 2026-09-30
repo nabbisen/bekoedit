@@ -30,6 +30,15 @@ exists. The task 037 merge report traced this.
 **Read the variable at run time instead**, with `std::env::var("CARGO_MANIFEST_DIR")`,
 which cargo sets when it runs a test. This is the first commit of part A.
 
+**Also, as part B's first commit** (added 2026-09-30):
+
+- the same change in `bekoedit-app`'s tests that use
+  `env!("CARGO_MANIFEST_DIR")`: `link_guard/tests.rs`, `shell_focus/tests.rs`,
+  `tests/rfc_042.rs`, `source_sync/host/tests.rs` and
+  `tests/link_opener_stubs.rs`;
+- `#[cfg(unix)]` on `paste_probe.rs`'s `XCLIP_STUB_BODY`, which the Windows
+  build reports as unused.
+
 ## 2. Part A: prove the gating assumptions, then merge a probe · **[Binding]**
 
 Before any product code, one **release-checks scenario** answers the questions
@@ -60,6 +69,31 @@ and report.** Slice 2's end-to-end testing then needs a different design, and
 that decision is mine.
 
 ## 3. Part B: the paste path
+
+### 3.0 What part A established · **[Binding]**, added 2026-09-30
+
+From run `36707615030`, with a GTK 4 owner serving both flavours, confirmed
+from outside the WebView:
+
+- **A real Ctrl+V carries both flavours to the page**, as a trusted `paste`
+  event. The design stands, and **the end-to-end test uses the real clipboard**.
+- **A real Ctrl+Shift+V carries only `text/plain`.** WebKitGTK strips the HTML
+  for that chord itself, so the handler sees no `text/html` and lets
+  CodeMirror's plain paste run.
+- **WebKitGTK rewrites the HTML before the page sees it.** The owner served 84
+  characters, and the page read **1,469**, beginning `<h1 style="caret-color:
+  …`: every element carries computed inline styles. **This is the HTML a Linux
+  paste will actually convert,** and it is exactly the shape where `mdka` drops
+  bold carried by `style` (RFC-046 §6.2, item 4). So:
+  - the end-to-end scenario **records the full HTML the page received**, as one
+    line in the log;
+  - that exact HTML becomes a fixture in `bekoedit-paste`'s corpus, named
+    `webkitgtk-…`, **not** `synthetic-…`, as the first real serialisation in
+    the corpus. Its expected Markdown is typed by hand;
+  - **if the bold, or any heading or list structure, is lost in that
+    conversion, report it before shipping.** Whether that is acceptable, or
+    needs a pre-pass, or a letter to upstream, is my decision to make on
+    evidence.
 
 ### 3.1 The handler · **[Binding]**
 
@@ -131,11 +165,13 @@ The `data:` image marker passes the localised text through
 
 **Ctrl+Shift+V** (Cmd+Shift+V on macOS) pastes plain text (RFC-046 §5.5).
 
-- Mechanism **[Advisory]**: the chord's keydown sets a one-shot flag, the next
-  `paste` in the same editor consumes it, and CodeMirror's plain paste runs.
-- **If part A showed that WebKitGTK sends no `paste` event for the chord,** read
-  the plain flavour through whatever part A found that works, and say what you
-  used. If nothing works, stop and report.
+- **On Linux this already holds without any code** (§3.0): the chord's paste
+  carries no `text/html`, so §3.1's handler does nothing.
+- **Keep the one-shot flag anyway.** The chord's keydown sets it, and the next
+  `paste` in the same editor consumes it and lets CodeMirror's plain paste run,
+  even if `text/html` is present. WKWebView (macOS) and WebView2 (Windows) are
+  untested here and may not strip the HTML. The flag makes the behaviour the
+  same everywhere, and costs a few lines.
 
 ### 3.6 Tests · **[Binding]**
 
@@ -150,10 +186,13 @@ The `data:` image marker passes the localised text through
 - **Rust:** the request and reply round-trip; the handler calls the converter
   with `LineEnding::Lf` and the localised marker; the table notice appears only
   when §3.4 says so.
-- **End to end, in release checks,** using what part A proved. A real paste of
-  HTML with a heading, a list and a table must arrive as the expected Markdown.
-  A plain paste of the same clipboard must arrive as the plain flavour. The
-  bytes on disk after save are checked like task 026's.
+- **End to end, in release checks,** with part A's GTK 4 clipboard owner and
+  real XTEST keys:
+  - a real Ctrl+V of HTML with a heading, a list, **bold**, and a table must
+    arrive as the expected Markdown;
+  - a real Ctrl+Shift+V of the same clipboard must arrive as the plain flavour;
+  - the bytes on disk after save are checked like task 026's;
+  - the full received HTML is logged (§3.0).
 - **Mutations**, each failing a named test:
   - no position mapping;
   - no discard;
