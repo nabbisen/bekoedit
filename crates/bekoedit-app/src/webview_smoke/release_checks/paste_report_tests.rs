@@ -452,13 +452,24 @@ fn control_where_a_flavour_failed_to_read_back_says_the_error_and_is_verdict_no(
 
 #[test]
 fn control_where_a_flavour_reads_back_empty_is_not_served() {
-    let mut control = served_both();
-    control.html = Some(String::new());
-    let observation = Observation {
-        control,
-        ..Default::default()
-    };
-    assert!(verdict_control(&observation).ends_with("NO"));
+    // Either flavour empty must fail the control's verdict on its own -- both
+    // are load-bearing, not just html.
+    for empty in ["html", "plain"] {
+        let mut control = served_both();
+        match empty {
+            "html" => control.html = Some(String::new()),
+            _ => control.plain = Some(String::new()),
+        }
+        let observation = Observation {
+            control,
+            ..Default::default()
+        };
+        assert!(
+            verdict_control(&observation).ends_with("NO"),
+            "{empty} empty: {}",
+            verdict_control(&observation)
+        );
+    }
 }
 
 #[test]
