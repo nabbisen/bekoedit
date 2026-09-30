@@ -455,11 +455,15 @@ jobs:
         # WebView does with a real Ctrl+V and Ctrl+Shift+V and asserts no product
         # behaviour; the soak RESTARTS at 0 of 10 again from the run that first
         # contains it.
+        # RFC-046 slice 2 part B then added `paste_conversion`, which asserts the
+        # paste handler itself (a real Ctrl+V converts and saves; a real
+        # Ctrl+Shift+V pastes plain); the soak RESTARTS at 0 of 10 again from the
+        # run that first contains it.
         id: release_checks
         continue-on-error: true
         run: |
           failed=0
-          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe; do
+          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe paste_conversion; do
             RELEASE_CHECKS_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-release-checks.XXXXXX")"
             echo "release-checks scenario: $scenario"
             # Task 033: only this scenario gets stub openers. $BROWSER is the
@@ -474,7 +478,7 @@ jobs:
             # RFC-046 slice 2, part A: the probe starts this helper itself (it
             # owns the clipboard with text/html AND text/plain, which xclip cannot
             # offer at once) under this scenario's own Xvfb, and only here.
-            if [ "$scenario" = paste_probe ]; then
+            if [ "$scenario" = paste_probe ] || [ "$scenario" = paste_conversion ]; then
               opener_env=("BEKOEDIT_PASTE_PROBE_CLIPBOARD_OWNER=$PWD/scripts/webview-clipboard-owner.py")
             fi
             timeout 90 xvfb-run -a -s "-screen 0 1280x1024x24" \
