@@ -273,12 +273,20 @@ jobs:
             "$ARTIFACT_DIR/bekoedit-$EXPECTED_VERSION-x86_64-unknown-linux-gnu.tar.gz" \
             bekoedit
           bash scripts/check-linux-portability-containers.sh "$EXTRACT_DIR/bekoedit"
+      - name: Release notes from this tag's CHANGELOG.md
+        shell: bash
+        run: |
+          set -euo pipefail
+          # docs/src/changelog-policy.md: the release page carries this
+          # version's CHANGELOG section as text, copied at the tag, so the page
+          # stands on its own whatever later happens to CHANGELOG.md.
+          python3 scripts/release-notes.py "$EXPECTED_VERSION" CHANGELOG.md \
+            "$GITHUB_REPOSITORY" "$EXPECTED_VERSION" > "$RUNNER_TEMP/release-notes.md"
+          cat "$RUNNER_TEMP/release-notes.md"
       - name: Publish verified release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          # docs/src/changelog-policy.md: the page only links to CHANGELOG.md,
-          # pinned to this tag, where this version is the first section.
-          body: "Release notes: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ env.EXPECTED_VERSION }}/CHANGELOG.md)"
+          body_path: ${{ runner.temp }}/release-notes.md
           files: |
             dist/bekoedit-${{ env.EXPECTED_VERSION }}-x86_64-unknown-linux-gnu.tar.gz
             dist/bekoedit-${{ env.EXPECTED_VERSION }}-x86_64-unknown-linux-gnu.tar.gz.sha256

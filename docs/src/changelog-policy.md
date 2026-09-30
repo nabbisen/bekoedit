@@ -1,8 +1,8 @@
 # Changelog and Release Notes
 
-`CHANGELOG.md` is the one place where release notes live. Nothing is written
-twice: each release has one section, in one file, and the GitHub Release page
-only links to it.
+`CHANGELOG.md` is the one place where release notes are **written**. Each
+release has one section, in one file. The GitHub Release page carries a copy of
+that section, made automatically at the tag, and is never edited by hand.
 
 ## Each release's section
 
@@ -34,11 +34,16 @@ detail:
 
 ## The GitHub Release page
 
-The page carries **one line**, a link to `CHANGELOG.md` **at the release's own
-tag**. At its tag, a version is always the first section of `CHANGELOG.md`.
+The page carries **the release's own `CHANGELOG.md` section, as text**: from
+its Highlights to the end of its detail, followed by one link to `CHANGELOG.md`
+at the release's tag for the full history.
 
-The link is pinned to the tag, not to `main`, so it still works when older
-sections are later moved (next section). Nothing else is written on the page.
+- **It is copied at the tag by `release.yml`** (`scripts/release-notes.py`), so
+  it is exactly the text that was reviewed and released.
+- **The page stands on its own.** It does not depend on what `CHANGELOG.md`
+  later becomes, when sections move to `changelog/` or anything else changes.
+- **Changed 2026-09-30, on the owner's decision.** Until then the page was only
+  a link. Pages from 0.16.0 on carry the text.
 
 ## Keeping the file a readable size
 
@@ -69,7 +74,7 @@ link works on GitHub and in the repository, not offline.
 |---|---|---|
 | The released version has a dated section | `release.yml`, before anything is built | in place |
 | That section opens with `### Highlights` | `release.yml`, same step | in place |
-| The GitHub Release page links to `CHANGELOG.md` at the tag | `release.yml` sets the page text | in place |
+| The GitHub Release page carries the release's section, copied at the tag | `release.yml`, with `scripts/release-notes.py` | in place |
 | Each version appears exactly once across `CHANGELOG.md` and `changelog/` | `scripts/check-changelog.sh`, in CI | in place |
 | Every archive file is linked from `CHANGELOG.md`, and every link resolves | same check | in place |
 | No file in the repository links to a section that has moved | same check | in place |
