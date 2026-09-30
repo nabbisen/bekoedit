@@ -115,7 +115,12 @@ fn rfc_042_every_shell_focus_acquire_has_a_release_in_the_same_file() {
     // menu's other close paths — so no allow-list entry is needed.
     const ALLOW_LISTED_NO_RELEASE_IN_FILE: &[&str] = &[];
 
-    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    // At run time, not `env!`: that is fixed into the binary when it is
+    // compiled, so a test binary reused from a deleted worktree (a shared
+    // `target/`) would look in a directory that no longer exists. Cargo sets
+    // this when it runs a test.
+    let manifest_dir_string = std::env::var("CARGO_MANIFEST_DIR").expect("run by cargo test");
+    let manifest_dir = std::path::Path::new(&manifest_dir_string);
     let mut checked = Vec::new();
     collect_rust_sources(
         &manifest_dir.join("src/components"),

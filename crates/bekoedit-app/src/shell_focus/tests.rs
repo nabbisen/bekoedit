@@ -82,8 +82,13 @@ fn emit_eval_scripts_for_node_parse_check() {
 fn eval_scripts_dir() -> std::path::PathBuf {
     match std::env::var("CARGO_TARGET_DIR") {
         Ok(dir) => std::path::Path::new(&dir).join("eval-scripts"),
+        // At run time, not `env!`: that is fixed into the binary when it is
+        // compiled, so a test binary reused from a deleted worktree (a shared
+        // `target/`) would look in a directory that no longer exists. Cargo
+        // sets this when it runs a test.
         Err(_) => {
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/eval-scripts")
+            let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("run by cargo test");
+            std::path::Path::new(&manifest_dir).join("../../target/eval-scripts")
         }
     }
 }

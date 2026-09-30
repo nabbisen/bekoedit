@@ -61,7 +61,12 @@ fn stubs_are_the_only_openers_and_see_the_urls_the_scenario_expects() {
         );
         return;
     }
-    let scripts = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../scripts");
+    // At run time, not `env!`: that is fixed into the binary when it is
+    // compiled, so a test binary reused from a deleted worktree (a shared
+    // `target/`) would look in a directory that no longer exists. Cargo sets
+    // this when it runs a test.
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("run by cargo test");
+    let scripts = PathBuf::from(manifest_dir).join("../../scripts");
     let dir = tempfile::tempdir().unwrap();
     let stubs = dir.path().join("stubs");
     let made = Command::new("bash")

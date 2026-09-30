@@ -104,11 +104,12 @@ fn the_os_opener_is_called_from_one_place() {
     // Built at run time, so this file does not match itself.
     let needle = ["web", "browser::"].concat();
     let mut hits = Vec::new();
-    visit(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src"),
-        &needle,
-        &mut hits,
-    );
+    // At run time, not `env!`: that is fixed into the binary when it is
+    // compiled, so a test binary reused from a deleted worktree (a shared
+    // `target/`) would look in a directory that no longer exists. Cargo sets
+    // this when it runs a test.
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("run by cargo test");
+    visit(&PathBuf::from(manifest_dir).join("src"), &needle, &mut hits);
     let names: Vec<_> = hits
         .iter()
         .map(|(path, calls)| {

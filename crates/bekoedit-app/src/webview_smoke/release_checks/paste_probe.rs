@@ -395,7 +395,11 @@ mod tests {
     }
 
     /// A stand-in `xclip`: reads back `TARGETS`, `text/html` and `text/plain`
-    /// with fixed content; anything else exits non-zero.
+    /// with fixed content; anything else exits non-zero. Used only by the two
+    /// `#[cfg(unix)]` tests below (`xclip_stub` needs `chmod`), so it is gated
+    /// the same way: otherwise a non-Unix compile (the Windows CI job, which
+    /// still builds this whole binary) reports it as dead code.
+    #[cfg(unix)]
     const XCLIP_STUB_BODY: &str = r#"
 import sys
 args = sys.argv[1:]

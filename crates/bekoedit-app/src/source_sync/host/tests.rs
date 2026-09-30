@@ -201,11 +201,16 @@ fn evaluate_in_node(mode: &str, script: &str, expected: &serde_json::Value) {
     let expected_path = dir.join("expected.json");
     std::fs::write(&script_path, script).unwrap();
     std::fs::write(&expected_path, serde_json::to_string(expected).unwrap()).unwrap();
+    // At run time, not `env!` (which `concat!` would otherwise need, being
+    // compile-time): that is fixed into the binary when it is compiled, so a
+    // test binary reused from a deleted worktree (a shared `target/`) would
+    // look in a directory that no longer exists. Cargo sets this when it runs
+    // a test.
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("run by cargo test");
+    let harness =
+        std::path::Path::new(&manifest_dir).join("js/test/support/bridge-payload-harness.mjs");
     let output = std::process::Command::new("node")
-        .arg(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/js/test/support/bridge-payload-harness.mjs"
-        ))
+        .arg(&harness)
         .args([mode])
         .arg(&script_path)
         .arg(&expected_path)
