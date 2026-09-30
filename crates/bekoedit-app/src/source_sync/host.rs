@@ -23,6 +23,8 @@ use super::{
     lifecycle::LifecycleEffect,
 };
 
+mod paste;
+
 const EDITOR_BUNDLE: &str = include_str!("../../assets/editor-bundle.js");
 const SOURCE_RELAY: &str = "__bk_source_editor_relay";
 const TEXT_CONTAINER: &str = "cm-root";
@@ -72,6 +74,32 @@ pub fn SourceEditorControllerHost() -> Element {
                         // Reaches the trusted-click log through `bridge::trace`
                         // (task 036), so it is recorded once, not twice.
                         bridge::trace(event, details);
+                    }
+                    if let SourceEditorEvent::PasteRequested {
+                        identity,
+                        token,
+                        html,
+                        plain_length,
+                        ..
+                    } = event
+                    {
+                        // A paste is not a lifecycle transition (RFC-046 §3.2):
+                        // handled and replied to here, never through
+                        // `handle_event`'s mount/snapshot/resume machine.
+                        paste::handle_paste_requested(
+                            identity,
+                            token,
+                            html,
+                            plain_length,
+                            toasts,
+                            lang,
+                            generation,
+                        );
+                        continue;
+                    }
+                    if let SourceEditorEvent::PasteDiscarded { token, .. } = event {
+                        paste::handle_paste_discarded(token, toasts, lang);
+                        continue;
                     }
                     let active_focus_token = sync.read().active_command_focus_token();
                     let handled = {
@@ -364,7 +392,7 @@ fn request_for_effect(effect: &LifecycleEffect, app: &AppState) -> Option<Source
     }
 }
 
-fn dispatch_request(
+pub(super) fn dispatch_request(
     request: &SourceEditorRequest,
     fallback: Option<&SourceEditorEvent>,
     relay_generation: u64,

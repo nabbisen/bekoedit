@@ -89,6 +89,12 @@ impl SourceSyncState {
                 Err(reason.into())
             }
             SourceEditorEvent::Trace { .. } => Ok(()),
+            // RFC-046 §3.2/§3.3: `host.rs`'s relay loop intercepts and
+            // `continue`s past every `PasteRequested`/`PasteDiscarded`, so
+            // these arms exist only to keep the match exhaustive; neither is
+            // reached in practice.
+            SourceEditorEvent::PasteRequested { .. } => Ok(()),
+            SourceEditorEvent::PasteDiscarded { .. } => Ok(()),
         })();
         if matches!(self.lifecycle.state, LifecycleState::Unavailable { .. }) {
             self.protected_focus_token = None;

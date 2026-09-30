@@ -14,6 +14,7 @@ import {
 
 import { BRIDGE_SCHEMA_VERSION, createLifecycleAdapter } from "./lifecycle.js";
 import { dispatchForRelayGeneration } from "./transport.js";
+import { createPasteController } from "./paste.js";
 import {
   consumeFocusRequest,
   installBrowserFocusGuardRegistry,
@@ -24,6 +25,7 @@ let view = null;
 let sendTimer = null;
 let skipNextSend = false;
 let adapter = null;
+let pasteController = null;
 const focusGuards = installBrowserFocusGuardRegistry(window, document);
 if (!focusGuards) {
   throw new Error("bekoedit: incompatible source focus guard registry");
@@ -49,6 +51,23 @@ function trace(name, details = {}) {
     ...details,
   });
 }
+
+pasteController = createPasteController({
+  emit,
+  getIdentity: () => adapter.currentIdentity(),
+  isHeld: () => adapter.isHeld(),
+  getSelection: (currentView) => {
+    const { from, to } = currentView.state.selection.main;
+    return { from, to };
+  },
+  insert(currentView, { from, to, text }) {
+    currentView.dispatch({
+      changes: { from, to, insert: text },
+      selection: { anchor: from + text.length },
+      userEvent: "input.paste",
+    });
+  },
+});
 
 function cancelPendingChange() {
   clearTimeout(sendTimer);
@@ -123,8 +142,15 @@ function buildExtensions() {
         const max = scroller.scrollHeight - scroller.clientHeight;
         if (max > 0) emit({ type: "scroll", fraction: scroller.scrollTop / max });
       },
+      keydown(event) {
+        pasteController.handleKeydown(event);
+      },
+      paste(event, currentView) {
+        if (pasteController.handlePaste(event, currentView)) return true;
+      },
     }),
     EditorView.updateListener.of((update) => {
+      pasteController.handleTransaction(update);
       if (update.docChanged && !skipNextSend) scheduleSend(false);
     }),
   ];
@@ -157,6 +183,7 @@ adapter = createLifecycleAdapter({
 function dispatch(request) {
   try {
     const parsed = typeof request === "string" ? JSON.parse(request) : request;
+    if (pasteController.handleReply(parsed, view)) return true;
     return adapter.dispatch(parsed);
   } catch (_error) {
     trace("js.dispatch.bridge_error");

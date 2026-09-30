@@ -58,6 +58,16 @@ mod app_tests {
         assert!(bundle.contains("consumeFocusGuard"));
     }
 
+    /// RFC-046 §3.1: `paste.js` pre-checks the pasted HTML's length before it
+    /// ever crosses the bridge, so its threshold must not drift from the
+    /// crate's own authoritative byte limit.
+    #[test]
+    fn paste_size_pre_check_matches_the_crate_limit() {
+        let paste_js = include_str!("../js/src/paste.js");
+        assert_eq!(bekoedit_paste::MAX_HTML_BYTES, 1024 * 1024);
+        assert!(paste_js.contains("MAX_HTML_UTF16_LENGTH = 1024 * 1024"));
+    }
+
     #[test]
     fn application_root_assets_are_cargo_native_and_current() {
         let app = include_str!("app.rs");

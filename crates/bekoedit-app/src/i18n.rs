@@ -220,6 +220,14 @@ fn tr_en(key: &str) -> &'static str {
         "status.diag_hint" => "Parse diagnostics",
         "status.words" => "words",
         "status.chars" => "characters",
+        "paste.too_large" => "Pasted content was too large to convert; pasted as plain text.",
+        "paste.failed" => "Pasted content could not be converted; pasted as plain text.",
+        "paste.timed_out" => "Pasted content took too long to convert; pasted as plain text.",
+        "paste.table_no_form" => {
+            "The pasted table could not be kept as a Markdown table; its text was kept."
+        }
+        "paste.image_omitted" => "image",
+        "paste.discarded" => "Paste not applied: the document changed before it was ready.",
         _ => "",
     }
 }
@@ -399,6 +407,22 @@ fn tr_ja(key: &str) -> &'static str {
         "status.diag_hint" => "パース警告",
         "status.words" => "単語",
         "status.chars" => "文字",
+        "paste.too_large" => {
+            "貼り付けた内容が大きすぎて変換できなかったため、プレーンテキストとして貼り付けました。"
+        }
+        "paste.failed" => {
+            "貼り付けた内容を変換できなかったため、プレーンテキストとして貼り付けました。"
+        }
+        "paste.timed_out" => {
+            "貼り付けた内容の変換に時間がかかりすぎたため、プレーンテキストとして貼り付けました。"
+        }
+        "paste.table_no_form" => {
+            "貼り付けた表をMarkdownの表として保持できなかったため、テキストのみ保持しました。"
+        }
+        "paste.image_omitted" => "画像",
+        "paste.discarded" => {
+            "貼り付けは反映されませんでした: 準備が整う前にドキュメントが変更されました。"
+        }
         _ => "",
     }
 }
@@ -419,6 +443,12 @@ mod tests {
             "editor.loading",
             "editor.unavailable",
             "editor.retry",
+            "paste.too_large",
+            "paste.failed",
+            "paste.timed_out",
+            "paste.table_no_form",
+            "paste.image_omitted",
+            "paste.discarded",
         ];
         for key in keys {
             assert!(!tr(Lang::En, key).is_empty(), "missing en: {key}");

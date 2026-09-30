@@ -17,6 +17,7 @@ path = "src/main.rs"
 bekoedit-core               = { workspace = true }
 bekoedit-fs                 = { workspace = true }
 bekoedit-markdown           = { workspace = true }
+bekoedit-paste              = { workspace = true }
 bekoedit-ui-contract        = { workspace = true }
 
 dioxus                      = { workspace = true, features = ["desktop"] }
