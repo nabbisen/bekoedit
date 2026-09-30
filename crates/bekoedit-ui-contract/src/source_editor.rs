@@ -102,6 +102,47 @@ pub enum SourceEditorRequest {
         operation_id: OperationId,
         identity: EditorIdentity,
     },
+    /// RFC-046: the converted (or refused) result of one paste, in reply to a
+    /// `PasteRequested` event. Outside RFC-041's mount/snapshot/resume state
+    /// machine: it is delivered the same way, but carries no `operation_id` and
+    /// expects no acknowledgement back through it, since the page applies the
+    /// result and moves on -- see `paste.js`.
+    PasteResult {
+        protocol_version: u32,
+        identity: EditorIdentity,
+        token: u64,
+        outcome: PasteOutcome,
+    },
+}
+
+/// RFC-046 §3.2. Mirrors `bekoedit_paste::Outcome`, plus `table_no_gfm_form`
+/// (§3.4), which the page needs to decide the one extra notice `bekoedit_paste`
+/// itself does not know about (it has no `bekoedit_markdown` dependency).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum PasteOutcome {
+    /// Insert `markdown`. If `table_no_gfm_form`, also raise that notice.
+    Converted {
+        markdown: String,
+        table_no_gfm_form: bool,
+    },
+    /// Insert the plain flavour the page already holds locally, and raise the
+    /// notice named by `reason`.
+    Fallback { reason: PasteFallbackReason },
+    /// Insert the plain flavour the page already holds locally; no notice.
+    Empty,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PasteFallbackReason {
+    TooLarge,
+    Failed,
+    TimedOut,
 }
 
 impl SourceEditorRequest {
@@ -126,6 +167,9 @@ impl SourceEditorRequest {
                 protocol_version, ..
             }
             | Self::DestroyEditor {
+                protocol_version, ..
+            }
+            | Self::PasteResult {
                 protocol_version, ..
             } => *protocol_version,
         }
@@ -349,6 +393,28 @@ pub enum SourceEditorEvent {
         #[serde(default)]
         focus_guard_diagnostic: Option<FocusGuardDiagnostic>,
     },
+    /// RFC-046 §3.2: a `paste` in the editor carried `text/html`, and plain
+    /// paste was not requested. `html` is `None` when the page already decided
+    /// `TooLarge` itself, from the flavour's length alone (§3.1): the page has
+    /// already inserted the plain flavour by the time this arrives, so it asks
+    /// only for the notice, and expects no `PasteResult` reply.
+    PasteRequested {
+        protocol_version: u32,
+        identity: EditorIdentity,
+        token: u64,
+        html: Option<String>,
+        plain_length: u64,
+    },
+    /// RFC-046 §3.3: a `PasteResult` arrived for a paste the page can no
+    /// longer apply -- the editor's identity changed, or it is held -- so the
+    /// page discarded it instead of inserting into the wrong document. Fired
+    /// purely to raise the one Warning notice §3.3 requires; there is nothing
+    /// further for Rust to compute.
+    PasteDiscarded {
+        protocol_version: u32,
+        identity: EditorIdentity,
+        token: u64,
+    },
 }
 
 impl SourceEditorEvent {
@@ -400,6 +466,12 @@ impl SourceEditorEvent {
                 protocol_version, ..
             }
             | Self::Trace {
+                protocol_version, ..
+            }
+            | Self::PasteRequested {
+                protocol_version, ..
+            }
+            | Self::PasteDiscarded {
                 protocol_version, ..
             } => *protocol_version,
         }
