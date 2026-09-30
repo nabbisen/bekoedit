@@ -161,29 +161,50 @@ pub(super) fn structure_report(markdown: &str) -> StructureSurvived {
     }
 }
 
-/// The saved file, with line endings normalized on both sides, must be
-/// exactly `inserted` (as CodeMirror holds it, `\n`-only) followed by the
-/// original content, also normalized. Tolerant of whatever line ending task
-/// 027's reconciliation gives newly inserted content (its own concern, with
-/// its own dedicated coverage in `save.rs`/`mode_switch.rs`): what this
-/// guards is that paste's insertion corrupts or drops nothing on the way to
-/// disk.
+/// The exact bytes the saved file must be, required (review, 2026-09-30) in
+/// place of a check that normalized line endings on both sides and so could
+/// never see a change to the *original*'s own endings -- the exact defect
+/// task 027 fixed, now reachable through paste's insertion instead.
+///
+/// The paste lands at document position 0, so it is a pure prefix: nothing
+/// of `original` moves. Task 027's Rule 2 governs what ending paste's own
+/// inserted line breaks take, since the seeded note (`original_note()`)
+/// mixes endings: an inserted break takes the ending of the break that ends
+/// the splice's first line, and here that is `original`'s own first line,
+/// `# Title\r\n` -- CRLF. `inserted` is `\n`-only (CodeMirror's own form,
+/// and the handler strips its own trailing break, §3.3), so re-encoding
+/// every `\n` in it to `\r\n` gives the exact expected bytes:
+///
+/// ```text
+/// saved == inserted.replace('\n', "\r\n") + original      // byte for byte
+/// ```
 pub(super) fn check_saved_paste(
     original: &[u8],
     saved: &[u8],
     inserted: &str,
 ) -> Result<(), String> {
-    let normalize = |bytes: &[u8]| String::from_utf8_lossy(bytes).replace("\r\n", "\n");
-    let saved_normalized = normalize(saved);
-    let expected = format!("{}{}", inserted.replace("\r\n", "\n"), normalize(original));
-    if saved_normalized == expected {
+    let mut expected = inserted.replace('\n', "\r\n").into_bytes();
+    expected.extend_from_slice(original);
+    if saved == expected.as_slice() {
         return Ok(());
     }
+    let Some(offset) =
+        (0..expected.len().max(saved.len())).find(|&i| expected.get(i) != saved.get(i))
+    else {
+        return Ok(());
+    };
+    let show = |bytes: &[u8]| {
+        bytes
+            .get(offset)
+            .map_or("end of file".to_string(), |b| format!("{b:#04x}"))
+    };
     Err(format!(
-        "{NAME}: saved content (line endings normalized) does not match the converted paste \
-         prefixed onto the original; saved {} chars, expected {} chars",
-        saved_normalized.chars().count(),
-        expected.chars().count()
+        "{NAME}: first differing byte offset {offset}: expected {}, saved {} \
+         (expected {} bytes, saved {})",
+        show(&expected),
+        show(saved),
+        expected.len(),
+        saved.len()
     ))
 }
 
@@ -314,6 +335,9 @@ pub(super) async fn run(
     tokio::time::sleep(SETTLE).await;
     let saved = std::fs::read(file)
         .map_err(|error| format!("{NAME}: cannot read {}: {error}", file.display()))?;
+    // If this disagrees with `check_saved_paste`'s Rule 2 reasoning on a real
+    // run, that is a finding to report with the bytes, not a reason to loosen
+    // the check (review, 2026-09-30).
     check_saved_paste(&expectation.original, &saved, inserted)?;
 
     Ok(vec![
@@ -358,17 +382,11 @@ mod tests {
         assert!(report.list && report.bold && !report.heading && !report.table);
     }
 
+    /// The exact case (review, 2026-09-30): Rule 2's ending -- the splice's
+    /// first line, `original`'s own `# Title\r\n` -- re-encodes every `\n`
+    /// `inserted` holds, byte for byte, nothing normalized on either side.
     #[test]
-    fn check_saved_paste_accepts_an_exact_prefix_insertion() {
-        let original = b"# Title\r\nbody\r\n";
-        let inserted = "# Report\n\n";
-        let mut saved = inserted.as_bytes().to_vec();
-        saved.extend_from_slice(original);
-        assert!(check_saved_paste(original, &saved, inserted).is_ok());
-    }
-
-    #[test]
-    fn check_saved_paste_accepts_the_inserted_newlines_re_encoded_as_crlf() {
+    fn check_saved_paste_accepts_the_exact_rule_2_encoding() {
         let original = b"# Title\r\nbody\r\n";
         let inserted = "# Report\n\n";
         let mut saved = b"# Report\r\n\r\n".to_vec();
@@ -382,16 +400,36 @@ mod tests {
         let inserted = "# Report\n\n";
         let saved = original.to_vec(); // the paste never made it to disk
         let error = check_saved_paste(original, &saved, inserted).unwrap_err();
-        assert!(error.contains("does not match"), "{error}");
+        // "# " matches; expected's "Report" and the untouched original's
+        // "Title" first differ at their third character, offset 2.
+        assert!(error.contains("first differing byte offset 2"), "{error}");
     }
 
     #[test]
     fn check_saved_paste_rejects_a_change_to_the_untouched_original() {
         let original = b"# Title\r\nbody\r\n";
         let inserted = "# Report\n\n";
-        let mut saved = inserted.as_bytes().to_vec();
+        let mut saved = b"# Report\r\n\r\n".to_vec();
         saved.extend_from_slice(b"# Title\r\nBODY\r\n"); // the original was touched
         let error = check_saved_paste(original, &saved, inserted).unwrap_err();
-        assert!(error.contains("does not match"), "{error}");
+        // "# Report\r\n\r\n" is 12 bytes, "# Title\r\n" is 9: the touched "B"
+        // (was "b") lands at offset 12 + 9 = 21.
+        assert!(error.contains("first differing byte offset 21"), "{error}");
+    }
+
+    /// The defect §3 required this check to catch, and the tolerant (both
+    /// sides normalized) comparison it replaced could not: a change to one
+    /// of the *original*'s own line endings, past the inserted prefix,
+    /// disguised by the paste's own re-encoded `\r\n` looking identical.
+    #[test]
+    fn check_saved_paste_rejects_the_original_s_own_line_ending_changed() {
+        let original = b"# Title\r\nbody\r\n";
+        let inserted = "# Report\n\n";
+        // The inserted prefix is exact; "body"'s own trailing \r\n became \n.
+        let saved = b"# Report\r\n\r\n# Title\r\nbody\n".to_vec();
+        let error = check_saved_paste(original, &saved, inserted).unwrap_err();
+        // The prefix and "# Title\r\nbody" (25 bytes of it) match; original's
+        // own "\r\n" at the end is where the two first differ.
+        assert!(error.contains("first differing byte offset 25"), "{error}");
     }
 }
