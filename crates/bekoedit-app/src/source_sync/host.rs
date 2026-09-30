@@ -75,36 +75,12 @@ pub fn SourceEditorControllerHost() -> Element {
                         // (task 036), so it is recorded once, not twice.
                         bridge::trace(event, details);
                     }
-                    if let SourceEditorEvent::PasteRequested {
-                        identity,
-                        token,
-                        html,
-                        plain_length,
-                        ..
-                    } = event
-                    {
-                        // A paste is not a lifecycle transition (RFC-046 §3.2):
-                        // handled and replied to here, never through
-                        // `handle_event`'s mount/snapshot/resume machine.
-                        paste::handle_paste_requested(
-                            identity,
-                            token,
-                            html,
-                            plain_length,
-                            toasts,
-                            lang,
-                            generation,
-                        );
+                    // None of RFC-046's paste events are lifecycle
+                    // transitions, so `paste::intercept` fully handles them
+                    // and hands back only what is not one of them.
+                    let Some(event) = paste::intercept(event, toasts, lang, generation) else {
                         continue;
-                    }
-                    if let SourceEditorEvent::PasteDiscarded { token, .. } = event {
-                        paste::handle_paste_discarded(token, toasts, lang);
-                        continue;
-                    }
-                    if let SourceEditorEvent::PasteApplied { token, .. } = event {
-                        paste::handle_paste_applied(token, toasts, lang);
-                        continue;
-                    }
+                    };
                     let active_focus_token = sync.read().active_command_focus_token();
                     let handled = {
                         let mut app = state.write();

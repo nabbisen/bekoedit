@@ -18,9 +18,12 @@
 //!
 //! **Known residual, recorded, not fixed:** if the editor remounts while a
 //! conversion is in flight, neither `PasteApplied` nor `PasteDiscarded` ever
-//! arrives for that token (the identity the page would send them under is
-//! gone). Its pending notice then just ages out of the bounded store,
-//! unraised. This is rare -- conversion takes on the order of tens of
+//! arrives for that token under the identity it was set under (the page's own
+//! token numbering restarts on a remount, so a later paste on the new editor
+//! could otherwise reuse the same token number). Keyed by `(EditorIdentity,
+//! token)`, not token alone (review, 2026-09-30), that stale entry can never
+//! be taken by a different editor's paste; it just ages out of the bounded
+//! store, unraised. This is rare -- conversion takes on the order of tens of
 //! milliseconds -- and a silent notice loss on an already-unusual remount is
 //! preferable to inventing a timeout for it.
 
@@ -29,7 +32,9 @@ use std::sync::Mutex;
 use bekoedit_paste::{FallbackReason, LineEnding, Outcome, convert_with_marker};
 use bekoedit_ui_contract::{
     BRIDGE_SCHEMA_VERSION,
-    source_editor::{EditorIdentity, PasteFallbackReason, PasteOutcome, SourceEditorRequest},
+    source_editor::{
+        EditorIdentity, PasteFallbackReason, PasteOutcome, SourceEditorEvent, SourceEditorRequest,
+    },
 };
 use dioxus::prelude::*;
 
@@ -42,31 +47,39 @@ use crate::{
 use super::dispatch_request;
 
 /// A paste's notice key, held between the reply being sent and the page
-/// saying what happened to it. Bounded (the residual above): the oldest
-/// entry is evicted first, so a run of abandoned tokens cannot grow this
-/// without limit. A plain type, not the `static` below directly, so its own
-/// tests exercise an isolated instance rather than the one every handler
-/// shares -- eviction order is otherwise not deterministic to test against
-/// a process-global store under a parallel test run.
+/// saying what happened to it. Keyed by `(EditorIdentity, token)`, not token
+/// alone (review, 2026-09-30): `paste.js` numbers tokens from 1 per editor
+/// script instance, so a remount restarts that numbering, and a token-only
+/// key could let a stale entry be taken by an unrelated later paste on the
+/// new editor, showing that paste's user someone else's notice. Bounded (the
+/// residual above): the oldest entry is evicted first, so a run of abandoned
+/// entries cannot grow this without limit. A plain type, not the `static`
+/// below directly, so its own tests exercise an isolated instance rather
+/// than the one every handler shares -- eviction order is otherwise not
+/// deterministic to test against a process-global store under a parallel
+/// test run.
 #[derive(Debug, Default)]
 struct PendingNotices {
-    entries: Vec<(u64, &'static str)>,
+    entries: Vec<(EditorIdentity, u64, &'static str)>,
 }
 
 impl PendingNotices {
-    fn set(&mut self, token: u64, key: &'static str) {
+    fn set(&mut self, identity: EditorIdentity, token: u64, key: &'static str) {
         if self.entries.len() >= MAX_PENDING_NOTICES {
             self.entries.remove(0);
         }
-        self.entries.push((token, key));
+        self.entries.push((identity, token, key));
     }
 
-    /// Removes and returns `token`'s pending notice, if it still has one.
-    /// Called exactly once per token, by whichever of
+    /// Removes and returns `(identity, token)`'s pending notice, if it still
+    /// has one. Called exactly once per paste, by whichever of
     /// `PasteApplied`/`PasteDiscarded` arrives first for it.
-    fn take(&mut self, token: u64) -> Option<&'static str> {
-        let index = self.entries.iter().position(|(t, _)| *t == token)?;
-        Some(self.entries.remove(index).1)
+    fn take(&mut self, identity: EditorIdentity, token: u64) -> Option<&'static str> {
+        let index = self
+            .entries
+            .iter()
+            .position(|(i, t, _)| *i == identity && *t == token)?;
+        Some(self.entries.remove(index).2)
     }
 }
 
@@ -75,24 +88,70 @@ static PENDING_NOTICES: Mutex<PendingNotices> = Mutex::new(PendingNotices {
     entries: Vec::new(),
 });
 
-fn set_pending_notice(token: u64, key: &'static str) {
+fn set_pending_notice(identity: EditorIdentity, token: u64, key: &'static str) {
     PENDING_NOTICES
         .lock()
         .expect("pending-notices lock")
-        .set(token, key);
+        .set(identity, token, key);
 }
 
-fn take_pending_notice(token: u64) -> Option<&'static str> {
+fn take_pending_notice(identity: EditorIdentity, token: u64) -> Option<&'static str> {
     PENDING_NOTICES
         .lock()
         .expect("pending-notices lock")
-        .take(token)
+        .take(identity, token)
+}
+
+/// None of RFC-046's paste events are lifecycle transitions (module doc
+/// comment), so this fully handles the three of them and hands back `None`;
+/// anything else it hands back unchanged, for `host.rs`'s relay loop to pass
+/// to `handle_event` as before. The single entry point from `host.rs`, so the
+/// three `handle_paste_*` functions below need no visibility past this module.
+pub(super) fn intercept(
+    event: SourceEditorEvent,
+    toasts: Signal<Vec<Toast>>,
+    lang: Lang,
+    relay_generation: u64,
+) -> Option<SourceEditorEvent> {
+    match event {
+        SourceEditorEvent::PasteRequested {
+            identity,
+            token,
+            html,
+            plain_length,
+            ..
+        } => {
+            handle_paste_requested(
+                identity,
+                token,
+                html,
+                plain_length,
+                toasts,
+                lang,
+                relay_generation,
+            );
+            None
+        }
+        SourceEditorEvent::PasteDiscarded {
+            identity, token, ..
+        } => {
+            handle_paste_discarded(identity, token, toasts, lang);
+            None
+        }
+        SourceEditorEvent::PasteApplied {
+            identity, token, ..
+        } => {
+            handle_paste_applied(identity, token, toasts, lang);
+            None
+        }
+        other => Some(other),
+    }
 }
 
 /// `SourceEditorEvent::PasteRequested` arrived. `html` is `None` when the page
 /// already decided `TooLarge` itself and inserted the plain flavour: there is
 /// nothing to convert and no reply to send, only the notice.
-pub(super) fn handle_paste_requested(
+fn handle_paste_requested(
     identity: EditorIdentity,
     token: u64,
     html: Option<String>,
@@ -125,7 +184,7 @@ pub(super) fn handle_paste_requested(
         // Held, not raised: the page has not yet decided whether this reply
         // is applied or discarded (module doc comment).
         if let Some(key) = notice_key {
-            set_pending_notice(token, key);
+            set_pending_notice(identity, token, key);
         }
         bridge::trace(
             "source.paste.replied",
@@ -187,34 +246,44 @@ enum PendingResolution {
 /// each side, as pure functions over [`PENDING_NOTICES`]: no `Signal`
 /// involved, so every case -- including that a discarded reply's own notice
 /// never surfaces -- is unit tested directly.
-fn resolve_applied(token: u64) -> PendingResolution {
-    match take_pending_notice(token) {
+fn resolve_applied(identity: EditorIdentity, token: u64) -> PendingResolution {
+    match take_pending_notice(identity, token) {
         Some(key) => PendingResolution::Notify(key, ToastKind::Info),
         None => PendingResolution::Nothing,
     }
 }
 
-fn resolve_discarded(token: u64) -> PendingResolution {
+fn resolve_discarded(identity: EditorIdentity, token: u64) -> PendingResolution {
     // Dropped, not surfaced: it would be false -- nothing was pasted.
-    take_pending_notice(token);
+    take_pending_notice(identity, token);
     PendingResolution::Notify("paste.discarded", ToastKind::Warning)
 }
 
 /// `SourceEditorEvent::PasteApplied` arrived (RFC-046 §3.4): the page
 /// inserted the reply's result. Raises that reply's held notice, if it had
 /// one; a successful conversion or `Empty` has none.
-pub(super) fn handle_paste_applied(token: u64, mut toasts: Signal<Vec<Toast>>, lang: Lang) {
+fn handle_paste_applied(
+    identity: EditorIdentity,
+    token: u64,
+    mut toasts: Signal<Vec<Toast>>,
+    lang: Lang,
+) {
     bridge::trace("source.paste.applied", format!("token={token}"));
-    if let PendingResolution::Notify(key, kind) = resolve_applied(token) {
+    if let PendingResolution::Notify(key, kind) = resolve_applied(identity, token) {
         push_toast(&mut toasts, kind, tr(lang, key));
     }
 }
 
 /// `SourceEditorEvent::PasteDiscarded` arrived (RFC-046 §3.3): the page could
 /// not apply a `PasteResult`, so it discarded it.
-pub(super) fn handle_paste_discarded(token: u64, mut toasts: Signal<Vec<Toast>>, lang: Lang) {
+fn handle_paste_discarded(
+    identity: EditorIdentity,
+    token: u64,
+    mut toasts: Signal<Vec<Toast>>,
+    lang: Lang,
+) {
     bridge::trace("source.paste.discarded", format!("token={token}"));
-    if let PendingResolution::Notify(key, kind) = resolve_discarded(token) {
+    if let PendingResolution::Notify(key, kind) = resolve_discarded(identity, token) {
         push_toast(&mut toasts, kind, tr(lang, key));
     }
 }
