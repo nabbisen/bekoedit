@@ -15,6 +15,16 @@ script (GTK 3) failed at run time with `AttributeError: 'Clipboard' object has n
 `Gdk.ContentProvider`, is plain data and needs no callback, so it works from Python. The CI package
 is `gir1.2-gtk-4.0`.
 
+Only the three byte providers are used: `text/html`, `text/plain;charset=utf-8` and `text/plain`. A
+fourth provider was tried, wrapping the plain text as a `GLib.Variant("s", plain)` for a `G_TYPE_VARIANT`
+`GValue`, on the reasoning that it would cover any target GTK maps from a `GValue` rather than raw bytes.
+It was removed on review, before it ever ran: the two byte providers already offer `text/plain` and
+`text/plain;charset=utf-8`, and GTK maps those to the X plain-text targets (`UTF8_STRING`, `STRING`)
+itself, so the variant provider added nothing -- and it was also the one line most likely to fail on its
+first run, since GTK has no standard serialiser for a bare `G_TYPE_VARIANT` value. A `GValue` provider
+for completeness would instead be `new_for_value(plain)` with a plain Python `str`, which PyGObject
+turns into a `G_TYPE_STRING`; it is not required either.
+
 It writes `READY` to <ready-file> once it owns the selection. It needs a display (DISPLAY, which
 xvfb-run sets), so it must never be run on a developer's desktop: it would take over the real
 clipboard.
@@ -25,7 +35,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
-from gi.repository import Gdk, GLib, Gio, Gtk  # noqa: E402
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 html, plain, ready_file = sys.argv[1], sys.argv[2], sys.argv[3]
 
@@ -39,7 +49,6 @@ providers = [
         "text/plain;charset=utf-8", GLib.Bytes.new(plain.encode("utf-8"))
     ),
     Gdk.ContentProvider.new_for_bytes("text/plain", GLib.Bytes.new(plain.encode("utf-8"))),
-    Gdk.ContentProvider.new_for_value(GLib.Variant("s", plain)),
 ]
 provider = Gdk.ContentProvider.new_union(providers)
 
