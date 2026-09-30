@@ -175,6 +175,22 @@ fn paste_discarded_round_trips() {
 }
 
 #[test]
+fn paste_applied_round_trips() {
+    let event = SourceEditorEvent::PasteApplied {
+        protocol_version: BRIDGE_SCHEMA_VERSION,
+        identity: identity(),
+        token: 15,
+    };
+    let json = serde_json::to_string(&event).unwrap();
+    assert!(json.contains("\"type\":\"pasteApplied\""));
+    assert_eq!(
+        serde_json::from_str::<SourceEditorEvent>(&json).unwrap(),
+        event
+    );
+    assert_eq!(event.protocol_version(), BRIDGE_SCHEMA_VERSION);
+}
+
+#[test]
 fn paste_result_round_trips_for_each_outcome() {
     let cases = [
         PasteOutcome::Converted {

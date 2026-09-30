@@ -415,6 +415,16 @@ pub enum SourceEditorEvent {
         identity: EditorIdentity,
         token: u64,
     },
+    /// RFC-046 §3.4 (review, 2026-09-30): a `PasteResult` arrived and the page
+    /// inserted it. Fired purely so Rust raises that reply's notice (if it had
+    /// one) now, rather than when the reply was sent -- before, a paste that
+    /// was later discarded could raise both the reply's notice and the
+    /// discard notice, contradicting each other.
+    PasteApplied {
+        protocol_version: u32,
+        identity: EditorIdentity,
+        token: u64,
+    },
 }
 
 impl SourceEditorEvent {
@@ -472,6 +482,9 @@ impl SourceEditorEvent {
                 protocol_version, ..
             }
             | Self::PasteDiscarded {
+                protocol_version, ..
+            }
+            | Self::PasteApplied {
                 protocol_version, ..
             } => *protocol_version,
         }

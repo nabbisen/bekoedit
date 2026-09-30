@@ -101,6 +101,10 @@ pub fn SourceEditorControllerHost() -> Element {
                         paste::handle_paste_discarded(token, toasts, lang);
                         continue;
                     }
+                    if let SourceEditorEvent::PasteApplied { token, .. } = event {
+                        paste::handle_paste_applied(token, toasts, lang);
+                        continue;
+                    }
                     let active_focus_token = sync.read().active_command_focus_token();
                     let handled = {
                         let mut app = state.write();

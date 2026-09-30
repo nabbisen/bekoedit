@@ -95,6 +95,7 @@ impl SourceSyncState {
             // reached in practice.
             SourceEditorEvent::PasteRequested { .. } => Ok(()),
             SourceEditorEvent::PasteDiscarded { .. } => Ok(()),
+            SourceEditorEvent::PasteApplied { .. } => Ok(()),
         })();
         if matches!(self.lifecycle.state, LifecycleState::Unavailable { .. }) {
             self.protected_focus_token = None;

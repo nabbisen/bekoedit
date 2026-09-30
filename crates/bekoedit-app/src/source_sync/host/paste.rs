@@ -6,9 +6,25 @@
 //! ELOC limit. It never touches `SourceSyncState`: a paste is not a lifecycle
 //! transition (the RFC-041 mount/snapshot/resume state machine), and its
 //! result is applied by the page as an ordinary CodeMirror edit, which flows
-//! back through the *existing* `Change` event like any keystroke. Rust's part
-//! is stateless: one request in, one reply out (or, for a paste already
-//! decided locally, one notice and no reply).
+//! back through the *existing* `Change` event like any keystroke.
+//!
+//! **Exactly one notice per paste (§3.4), raised after the page has decided**
+//! what happened to the reply, not when Rust sends it: a reply's notice is
+//! held in [`PENDING_NOTICES`] until the page says `PasteApplied` (raise it)
+//! or `PasteDiscarded` (drop it, and raise `paste.discarded` instead). Two
+//! notices for one paste would otherwise be possible -- a fallback reason
+//! raised on send, and then a contradictory discard notice a moment later,
+//! for content that was never actually inserted.
+//!
+//! **Known residual, recorded, not fixed:** if the editor remounts while a
+//! conversion is in flight, neither `PasteApplied` nor `PasteDiscarded` ever
+//! arrives for that token (the identity the page would send them under is
+//! gone). Its pending notice then just ages out of the bounded store,
+//! unraised. This is rare -- conversion takes on the order of tens of
+//! milliseconds -- and a silent notice loss on an already-unusual remount is
+//! preferable to inventing a timeout for it.
+
+use std::sync::Mutex;
 
 use bekoedit_paste::{FallbackReason, LineEnding, Outcome, convert_with_marker};
 use bekoedit_ui_contract::{
@@ -24,6 +40,54 @@ use crate::{
 };
 
 use super::dispatch_request;
+
+/// A paste's notice key, held between the reply being sent and the page
+/// saying what happened to it. Bounded (the residual above): the oldest
+/// entry is evicted first, so a run of abandoned tokens cannot grow this
+/// without limit. A plain type, not the `static` below directly, so its own
+/// tests exercise an isolated instance rather than the one every handler
+/// shares -- eviction order is otherwise not deterministic to test against
+/// a process-global store under a parallel test run.
+#[derive(Debug, Default)]
+struct PendingNotices {
+    entries: Vec<(u64, &'static str)>,
+}
+
+impl PendingNotices {
+    fn set(&mut self, token: u64, key: &'static str) {
+        if self.entries.len() >= MAX_PENDING_NOTICES {
+            self.entries.remove(0);
+        }
+        self.entries.push((token, key));
+    }
+
+    /// Removes and returns `token`'s pending notice, if it still has one.
+    /// Called exactly once per token, by whichever of
+    /// `PasteApplied`/`PasteDiscarded` arrives first for it.
+    fn take(&mut self, token: u64) -> Option<&'static str> {
+        let index = self.entries.iter().position(|(t, _)| *t == token)?;
+        Some(self.entries.remove(index).1)
+    }
+}
+
+const MAX_PENDING_NOTICES: usize = 32;
+static PENDING_NOTICES: Mutex<PendingNotices> = Mutex::new(PendingNotices {
+    entries: Vec::new(),
+});
+
+fn set_pending_notice(token: u64, key: &'static str) {
+    PENDING_NOTICES
+        .lock()
+        .expect("pending-notices lock")
+        .set(token, key);
+}
+
+fn take_pending_notice(token: u64) -> Option<&'static str> {
+    PENDING_NOTICES
+        .lock()
+        .expect("pending-notices lock")
+        .take(token)
+}
 
 /// `SourceEditorEvent::PasteRequested` arrived. `html` is `None` when the page
 /// already decided `TooLarge` itself and inserted the plain flavour: there is
@@ -58,8 +122,10 @@ pub(super) fn handle_paste_requested(
             .await
             .unwrap_or(Outcome::Fallback(FallbackReason::Failed));
         let (wire_outcome, notice_key) = classify(outcome);
+        // Held, not raised: the page has not yet decided whether this reply
+        // is applied or discarded (module doc comment).
         if let Some(key) = notice_key {
-            notify(toasts, lang, key);
+            set_pending_notice(token, key);
         }
         bridge::trace(
             "source.paste.replied",
@@ -109,12 +175,48 @@ fn notify(mut toasts: Signal<Vec<Toast>>, lang: Lang, key: &'static str) {
     push_toast(&mut toasts, ToastKind::Info, tr(lang, key));
 }
 
+/// What arriving at a decision for one token (`PasteApplied` or
+/// `PasteDiscarded`) should raise, if anything.
+#[derive(Debug, Clone, PartialEq)]
+enum PendingResolution {
+    Notify(&'static str, ToastKind),
+    Nothing,
+}
+
+/// The whole "exactly one notice, and which one" decision (RFC-046 §3.4) for
+/// each side, as pure functions over [`PENDING_NOTICES`]: no `Signal`
+/// involved, so every case -- including that a discarded reply's own notice
+/// never surfaces -- is unit tested directly.
+fn resolve_applied(token: u64) -> PendingResolution {
+    match take_pending_notice(token) {
+        Some(key) => PendingResolution::Notify(key, ToastKind::Info),
+        None => PendingResolution::Nothing,
+    }
+}
+
+fn resolve_discarded(token: u64) -> PendingResolution {
+    // Dropped, not surfaced: it would be false -- nothing was pasted.
+    take_pending_notice(token);
+    PendingResolution::Notify("paste.discarded", ToastKind::Warning)
+}
+
+/// `SourceEditorEvent::PasteApplied` arrived (RFC-046 §3.4): the page
+/// inserted the reply's result. Raises that reply's held notice, if it had
+/// one; a successful conversion or `Empty` has none.
+pub(super) fn handle_paste_applied(token: u64, mut toasts: Signal<Vec<Toast>>, lang: Lang) {
+    bridge::trace("source.paste.applied", format!("token={token}"));
+    if let PendingResolution::Notify(key, kind) = resolve_applied(token) {
+        push_toast(&mut toasts, kind, tr(lang, key));
+    }
+}
+
 /// `SourceEditorEvent::PasteDiscarded` arrived (RFC-046 §3.3): the page could
-/// not apply a `PasteResult`, so it discarded it. Raises the one Warning
-/// notice that discard requires; there is nothing else to do.
+/// not apply a `PasteResult`, so it discarded it.
 pub(super) fn handle_paste_discarded(token: u64, mut toasts: Signal<Vec<Toast>>, lang: Lang) {
     bridge::trace("source.paste.discarded", format!("token={token}"));
-    push_toast(&mut toasts, ToastKind::Warning, tr(lang, "paste.discarded"));
+    if let PendingResolution::Notify(key, kind) = resolve_discarded(token) {
+        push_toast(&mut toasts, kind, tr(lang, key));
+    }
 }
 
 /// RFC-046 §3.3: `LineEnding::Lf`, always -- the editor speaks editor form,

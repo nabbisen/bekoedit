@@ -119,6 +119,16 @@ export function createPasteController(deps) {
     }
     const text = textForOutcome(message.outcome, plainText);
     deps.insert(view, { from, to, text });
+    // Told after the fact, not before (review, 2026-09-30): Rust holds this
+    // reply's notice, if it has one, until it knows the page actually used
+    // it -- otherwise a paste later discarded could raise two contradictory
+    // notices for the same paste (§3.4).
+    deps.emit({
+      type: "pasteApplied",
+      protocolVersion: BRIDGE_SCHEMA_VERSION,
+      identity,
+      token: message.token,
+    });
     return true;
   }
 

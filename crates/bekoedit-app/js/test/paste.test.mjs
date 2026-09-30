@@ -144,6 +144,29 @@ test("an empty reply inserts the cached plain flavour, silently", () => {
   assert.deepEqual(inserted, [{ from: 0, to: 0, text: "" }]);
 });
 
+test("an applied reply tells Rust afterwards, with the same token, so its held notice can be raised", () => {
+  const { controller, emitted } = harness();
+  controller.handlePaste(clipboardEvent({ html: "<p>hi</p>", plain: "hi" }), view(0, 0));
+  controller.handleReply(
+    { type: "pasteResult", token: 1, outcome: { kind: "converted", markdown: "x" } },
+    view(),
+  );
+  const applied = emitted.filter((message) => message.type === "pasteApplied");
+  assert.equal(applied.length, 1);
+  assert.equal(applied[0].token, 1);
+});
+
+test("a discarded reply never tells Rust it was applied", () => {
+  const { controller, emitted, setHeld } = harness();
+  controller.handlePaste(clipboardEvent({ html: "<p>hi</p>", plain: "hi" }), view());
+  setHeld(true);
+  controller.handleReply(
+    { type: "pasteResult", token: 1, outcome: { kind: "converted", markdown: "x" } },
+    view(),
+  );
+  assert.equal(emitted.filter((message) => message.type === "pasteApplied").length, 0);
+});
+
 test("the recorded selection is mapped through edits made while conversion is in flight", () => {
   const { controller, inserted } = harness();
   controller.handlePaste(clipboardEvent({ html: "<p>hi</p>", plain: "hi" }), view(10, 10));
