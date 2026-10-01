@@ -100,10 +100,17 @@ above when that release goes out.
 
 | RFC | Title | Notes |
 |-----|-------|-------|
+| RFC-046 | [Paste HTML as Markdown](done/RFC-046-paste-html-as-markdown.md) | Merged 2026-10-01 in three slices: the converter (`cdf486b`), the paste path (`51e3d88`, `8cf7cf3`), and surfacing (`5fb3ed3`). A Text Mode paste of formatted content becomes Markdown, converted by the new `bekoedit-paste` crate over `mdka` `=3.2.0`, and falls back to plain text, with a notice, where conversion would lose content. Ctrl+Shift+V pastes plain text. Handoffs: [`handoffs/046-paste-html-as-markdown/`](handoffs/046-paste-html-as-markdown/) |
+
+## Implemented — v0.16.0 (`done/`)
+
+Released 2026-09-25 (0.16.0); 0.16.1, the same day, was a security patch with no RFC.
+
+| RFC | Title | Notes |
+|-----|-------|-------|
 | RFC-043 | [Reopen last workspace on launch](done/RFC-043-reopen-last-workspace-on-launch.md) | Merged 2026-09-03 (`2afe1df`, PR #19). The setting existed since v0.2.0 and controlled nothing; it now opens the most recent workspace before first render, never a document, never falling through to an older entry. Unblocks RFC-044. Handoff: [`handoffs/043-reopen-last-workspace-on-launch/`](handoffs/043-reopen-last-workspace-on-launch/implementation-handoff.md) |
 | RFC-047 | [User commands during source-editor transitions](done/RFC-047-user-commands-during-editor-transitions.md) | Merged 2026-09-22 in two slices (`4476f90`, `79b45ec`) plus task 022 (`7a0ca07`). A mode click, an open, or a `Ctrl+S` arriving mid-transition used to be dropped with nothing a user could see. It is now queued and run, or reported in one sentence naming the action and the reason. A queued save is never applied to a document other than the one that was open. Handoffs: [`handoffs/047-user-commands-during-editor-transitions/`](handoffs/047-user-commands-during-editor-transitions/) |
 | RFC-044 | [Shell behaviour regression coverage](done/RFC-044-shell-behaviour-regression-coverage.md) | Merged in three slices: tree 2026-09-05 (`ab6acf9`), overflow menus 2026-09-16 (`59f21b7`), and C–F 2026-09-17 (`0978ff5`). RFC-042's keyboard and focus contracts now execute against a real WebView on every push and pull request. Slices 1 and 2 each found a shipped defect (tasks 014 and 017). **Promoted to blocking 2026-09-22**, after ten consecutive green `main` runs; the step now gates every pull request. Cross-OS (§9) is the remaining deferral. Handoffs: [`handoffs/044-shell-behaviour-regression-coverage/`](handoffs/044-shell-behaviour-regression-coverage/) |
-| RFC-046 | [Paste HTML as Markdown](done/RFC-046-paste-html-as-markdown.md) | Merged 2026-10-01 in three slices: the converter (`cdf486b`), the paste path (`51e3d88`, `8cf7cf3`), and surfacing (`5fb3ed3`). A Text Mode paste of formatted content becomes Markdown, converted by the new `bekoedit-paste` crate over `mdka` `=3.2.0`, and falls back to plain text, with a notice, where conversion would lose content. Ctrl+Shift+V pastes plain text. Handoffs: [`handoffs/046-paste-html-as-markdown/`](handoffs/046-paste-html-as-markdown/) |
 
 ## Open — under review or deferred (`proposed/`)
 
