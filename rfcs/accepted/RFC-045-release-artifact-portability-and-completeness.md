@@ -5,7 +5,7 @@
 2026-08-17. Slice 1 (ship the platform scripts) merged as `a9eb427`; slice 2
 (the cross-distribution check) merged as `f977fc7`. Moves to `done/` when slice
 3 lands. §10 Q1 and Q2 are now answered — on slice 2's evidence plus a verified
-local trial (§5.1) — and Q3 remains an owner action.
+local trial (§5.1) — and Q3 was answered by the owner on 2026-10-01.
 **Handoffs:** [`handoffs/045-release-artifact-portability-and-completeness/`](../handoffs/045-release-artifact-portability-and-completeness/)
 **Track:** Distribution
 **Priority:** High — the Linux artifact cannot start on a whole family of distributions
@@ -360,7 +360,13 @@ of the record rather than glossed over.
 Nothing to file. What remains is a published release containing the merge —
 see §5.1.
 
-### Q3 — does the release page need a Linux caveat? · **open, owner's call, and now sharper**
+### Q3 — does the release page need a Linux caveat? · **answered 2026-10-01: yes, while slice 3 is open**
+
+**Answer (owner, 2026-10-01).** The release page carries a short "Known issue (Linux)"
+note below the CHANGELOG copy, pointing to `cargo install bekoedit`. It is printed only
+while the portability check's Arch exemption (`libxdo.so.3`) exists, so slice 3's
+removal of that exemption also removes the note. The 0.17.0 page was edited by hand
+the same day. The automatic version is task 043. The original question follows.
 
 No longer time-boxed. Slice 3's deferral to Dioxus 0.8 stable (§5.1) means the
 wait is open-ended, and any release cut in the meantime — including one carrying
