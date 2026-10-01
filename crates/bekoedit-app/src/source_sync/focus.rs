@@ -243,26 +243,26 @@ fn submit_interaction(
     crate::bridge::trace("source.focus.interaction.allocate", token);
 
     spawn(async move {
-        // Task 039 §2.1: the trace says *which* way the arm failed to
-        // resolve, since only an elapsed `ARM_TIMEOUT` is a genuine timeout
-        // -- an early `None` from the old collapsed `.ok().flatten()` here
-        // read identically whether the page never answered in time or its
-        // query was dropped out from under it (task 029/036's finding).
-        let ack =
+        // Task 039 §2.1, and the review's §3.1: the trace says *which* way the
+        // arm failed to resolve, since only an elapsed `ARM_TIMEOUT` is a
+        // genuine timeout -- an early `None` from the old collapsed
+        // `.ok().flatten()` here read identically whether the page never
+        // answered in time or its query was dropped out from under it (task
+        // 029/036's finding). The decision itself lives in `arm_resolution`,
+        // not here, so a regression collapsing it back together fails that
+        // function's own test.
+        let outcome =
             match tokio::time::timeout(ARM_TIMEOUT, arm_focus_guard(token, &fingerprint, &origin))
                 .await
             {
-                Ok(Ok(ack)) => Some(ack),
-                Ok(Err(failure)) => {
-                    let (event, detail) = arm_failure_trace(&failure);
-                    crate::bridge::trace(event, detail);
-                    None
-                }
-                Err(_elapsed) => {
-                    crate::bridge::trace("source.focus.guard.timeout", token);
-                    None
-                }
+                Ok(Ok(ack)) => ArmOutcome::Armed(ack),
+                Ok(Err(failure)) => ArmOutcome::Failed(failure),
+                Err(_elapsed) => ArmOutcome::TimedOut,
             };
+        let (ack, trace) = arm_resolution(token, outcome);
+        if let Some((event, detail)) = trace {
+            crate::bridge::trace(event, detail);
+        }
         let armed = ack
             .as_ref()
             .is_some_and(|ack| ack.token == token && ack.armed);
@@ -368,6 +368,40 @@ fn arm_failure_trace(failure: &ArmFailure) -> (&'static str, &str) {
         ArmFailure::Unanswered(detail) => ("source.focus.guard.unanswered", detail.as_str()),
         ArmFailure::Undecodable(detail) => ("source.focus.guard.undecodable", detail.as_str()),
         ArmFailure::Unencodable(detail) => ("source.focus.guard.unencodable", detail.as_str()),
+    }
+}
+
+/// What `tokio::time::timeout(ARM_TIMEOUT, arm_focus_guard(..))` resolved to,
+/// collapsing tokio's own `Elapsed` (opaque, with no public constructor, so a
+/// type this module defines itself can be built directly in tests) into one
+/// variant.
+enum ArmOutcome {
+    Armed(GuardArmed),
+    Failed(ArmFailure),
+    TimedOut,
+}
+
+/// Review (2026-10-01), required before merging: M3 showed that mistracing a
+/// failed arm as `source.focus.guard.timeout` passed every test that existed,
+/// because the call site's own three-way branch -- not just
+/// [`arm_failure_trace`]'s narrower mapping -- was where that mistake could
+/// happen, and nothing tested *that* decision directly. This is now the one
+/// place that makes it, pure, so a regression there fails a test by name.
+/// Only [`ArmOutcome::TimedOut`] may ever choose `source.focus.guard.timeout`.
+fn arm_resolution(
+    token: u64,
+    outcome: ArmOutcome,
+) -> (Option<GuardArmed>, Option<(&'static str, String)>) {
+    match outcome {
+        ArmOutcome::Armed(ack) => (Some(ack), None),
+        ArmOutcome::Failed(failure) => {
+            let (event, detail) = arm_failure_trace(&failure);
+            (None, Some((event, detail.to_string())))
+        }
+        ArmOutcome::TimedOut => (
+            None,
+            Some(("source.focus.guard.timeout", token.to_string())),
+        ),
     }
 }
 

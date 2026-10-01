@@ -185,6 +185,49 @@ fn each_arm_failure_gets_its_own_trace_and_none_of_them_is_the_timeout_event() {
     }
 }
 
+/// Review (2026-10-01), §3.1: `arm_failure_trace` alone did not protect
+/// against the call site choosing the wrong trace for the wrong case -- M3
+/// mistraced a failed arm as `source.focus.guard.timeout` and every existing
+/// test still passed. `arm_resolution` is now the one place that decision is
+/// made, so it is tested directly, covering all five outcomes
+/// `tokio::time::timeout(ARM_TIMEOUT, arm_focus_guard(..))` can produce.
+#[test]
+fn arm_resolution_emits_the_right_trace_for_every_outcome_and_only_timeout_for_timed_out() {
+    let armed = GuardArmed {
+        token: 7,
+        armed: true,
+        reason: None,
+    };
+    let cases: [(ArmOutcome, Option<&str>); 5] = [
+        (ArmOutcome::Armed(armed), None),
+        (
+            ArmOutcome::Failed(ArmFailure::Unanswered("boom".to_string())),
+            Some("source.focus.guard.unanswered"),
+        ),
+        (
+            ArmOutcome::Failed(ArmFailure::Undecodable("boom".to_string())),
+            Some("source.focus.guard.undecodable"),
+        ),
+        (
+            ArmOutcome::Failed(ArmFailure::Unencodable("boom".to_string())),
+            Some("source.focus.guard.unencodable"),
+        ),
+        (ArmOutcome::TimedOut, Some("source.focus.guard.timeout")),
+    ];
+    for (outcome, expected_event) in cases {
+        let (ack, trace) = arm_resolution(7, outcome);
+        let event = trace.as_ref().map(|(event, _)| *event);
+        assert_eq!(event, expected_event);
+        match expected_event {
+            None => assert!(ack.is_some(), "an armed outcome emits no trace"),
+            Some(_) => assert!(
+                ack.is_none(),
+                "a failed or timed-out outcome carries no ack"
+            ),
+        }
+    }
+}
+
 #[test]
 fn the_arm_script_returns_its_promise_and_waits_for_release_with_a_bound() {
     let script = arm_focus_guard_js("{}");
