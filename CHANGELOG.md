@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-01
+
+### Highlights
+- Paste formatted text into Text Mode, from a web page or an office
+  document, and it becomes Markdown: headings, lists, bold, italics, links
+  and tables. Ctrl+Shift+V (Cmd+Shift+V on macOS) still pastes plain text.
+- Clicking a file in the workspace tree, a backlink, a mode tab or a search
+  result no longer occasionally leaves the cursor outside the editor.
+
 ### Added
 - **Paste formatted text as Markdown.** Pasting into Text Mode from a browser
   or an office app now converts headings, lists, bold, italics, links, tables
@@ -173,7 +182,8 @@ Accessibility work in this release covers the shell: file tree, menus, mode
 tabs, conflict banner, Recovery, and Settings. **Form Mode block editing does
 not yet expose accessibility metadata** and is tracked by RFC-042 slice 5.
 
-[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.16.1...HEAD
+[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.17.0...HEAD
+[0.17.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.17.0
 [0.16.1]: https://github.com/nabbisen/bekoedit/releases/tag/0.16.1
 [0.16.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.16.0
 [0.15.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.15.0
