@@ -471,7 +471,7 @@ Upstream released 2.6.0 to 3.0.0 and wrote to us
 **One visible side effect, questioned upstream:** ordinals. `1<sup>st</sup>`
 becomes `1ˢᵗ`, so a search for "1st" no longer finds it. A fixture pins the
 current output, and a suggestion was drafted to upstream
-(`.git-exclude/upstream/mdka/send/draft/2026-09-26-re-3.0.0-ordinals.md`).
+(`.git-exclude/upstream/mdka/send/2026-10-01-re-3.0.0-and-3.1.0.md`).
 
 Item 4, Google Docs bold through `font-weight:700`, is still not done upstream
 and is not scheduled.
