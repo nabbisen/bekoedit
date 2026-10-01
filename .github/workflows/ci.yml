@@ -429,9 +429,24 @@ jobs:
             echo "::warning title=Task 023 trusted-click run did not pass::outcome=${OUTCOME}; see that step's log"
           fi
       - name: Task 026 release walkthrough by machine (phase-1 checks #2, #3, #4, #8)
-        # NON-BLOCKING (task 026 §3): a new run, so continue-on-error applies to
-        # this step alone; the RFC-041, RFC-044 and trusted-click steps above
-        # are untouched. Four scenarios, each its own process launch on the
+        # BLOCKING since 2026-10-01, on the owner's approval: the soak criterion
+        # below -- ten consecutive green runs on `main`, read from the outcome
+        # line -- was met at the 0.17.0 release commit. The ten, counted from the
+        # last restart (`paste_conversion`): 36826965725 (8cf7cf3),
+        # 36829851592 (b78cce9), 36831718101 (26ce141), 36831777445 (c8b76b0),
+        # 36834154435 (5fb3ed3), 36836438517 (cca6cc3), 36840400649 (e8f58cf),
+        # 36845583357 (d9ddb96), 36847929792 (a0054ff) and 36852497607
+        # (2a6e416); 36856435709 (22ed31c) and 36861547637 (812f4c7) were green
+        # too.
+        #
+        # ADDING A SCENARIO NOW, as for RFC-044's step: the restart rule below
+        # was for the non-blocking period. A new scenario merges blocking, with
+        # its own mutation evidence, unless the reviewer requires it to land in
+        # a separate, non-blocking step for a stated soak first. If a scenario
+        # proves unstable on `main`, fix or remove that scenario -- do not make
+        # this whole step non-blocking again.
+        #
+        # History: introduced NON-BLOCKING (task 026 §3) as a new run. Four scenarios, each its own process launch on the
         # release binary (launch-time behaviours must not share state): the
         # reopen setting on with a usable recent (#2, and that the Start Screen
         # never mounts), on with the folder renamed away (#3: the Start Screen,
@@ -439,9 +454,8 @@ jobs:
         # saved through the app over a mixed-CRLF file, diffed on bytes (#8).
         # Every workspace is seeded through the profile; no native dialog.
         #
-        # Soak: 10 consecutive green runs on `main`, read from the outcome
-        # line below (never from this step's masked conclusion), as task
-        # 023's was. Promotion to blocking is a separate, later decision.
+        # Soak (met, see above): 10 consecutive green runs on `main`, read
+        # from the outcome line below, as task 023's was.
         #
         # Task 033 added a seventh scenario, `link_clicks_reach_only_the_
         # browser` (a click on every kind of link in Preview; only http(s)
@@ -460,7 +474,6 @@ jobs:
         # Ctrl+Shift+V pastes plain); the soak RESTARTS at 0 of 10 again from the
         # run that first contains it.
         id: release_checks
-        continue-on-error: true
         run: |
           failed=0
           for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe paste_conversion; do
