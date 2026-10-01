@@ -58,7 +58,6 @@ INSPECT_SCRIPT="$SCRIPT_DIR/check-linux-portability.sh"
 # resolve everything else, that gap is itself the finding RFC-045 SS5 asks
 # this slice to surface -- report it, do not quietly widen the list here.
 
-DISTRO_NAMES=(arch fedora)
 DISTRO_IMAGES=(
   "archlinux:base@sha256:b0deabeb3d283da2c7f7dbf0eea051b7b2cd0554e0b737cc457fd21683bdcdd1"
   "fedora:44@sha256:6c75d5bf57cb0fa5aa4b92c6a83c86c791644496d9ac230de7711f5b8ec3b898"
@@ -76,7 +75,19 @@ DISTRO_INSTALL=(
 # distribution's entry empty (not "libxdo.so.3") if its container
 # already resolves it. Slice 3 deletes the Arch entry once bundling (or
 # another fix) makes it resolve there too.
-DISTRO_EXPECT_MISSING=(libxdo.so.3 "")
+#
+# Task 043: this same file is release-notes.py's single source of truth for
+# whether the release page carries a Linux known-issue note -- not a copy of
+# it, not a separate flag. Its row order must match DISTRO_IMAGES and
+# DISTRO_INSTALL above, by position.
+EXEMPTIONS_FILE="$SCRIPT_DIR/linux-portability-exemptions.tsv"
+DISTRO_NAMES=()
+DISTRO_EXPECT_MISSING=()
+while IFS=$'\t' read -r name expect_missing || [ -n "$name" ]; do
+  [ -z "$name" ] && continue
+  DISTRO_NAMES+=("$name")
+  DISTRO_EXPECT_MISSING+=("$expect_missing")
+done <"$EXEMPTIONS_FILE"
 
 overall_status=0
 

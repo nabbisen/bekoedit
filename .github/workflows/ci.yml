@@ -30,6 +30,9 @@ jobs:
       - name: Changelog invariants (task 034)
         shell: bash
         run: bash scripts/check-changelog.sh
+      - name: Release notes self-test (task 043)
+        shell: bash
+        run: bash scripts/test-release-notes.sh
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable action snapshot
         with:
           toolchain: 1.88.0

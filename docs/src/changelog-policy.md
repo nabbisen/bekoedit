@@ -44,6 +44,11 @@ at the release's tag for the full history.
   later becomes, when sections move to `changelog/` or anything else changes.
 - **Changed 2026-09-30, on the owner's decision.** Until then the page was only
   a link. Pages from 0.16.0 on carry the text.
+- **A known platform problem gets a known-issue note on the page**, for as
+  long as it is encoded as an exemption in the release checks (RFC-045
+  §10 Q3, 2026-10-01) — for example, Linux's `libxdo.so.3` requirement on
+  Arch. The note is never written in `CHANGELOG.md`; it comes and goes with
+  the exemption it is driven by.
 
 ## Keeping the file a readable size
 
