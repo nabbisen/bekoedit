@@ -14,8 +14,11 @@ repository.workspace    = true
 # two consecutive patch releases of mdka changed our output. A bump is a
 # deliberate change, re-run against the fixture corpus. 3.0.0 (task 037) moved two
 # outputs from 2.5.1, both fixes: `<sup>`/`<sub>` keep their meaning (2.6.0), and
-# emphasis that opens a bold element is kept (2.7.0).
-mdka                        = { version = "=3.0.0", default-features = false }
+# emphasis that opens a bold element is kept (2.7.0). 3.2.0 (task 038) is
+# byte-identical to 3.0.0 except ordinals (fixture 30; upstream flattened
+# `1<sup>st</sup>` to `1st` at our suggestion), with the mode and options
+# unchanged -- `emphasis_from_style` (3.1.0) is a separate, deliberate opt-in.
+mdka                        = { version = "=3.2.0", default-features = false }
 thiserror                   = { workspace = true }
 
 [dev-dependencies]

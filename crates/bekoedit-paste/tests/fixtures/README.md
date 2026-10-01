@@ -36,7 +36,9 @@ ending. `synthetic-19` holds real `\r\n` bytes on purpose.
 | 20, 23, 24 | `data:` links and images, including nested in a link, and an SVG one with spaces, quotes and parentheses |
 | 21 | a plain document, as a baseline |
 | 25–29 | what `mdka` 3.0.0 changed from 2.5.1 (task 037): a superscript with a Unicode form (25) and without one, which gets a visible `^(…)` (26); a subscript, with `_(…)` where there is no Unicode form (27); a citation marker, which is left as it is (28); and emphasis that opens a bold element (29) |
-| 30 | ordinals: `1<sup>st</sup>` becomes `1ˢᵗ` under 3.0.0. **Pinned, and questioned upstream** (a search for "1st" no longer finds it; flattening it never changed its meaning). It is here so that any upstream change to it fails a fixture instead of slipping in; the suggestion to `mdka` is drafted as `.git-exclude/upstream/mdka/send/2026-10-01-re-3.0.0-and-3.1.0.md` |
+| 30 | ordinals: `1<sup>st</sup>` becomes `1st` as of 3.2.0 (was `1ˢᵗ` under 3.0.0 and 3.1.1). **Flattened upstream in 3.2.0, at our suggestion** (`.git-exclude/upstream/mdka/send/2026-10-01-re-3.0.0-and-3.1.0.md`); confirmed against the published 3.2.0 binary in their reply, `.git-exclude/upstream/mdka/receive/2026-10-01c-shipped-you-can-turn-it-on.md` |
+| 31–33 | more ordinal suffixes flattened in 3.2.0, each pinned from upstream's own worked examples: `1st 2nd 3rd 4th` (31); the Spanish ordinal marks `1º 2ª` (32); a suffix wrapped in a styled `<span>`, the shape a real editor's clipboard HTML uses (33) |
+| 34, 35 | ordinal shapes 3.2.0 deliberately leaves alone, pinned as the boundary: French `1<sup>er</sup>` stays `1ᵉʳ` (a real exponent reads as an exponent, not a typographic ordinal); an italicised suffix, `1<sup><i>st</i></sup>`, still gives `1ˢᵗ` (a narrower, documented limit, a different code path than 33) |
 
 ## `webkitgtk-paste-conversion`: the first real capture
 
@@ -98,3 +100,13 @@ Two details, checked by running both versions:
 - 2.5.1 and 3.0.0 both write a citation marker as `\[1]`: only the opening bracket is escaped.
 
 No known upstream gap is recorded in this corpus: every expectation above passes.
+
+## What `mdka` 3.2.0 moved from 3.0.0 (task 038)
+
+The pin moved `=3.0.0` → `=3.2.0`, mode and options unchanged (`Minimal`, no `emphasis_from_style`).
+Upstream measured 3.0.0 against 3.1.1 as 108-comparison byte-identical with the option off, and 3.1.1 →
+3.2.0 as ordinals-only; running every fixture here, including `webkitgtk-paste-conversion`, against the
+real 3.2.0 binary confirms it independently: **only fixture 30 moved**, exactly as predicted, and every
+other fixture — 01 through 29, and the real capture — is still byte-identical. Fixtures 31 to 35 are new,
+pinning the rest of upstream's stated 3.2.0 behaviour by hand from their letter, each run against the real
+binary before being typed in (`.git-exclude/upstream/mdka/receive/2026-10-01c-shipped-you-can-turn-it-on.md`).

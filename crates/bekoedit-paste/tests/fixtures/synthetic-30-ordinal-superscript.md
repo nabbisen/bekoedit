@@ -1,1 +1,1 @@
-1ˢᵗ and 2ⁿᵈ
+1st and 2nd
