@@ -1,3 +1,3 @@
-# Title
+# **Title**
 
-Plain and bold-only-by-style text.
+Plain and **bold-only-by-style** text.

@@ -9,12 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - **Paste formatted text as Markdown.** Pasting into Text Mode from a browser
   or an office app now converts headings, lists, bold, italics, links, tables
-  and other structure into Markdown, instead of dropping formatting. Known
-  limits: bold carried only by a style attribute, as Google Docs uses, arrives
-  as plain text — only tag-based bold (`<b>`/`<strong>`) is recognized. A
-  pasted table that cannot be kept as a Markdown table arrives as plain text
-  instead, with a notice. Ctrl+Shift+V (Cmd+Shift+V on macOS) pastes plain
-  text, unconverted, as before.
+  and other structure into Markdown, instead of dropping formatting. Bold or
+  italic carried only by a style attribute, as Google Docs uses, is kept too.
+  Known limit: a pasted table that cannot be kept as a Markdown table arrives
+  as plain text instead, with a notice. Ctrl+Shift+V (Cmd+Shift+V on macOS)
+  pastes plain text, unconverted, as before.
 
 ## [0.16.1] - 2026-09-25
 

@@ -29,7 +29,7 @@ ending. `synthetic-19` holds real `\r\n` bytes on purpose.
 | 10 | upstream's `2.4.1` regression, verbatim: a table cell holding two sibling `<div>`s. Fixed in `2.4.2` |
 | 11–14 | tables with no GFM form (row headers; nested) and tables inside a blockquote and a list item, each with `<br>` in a cell |
 | 15 | `Vec<i32>` in inline code and in a fenced block |
-| 16 | a Google-Docs-shaped paste: a non-bold `<b>` wrapper around blocks, and `font-weight:700` spans |
+| 16 | a Google-Docs-shaped paste: a non-bold `<b>` wrapper around blocks, and `font-weight:700` spans -- now recovered as bold (task 038) |
 | 17 | a definition list |
 | 18, 22 | literal `<` in prose |
 | 19 | CR and CRLF inside the HTML itself |
@@ -39,6 +39,7 @@ ending. `synthetic-19` holds real `\r\n` bytes on purpose.
 | 30 | ordinals: `1<sup>st</sup>` becomes `1st` as of 3.2.0 (was `1ˢᵗ` under 3.0.0 and 3.1.1). **Flattened upstream in 3.2.0, at our suggestion** (`.git-exclude/upstream/mdka/send/2026-10-01-re-3.0.0-and-3.1.0.md`); confirmed against the published 3.2.0 binary in their reply, `.git-exclude/upstream/mdka/receive/2026-10-01c-shipped-you-can-turn-it-on.md` |
 | 31–33 | more ordinal suffixes flattened in 3.2.0, each pinned from upstream's own worked examples: `1st 2nd 3rd 4th` (31); the Spanish ordinal marks `1º 2ª` (32); a suffix wrapped in a styled `<span>`, the shape a real editor's clipboard HTML uses (33) |
 | 34, 35 | ordinal shapes 3.2.0 deliberately leaves alone, pinned as the boundary: French `1<sup>er</sup>` stays `1ᵉʳ` (a real exponent reads as an exponent, not a typographic ordinal); an italicised suffix, `1<sup><i>st</i></sup>`, still gives `1ˢᵗ` (a narrower, documented limit, a different code path than 33) |
+| 36–39 | `emphasis_from_style`'s own boundary, pinned from upstream's worked examples (task 038 step 4): a heading restating its own default `font-weight:700` is **not** emphasised (36); a `<cite>` restating its own default `font-style:italic` is **not** emphasised (37); a `<span style="font-weight:700">` authored *inside* a heading **is** emphasised -- an authored bold is real, only the heading's own restated default is ignored (38); and the one boundary upstream names and keeps deliberately, an **inherited** bold from a wrapping `<div>` still opens emphasis inside the `<h2>` beneath it (39) -- pinned as a known, accepted boundary, not a gap |
 
 ## `webkitgtk-paste-conversion`: the first real capture
 
@@ -67,12 +68,13 @@ still carry it.
 
 ## Accepted limitations, recorded as expectations (RFC-046 §6.2)
 
-- **04 and 16:** bold or italic carried only by an inline `style` (`font-weight:700`,
-  `font-style:italic`) is lost. The text is kept. This is upstream's item 4, and it
-  is what a Google Docs paste looks like. **The expectation is the accepted
-  behaviour, not the ideal one.**
 - **11, 12, 17:** what has no Markdown form becomes one paragraph per cell, term or
   description. The text is kept.
+- **The `<div>`-inherits-into-`<h2>` boundary (39):** an ancestor's bold opens emphasis
+  inside a heading beneath it, where the heading's own restated default does not.
+  Upstream names this deliberately (`.git-exclude/upstream/mdka/receive/2026-10-01c-shipped-you-can-turn-it-on.md`
+  §3) and does not expect it in a computed-style paste. **Not a gap to close**, but
+  recorded so a future change to it is seen.
 
 ## Upstream's claims (RFC-046 §6.2), and where each is checked
 
@@ -110,3 +112,28 @@ real 3.2.0 binary confirms it independently: **only fixture 30 moved**, exactly 
 other fixture — 01 through 29, and the real capture — is still byte-identical. Fixtures 31 to 35 are new,
 pinning the rest of upstream's stated 3.2.0 behaviour by hand from their letter, each run against the real
 binary before being typed in (`.git-exclude/upstream/mdka/receive/2026-10-01c-shipped-you-can-turn-it-on.md`).
+
+## `emphasis_from_style` is on (task 038 step 4)
+
+`mdka_configured` now calls `.emphasis_from_style(true)`: bold or italic carried only by an element's own
+inline `style` (`font-weight` ≥ 600 or `bold`; `font-style: italic`/`oblique`) is read, not just tag-based
+`<b>`/`<strong>`/`<i>`/`<em>`. Every fixture was converted with the option on and compared against its
+existing expectation before anything was changed, so the result below is exhaustive over this corpus, not a
+sample:
+
+- **Two fixtures moved, both (a) wanted:**
+  - **04**, `<span style="font-weight:700">B</span> and <span style="font-style:italic">I</span>` →
+    `**B** and *I*` (was `B and I`). Exactly upstream's item 4.
+  - **16**, the Google-Docs-shaped paste → `# **Title**` and `**bold-only-by-style**` kept (was lost). The
+    title's bold comes from a `<span>` *inside* the `<h1>`, not the `<h1>`'s own style -- the distinction
+    fixture 38 pins directly.
+- **Nothing else moved**, including `webkitgtk-paste-conversion`: its `<h1>`, `<th>` and `<td>` carry no
+  `font-weight` in their own style at all (recorded above), so there was nothing for the option to find
+  there, spurious or otherwise, in this particular real capture.
+- **Fixtures 36 to 39** (above) pin upstream's own worked boundary examples by hand, each run against the
+  real binary first. **No spurious case was found**: no heading, table header cell, or already-bold element
+  anywhere in this corpus gained an unwanted `**…**` from a restated or inherited default, except the one
+  boundary (39) upstream names and keeps deliberately.
+
+Since every move was (a) and no fixture showed (b), the option stays on. The CHANGELOG's paste entry no
+longer lists style-only bold as a limit.

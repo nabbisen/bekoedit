@@ -167,7 +167,7 @@ fn mdka_configured(html: String) -> String {
 /// not yet enabled). A `const` rather than deleting the call above, so
 /// turning it on is a one-line, reviewable diff when it is: see
 /// `crates/bekoedit-paste/tests/fixtures/README.md`.
-const EMPHASIS_FROM_STYLE: bool = false;
+const EMPHASIS_FROM_STYLE: bool = true;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Limits {
