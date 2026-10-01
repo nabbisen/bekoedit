@@ -251,14 +251,9 @@ fn submit_interaction(
         // 029/036's finding). The decision itself lives in `arm_resolution`,
         // not here, so a regression collapsing it back together fails that
         // function's own test.
-        let outcome =
-            match tokio::time::timeout(ARM_TIMEOUT, arm_focus_guard(token, &fingerprint, &origin))
-                .await
-            {
-                Ok(Ok(ack)) => ArmOutcome::Armed(ack),
-                Ok(Err(failure)) => ArmOutcome::Failed(failure),
-                Err(_elapsed) => ArmOutcome::TimedOut,
-            };
+        let outcome = timed_arm_outcome(
+            tokio::time::timeout(ARM_TIMEOUT, arm_focus_guard(token, &fingerprint, &origin)).await,
+        );
         let (ack, trace) = arm_resolution(token, outcome);
         if let Some((event, detail)) = trace {
             crate::bridge::trace(event, detail);
@@ -379,6 +374,22 @@ enum ArmOutcome {
     Armed(GuardArmed),
     Failed(ArmFailure),
     TimedOut,
+}
+
+/// Collapses `tokio::time::timeout(ARM_TIMEOUT, arm_focus_guard(..))`'s result
+/// into an [`ArmOutcome`]. Pure, and generic over the elapsed-error type so a
+/// test can pass `Err(())` in place of tokio's own `Elapsed` (which has no
+/// public constructor) -- task 040 §2.2. Before this was pulled out, the call
+/// site itself was the one untested place this three-way decision was made:
+/// the review's M3 mutation (`Ok(Err(_failure)) => ArmOutcome::TimedOut`),
+/// reproduced here, passed every test that existed (`arm_resolution` only
+/// covers what it is handed, not how the handed value was produced).
+fn timed_arm_outcome<E>(result: Result<Result<GuardArmed, ArmFailure>, E>) -> ArmOutcome {
+    match result {
+        Ok(Ok(ack)) => ArmOutcome::Armed(ack),
+        Ok(Err(failure)) => ArmOutcome::Failed(failure),
+        Err(_elapsed) => ArmOutcome::TimedOut,
+    }
 }
 
 /// Review (2026-10-01), required before merging: M3 showed that mistracing a

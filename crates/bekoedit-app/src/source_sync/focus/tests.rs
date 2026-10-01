@@ -228,6 +228,41 @@ fn arm_resolution_emits_the_right_trace_for_every_outcome_and_only_timeout_for_t
     }
 }
 
+/// Task 040 §2.2: the review's M3 mutation at the call site itself
+/// (`Ok(Err(_failure)) => ArmOutcome::TimedOut`) passed every test that
+/// existed, because only `arm_resolution` -- what the call site's match
+/// *produces* -- was covered, not the match itself. `timed_arm_outcome` is
+/// now that match, pulled out and tested directly; reproducing M3 in it must
+/// fail this test by name.
+#[test]
+fn timed_arm_outcome_maps_every_branch_and_rejects_the_reviews_m3_mutation() {
+    let armed = GuardArmed {
+        token: 7,
+        armed: true,
+        reason: None,
+    };
+    assert!(matches!(
+        timed_arm_outcome::<()>(Ok(Ok(armed))),
+        ArmOutcome::Armed(_)
+    ));
+    assert!(matches!(
+        timed_arm_outcome::<()>(Ok(Err(ArmFailure::Unanswered("boom".to_string())))),
+        ArmOutcome::Failed(ArmFailure::Unanswered(_))
+    ));
+    assert!(matches!(
+        timed_arm_outcome::<()>(Ok(Err(ArmFailure::Undecodable("boom".to_string())))),
+        ArmOutcome::Failed(ArmFailure::Undecodable(_))
+    ));
+    assert!(matches!(
+        timed_arm_outcome::<()>(Ok(Err(ArmFailure::Unencodable("boom".to_string())))),
+        ArmOutcome::Failed(ArmFailure::Unencodable(_))
+    ));
+    assert!(matches!(
+        timed_arm_outcome::<()>(Err(())),
+        ArmOutcome::TimedOut
+    ));
+}
+
 #[test]
 fn the_arm_script_returns_its_promise_and_waits_for_release_with_a_bound() {
     let script = arm_focus_guard_js("{}");
