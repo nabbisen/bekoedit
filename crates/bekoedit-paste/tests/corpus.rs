@@ -126,8 +126,9 @@ fn the_corpus_is_there_and_every_html_file_has_its_markdown_and_no_markdown_is_o
     assert!(names.len() >= 20, "only {} fixtures", names.len());
     for name in &names {
         assert!(
-            name.starts_with("synthetic-"),
-            "{name}: every fixture here is hand-written and says so"
+            name.starts_with("synthetic-") || name.starts_with("webkitgtk-"),
+            "{name}: every fixture here is either hand-written (`synthetic-`) or a real \
+             capture (`webkitgtk-`), and says so"
         );
         assert!(
             fixtures_dir().join(format!("{name}.md")).exists(),
