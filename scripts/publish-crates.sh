@@ -63,7 +63,14 @@ for crate in "${CRATES[@]}"; do
     continue
   fi
 
-  if cargo info "$crate@$VERSION" >/dev/null 2>&1; then
+  # --registry crates-io forces an actual registry lookup. Without it,
+  # inside this workspace, `cargo info <crate>@<version>` answers from the
+  # local workspace member whenever the asked-for version equals the
+  # version in Cargo.toml -- true for every real release, since that is
+  # exactly the version being published and not yet on crates.io. Without
+  # this flag, every crate would read as already published, and the whole
+  # script would skip all six and exit 0 having published nothing.
+  if cargo info --registry crates-io "$crate@$VERSION" >/dev/null 2>&1; then
     echo "publish-crates.sh: $crate@$VERSION is already on crates.io, skipping"
     continue
   fi
