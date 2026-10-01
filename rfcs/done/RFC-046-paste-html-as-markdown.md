@@ -1,7 +1,7 @@
 # RFC-046: Paste HTML as Markdown
 
 **Project:** bekoedit
-**Status:** Implemented — on `main`, not yet released (2026-10-01). Accepted
+**Status:** Implemented — released in 0.17.0 (2026-10-01). Accepted
 2026-09-16, the day it was drafted. Three slices (§9): the converter
 (`cdf486b`), the paste path (`51e3d88`, `8cf7cf3`), and surfacing (`5fb3ed3`);
 `mdka` `=3.2.0` with item 4 enabled (`b78cce9`).
