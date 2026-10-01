@@ -1,6 +1,6 @@
 # Architecture
 
-bekoedit is structured as a Cargo workspace of five crates. Each layer has a
+bekoedit is structured as a Cargo workspace of six crates. Each layer has a
 single responsibility; the layers form a strict dependency graph — no crate
 depends on one above it.
 
@@ -19,6 +19,10 @@ depends on one above it.
 │  bekoedit-markdown  MarkdownIndex, block identity,          │
 │                      source patches, form projection,        │
 │                      preview rendering, section operations   │
+├─────────────────────────────────────────────────────────────┤
+│  bekoedit-paste  Clipboard HTML to Markdown for             │
+│                   Text Mode paste; depends only on mdka      │
+│                   and thiserror, never an HTML parser        │
 ├─────────────────────────────────────────────────────────────┤
 │  bekoedit-ui-contract  Typed command/event payloads         │
 │                         (versioned; shared across boundary)  │
@@ -50,6 +54,15 @@ typed relay:
 
 All messages are validated against `bekoedit_ui_contract::BRIDGE_SCHEMA_VERSION`
 so mismatches surface as explicit errors rather than silent data corruption.
+
+## The paste path (RFC-046)
+
+`bekoedit-paste` has one job: convert the `text/html` flavour of a Text Mode
+paste into Markdown. It depends on `mdka` (an exact pin) and `thiserror`
+only — never `bekoedit-markdown`, so the block-identity and form-projection
+layer stays free of an HTML parser. `bekoedit-app` calls it off the UI
+thread, with a size limit and a time budget; past either, or on any
+conversion failure, the plain `text/plain` flavour is inserted instead.
 
 ## Editing modes
 

@@ -98,6 +98,11 @@ Code / Link toolbar. Unsupported structures shown as editable raw islands.
 composition-safe (sends to Rust only after `compositionend`), find-in-file,
 undo/redo.
 
+**Paste formatted text as Markdown** — pasting from a browser or an office
+app converts headings, bold/italic (including style-only bold, as Google
+Docs uses), links, lists and tables into Markdown; Ctrl+Shift+V pastes
+plain text.
+
 **Workspace & files** — local folder tree, create/rename/delete (trash by
 default), `.git`/`node_modules`/`target` ignored, Git status badges (M/A/D/?).
 
