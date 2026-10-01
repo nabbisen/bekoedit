@@ -38,9 +38,6 @@ const HTML_FLAVOUR: &str = "<h1>Report</h1><p>Some <b>bold</b> text.</p>\
     <ul><li>one</li><li>two</li></ul>\
     <table><tr><th>a</th><th>b</th></tr><tr><td>1</td><td>2</td></tr></table>";
 const PLAIN_FLAVOUR: &str = "Report\nSome bold text.\none\ntwo\na\tb\n1\t2";
-/// The plain flavour's first line: enough to detect the plain paste landed,
-/// without depending on how CodeMirror wraps or joins the rest.
-const PLAIN_FIRST_LINE: &str = "Report";
 
 const OWNER_READY_DEADLINE: Duration = Duration::from_secs(10);
 const SETTLE: Duration = Duration::from_millis(1500);
@@ -249,25 +246,30 @@ pub(super) async fn run(
 
     // §3.5: Ctrl+Shift+V pastes the plain flavour, unconverted, checked first
     // so its undo leaves the document exactly as the real paste will find it.
+    //
+    // Checked against the *inserted* text alone, not the whole document
+    // (first CI run, 2026-10-01): the seeded note's own first line is
+    // "# Title", so a whole-document check for a stray "#" fails on every
+    // run regardless of what the chord actually did, before ever reaching
+    // the real paste this scenario exists to exercise.
     run_xdotool(&["key", "--clearmodifiers", "ctrl+Home"]).await?;
     run_xdotool(&["key", "--clearmodifiers", "ctrl+shift+v"]).await?;
-    wait_until(NAME, "the plain-paste chord to insert text", || {
-        dom::editor_contains(PLAIN_FIRST_LINE)
-    })
-    .await?;
-    let after_plain_paste = editor_text().await?;
-    if after_plain_paste.contains("**") || after_plain_paste.contains('#') {
+    let after_plain_paste = wait_until_text_changes(&original_text).await?;
+    if !after_plain_paste.ends_with(&original_text) {
         return Err(format!(
-            "{NAME}: the plain-paste chord left Markdown-looking content, so it was converted, \
-             not pasted plain"
+            "{NAME}: the plain-paste chord's surrounding text was not left untouched \
+             (expected the caret-0 insertion to leave the original as an exact suffix)"
+        ));
+    }
+    let inserted_plain = &after_plain_paste[..after_plain_paste.len() - original_text.len()];
+    if inserted_plain != PLAIN_FLAVOUR {
+        return Err(format!(
+            "{NAME}: the plain-paste chord did not insert the plain flavour verbatim: \
+             {inserted_plain:?}"
         ));
     }
     run_xdotool(&["key", "--clearmodifiers", "ctrl+z"]).await?;
-    wait_until(NAME, "undo to remove the plain-pasted text", || async {
-        Ok(!dom::editor_contains(PLAIN_FIRST_LINE).await?)
-    })
-    .await?;
-    let reverted = editor_text().await?;
+    let reverted = wait_until_text_changes(&after_plain_paste).await?;
     if reverted != original_text {
         return Err(format!(
             "{NAME}: undo after the plain-paste check did not restore the original text"
