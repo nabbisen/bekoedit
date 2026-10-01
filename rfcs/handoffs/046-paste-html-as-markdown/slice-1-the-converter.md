@@ -1,6 +1,6 @@
 # RFC-046 handoff — slice 1: the converter
 
-**Governing RFC:** [RFC-046](../../accepted/RFC-046-paste-html-as-markdown.md) §5.3, §5.4, §6.2, §7, §8
+**Governing RFC:** [RFC-046](../../done/RFC-046-paste-html-as-markdown.md) §5.3, §5.4, §6.2, §7, §8
 **Slice:** 1 of 3 — the converter crate, headless. Slice 2 is the paste path; slice 3 is documentation.
 **Baseline:** `main` at `6f6864a` or later. If `main` moves in a file this slice
 touches, merge `origin/main` in; never rebase.

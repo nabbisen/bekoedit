@@ -1,11 +1,10 @@
 # RFC-046: Paste HTML as Markdown
 
 **Project:** bekoedit
-**Status:** Accepted — approved for implementation by the project owner on
-2026-09-16, the day it was drafted. Implementation is deliberately scheduled
-**after RFC-044's remaining slices** (slice 2 and slice 3), per the owner's
-decision of the same date; acceptance authorises the design, not an immediate
-start.
+**Status:** Implemented — on `main`, not yet released (2026-10-01). Accepted
+2026-09-16, the day it was drafted. Three slices (§9): the converter
+(`cdf486b`), the paste path (`51e3d88`, `8cf7cf3`), and surfacing (`5fb3ed3`);
+`mdka` `=3.2.0` with item 4 enabled (`b78cce9`).
 **Track:** Editing
 **Priority:** Medium — a common authoring path that currently loses all structure
 **Date:** 2026-09-16
@@ -619,6 +618,11 @@ Measured by resolving `mdka` 2.2.1 against this workspace's `Cargo.lock`:
      bytes.
 3. **Surfacing.** Documentation and the manual walkthrough items. No settings
    work: §10 Q1 is settled as "no toggle".
+
+   **Done (2026-10-01):** `rfcs/handoffs/046-paste-html-as-markdown/slice-3-surfacing.md`,
+   merged as `5fb3ed3`: `editing-modes.md` (pasting, and Preview's link rules),
+   `architecture.md`, and the README. The proposed walkthrough items are in the
+   0.17.0 release evidence.
 
 Scheduled after RFC-044's slices 2 and 3.
 

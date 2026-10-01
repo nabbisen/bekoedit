@@ -1,6 +1,6 @@
 # RFC-046 handoff — slice 3: surfacing
 
-**Governing RFC:** [RFC-046](../../accepted/RFC-046-paste-html-as-markdown.md) §5.4, §5.5, §6.4, §7, §9
+**Governing RFC:** [RFC-046](../../done/RFC-046-paste-html-as-markdown.md) §5.4, §5.5, §6.4, §7, §9
 **Slice:** 3 of 3 — documentation. No code.
 **Baseline:** `main` at `26ce141` or later. If `main` moves in a file this slice
 touches, merge `origin/main` in; never rebase.

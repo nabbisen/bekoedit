@@ -1,6 +1,6 @@
 # RFC-046 handoff — slice 2: the paste path
 
-**Governing RFC:** [RFC-046](../../accepted/RFC-046-paste-html-as-markdown.md) §5.1, §5.2, §5.4, §5.5, §5.6, §7, §8
+**Governing RFC:** [RFC-046](../../done/RFC-046-paste-html-as-markdown.md) §5.1, §5.2, §5.4, §5.5, §5.6, §7, §8
 **Slice:** 2 of 3 — the paste handler, the bridge, the fallback notices, and plain paste. Slice 3 is documentation.
 **Baseline:** `main` at the commit that adds this handoff, or later. If `main` moves in a file this slice
 touches, merge `origin/main` in; never rebase.
