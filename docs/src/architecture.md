@@ -22,7 +22,8 @@ depends on one above it.
 ├─────────────────────────────────────────────────────────────┤
 │  bekoedit-paste  Clipboard HTML to Markdown for             │
 │                   Text Mode paste; depends only on mdka      │
-│                   and thiserror, never an HTML parser        │
+│                   and thiserror, keeping bekoedit-markdown   │
+│                   free of an HTML parser                     │
 ├─────────────────────────────────────────────────────────────┤
 │  bekoedit-ui-contract  Typed command/event payloads         │
 │                         (versioned; shared across boundary)  │

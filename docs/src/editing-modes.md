@@ -46,8 +46,8 @@ Your file is never changed beyond the pasted text, and keeps its own line
 endings — see [Source Preservation Model](source-preservation.md).
 
 **Known limit:** bold declared on a block that wraps a heading also makes
-the heading bold, even when the heading's own style says otherwise. This is
-a deliberate choice in the converter upstream, not a bekoedit decision.
+the heading bold. This is a deliberate choice in the converter upstream,
+not a bekoedit decision.
 
 ## Form Mode
 
@@ -86,8 +86,9 @@ escaped, never injected — scripts in documents cannot execute.
 
 - Only `http:`/`https:` links and `mailto:` links open, in your browser or
   mail client.
-- A relative link (such as `other.md`) or a network path does not open; a
-  notice says why.
+- A relative link (such as `other.md`) does not open; a notice says why.
+- A network path (such as `//host/x` or `\\host\share`) is shown as plain
+  text, not as a link.
 - Following a link to another document from Preview is not supported yet.
 - A `#` link stays on the page.
 - A link with another scheme, such as `javascript:`, is shown as its plain
