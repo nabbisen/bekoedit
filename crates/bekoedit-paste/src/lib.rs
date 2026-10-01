@@ -6,8 +6,11 @@
 //! than the one asked for. Nothing here touches the app: the paste handler,
 //! the toast and the editor transaction are slice 2.
 //!
-//! Conversion is `mdka` 3.0.0 in `ConversionMode::Minimal` with default
-//! features off (RFC-046 §5.3, §6.2). Around it:
+//! Conversion is `mdka` 3.2.0, `ConversionMode::Balanced` with
+//! `drop_interactive_shell(true)` and `preserve_ids(false)` (measured by
+//! upstream, and by this crate's own fixture corpus, as byte-identical to
+//! `Minimal` with `emphasis_from_style` off -- task 038), default features
+//! off (RFC-046 §5.3, §6.2). Around it:
 //!
 //! - **Too large** (`MAX_HTML_BYTES`), measured before `mdka` is called.
 //! - **Failed**: `mdka` panics. The panic is caught, so a paste can never take
@@ -139,16 +142,32 @@ pub fn convert_with_marker(
         line_ending,
         image_marker,
         Limits::DEFAULT,
-        mdka_minimal,
+        mdka_configured,
     )
 }
 
-/// `mdka` as configured for paste: `Minimal`, which drops page chrome and emits
-/// no `<a id>` anchors (RFC-046 §5.3).
-fn mdka_minimal(html: String) -> String {
-    let options = mdka::ConversionOptions::for_mode(mdka::ConversionMode::Minimal);
+/// `mdka` as configured for paste (RFC-046 §5.3; task 038 step 3): `Balanced`
+/// with the two options that reproduce `Minimal`'s own behaviour --
+/// `drop_interactive_shell` (page chrome) and no `<a id>` anchors
+/// (`preserve_ids(false)`) -- so that `emphasis_from_style` can be read at
+/// all (`Minimal` unwraps `<span>`/`<div>` before their `style` can be read;
+/// upstream measured this combination byte-identical to `Minimal` with the
+/// option off, over their 54-document corpus, and this crate's own fixture
+/// corpus confirms it independently). The option itself is a separate,
+/// deliberate opt-in (`EMPHASIS_FROM_STYLE`), off here.
+fn mdka_configured(html: String) -> String {
+    let options = mdka::ConversionOptions::for_mode(mdka::ConversionMode::Balanced)
+        .drop_interactive_shell(true)
+        .preserve_ids(false)
+        .emphasis_from_style(EMPHASIS_FROM_STYLE);
     mdka::html_to_markdown_with(&html, &options)
 }
+
+/// Off (task 038 step 4; RFC-046 §6.2 item 4 is still an accepted limitation,
+/// not yet enabled). A `const` rather than deleting the call above, so
+/// turning it on is a one-line, reviewable diff when it is: see
+/// `crates/bekoedit-paste/tests/fixtures/README.md`.
+const EMPHASIS_FROM_STYLE: bool = false;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Limits {

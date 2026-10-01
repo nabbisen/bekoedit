@@ -187,6 +187,9 @@ fn no_data_destination_survives_in_any_output() {
 fn the_guard_changes_no_code_content() {
     for name in fixture_names() {
         let html = read(&name, "html");
+        // `Minimal` here, not the crate's own `Balanced`-plus-options
+        // configuration: the two are measured byte-identical (task 038), so
+        // `Minimal` remains a valid, simpler independent reference baseline.
         let raw = mdka::html_to_markdown_with(
             &html,
             &mdka::ConversionOptions::for_mode(mdka::ConversionMode::Minimal),
