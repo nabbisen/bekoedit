@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   as plain text instead, with a notice. Ctrl+Shift+V (Cmd+Shift+V on macOS)
   pastes plain text, unconverted, as before.
 
+### Fixed
+- A click that should move focus into the editor — opening a document from
+  the workspace tree or a backlink, a mode tab, or a search result —
+  occasionally left focus on the clicked control instead. This happened
+  intermittently, more often while opening a larger document.
+
 ## [0.16.1] - 2026-09-25
 
 ### Highlights

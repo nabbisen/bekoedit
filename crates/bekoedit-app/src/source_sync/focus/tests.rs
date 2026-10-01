@@ -150,6 +150,92 @@ fn the_arm_script_parses_its_request_from_a_string_literal() {
     assert!(!script.contains("const request = {"));
 }
 
+// ---- Task 039: the acknowledgement must outlive the page's garbage
+// collector --------------------------------------------------------------
+
+#[test]
+fn each_arm_failure_gets_its_own_trace_and_none_of_them_is_the_timeout_event() {
+    let cases = [
+        (
+            ArmFailure::Unanswered("EvalError::Finished - eval has already ran".to_string()),
+            "source.focus.guard.unanswered",
+        ),
+        (
+            ArmFailure::Undecodable("not json".to_string()),
+            "source.focus.guard.undecodable",
+        ),
+        (
+            ArmFailure::Unencodable("recursion limit".to_string()),
+            "source.focus.guard.unencodable",
+        ),
+    ];
+    for (failure, expected_event) in cases {
+        let (event, detail) = arm_failure_trace(&failure);
+        assert_eq!(event, expected_event, "{failure:?}");
+        assert_ne!(
+            event, "source.focus.guard.timeout",
+            "only an elapsed ARM_TIMEOUT may use this event, at the call site"
+        );
+        let expected_detail = match &failure {
+            ArmFailure::Unanswered(detail)
+            | ArmFailure::Undecodable(detail)
+            | ArmFailure::Unencodable(detail) => detail,
+        };
+        assert_eq!(detail, expected_detail);
+    }
+}
+
+#[test]
+fn the_arm_script_returns_its_promise_and_waits_for_release_with_a_bound() {
+    let script = arm_focus_guard_js("{}");
+    // The leading `return` is the fix itself (task 039 section 2.2): without
+    // it, the outer evaluated function resolves right after `dioxus.send`,
+    // regardless of what the inner IIFE goes on to do.
+    assert!(
+        script.contains("return (async () => {"),
+        "the evaluated function must return its promise: {script}"
+    );
+    assert!(
+        script.contains("dioxus.send(JSON.stringify(ack))"),
+        "{script}"
+    );
+    // Waits for Rust's release, but bounded -- a string-level check, as for
+    // `render_locate_script` (task 023 section 5.4).
+    assert!(script.contains("dioxus.recv()"), "{script}");
+    assert!(
+        script.contains(&format!("setTimeout(resolve, {GUARD_RELEASE_TIMEOUT_MS})")),
+        "{script}"
+    );
+    assert!(
+        GUARD_RELEASE_TIMEOUT_MS > ARM_TIMEOUT.as_millis() as u64,
+        "the page's own bound must outlast ARM_TIMEOUT, or the ordinary path \
+         could resolve via the bound instead of the release"
+    );
+}
+
+#[test]
+fn the_release_is_sent_only_after_the_acknowledgement_is_received() {
+    // Task 039 section 2.2's third point: Rust sends the release after its
+    // `recv` returns. `arm_focus_guard` itself needs a live WebView to run
+    // (the async guard flow, per this module's own doc comment), so this is
+    // a source-order check, not a call-order one -- the project's existing
+    // convention for a JS/async ordering claim it cannot otherwise observe
+    // headlessly (e.g. `application_root_assets_are_cargo_native...`-style
+    // `include_str!` checks elsewhere in this crate).
+    let source = include_str!("../focus.rs");
+    let recv_at = source
+        .find(".recv::<String>()")
+        .expect("the acknowledgement is read with eval.recv::<String>()");
+    let send_at = source
+        .find("let _ = eval.send(true);")
+        .expect("the release is sent with eval.send(true)");
+    assert!(
+        recv_at < send_at,
+        "the release (byte {send_at}) must be sent after the acknowledgement \
+         is received (byte {recv_at}), not before"
+    );
+}
+
 #[test]
 fn the_consume_script_parses_its_identity_and_quotes_its_fingerprint() {
     let identity = serde_json::to_string(&serde_json::json!({ "epoch": 2 })).unwrap();

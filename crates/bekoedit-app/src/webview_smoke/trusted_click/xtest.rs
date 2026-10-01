@@ -151,14 +151,20 @@ async fn locate_click_target(
     // Acknowledge, then join: see `render_locate_script`'s own comment.
     // Not pinned across separate exchanges like the shared transport's
     // evaluator pin -- this is one self-contained round trip -- but
-    // joined rather than dropped, so Dioxus's own cleanup runs now
-    // instead of being deferred to a later GC pass.
-    eval.send(true).map_err(|error| {
-        format!("could not acknowledge locate response for {selector}: {error}")
-    })?;
-    eval.join::<Option<serde_json::Value>>()
-        .await
-        .map_err(|error| format!("locate query for {selector} did not complete: {error}"))?;
+    // joined rather than dropped, so Dioxus's own cleanup runs now instead
+    // of being deferred to a later GC pass, *when it can*.
+    //
+    // Task 039 §2.3: `response` is already in hand, validated, and
+    // returned below either way -- neither of these can fail the run
+    // without discarding an answer this call actually has. The exact
+    // hazard they guard against doing that for: run `36718984742`'s
+    // `EvalError::Finished - eval has already ran`, from this same
+    // evaluator's slab entry being dropped (by the page's own GC, after
+    // `send(response)` lets its promise resolve, per
+    // `render_locate_script`'s comment) before this `join` ran, not
+    // because anything here was actually wrong.
+    let _ = eval.send(true);
+    let _ = eval.join::<Option<serde_json::Value>>().await;
     Ok(response)
 }
 

@@ -18,6 +18,13 @@ use super::{
 };
 
 const ARM_TIMEOUT: Duration = Duration::from_millis(250);
+/// How long the page's own arm script waits for Rust's release (task 039
+/// §2.2) before giving up on its own side. Comfortably longer than
+/// `ARM_TIMEOUT`, so the ordinary path always resolves via the release, not
+/// this bound -- it exists only so a dropped `ARM_TIMEOUT` race (Rust never
+/// sends a release because it stopped waiting) cannot leave the page's
+/// promise, and the query it keeps reachable, pending forever.
+const GUARD_RELEASE_TIMEOUT_MS: u64 = 1000;
 const FOCUS_GUARD_BOOTSTRAP: &str = include_str!("../../assets/focus-guard-bundle.js");
 const FOCUS_GUARD_PROTOCOL_VERSION: u32 = 2;
 
@@ -236,23 +243,36 @@ fn submit_interaction(
     crate::bridge::trace("source.focus.interaction.allocate", token);
 
     spawn(async move {
-        let response =
-            tokio::time::timeout(ARM_TIMEOUT, arm_focus_guard(token, &fingerprint, &origin))
+        // Task 039 §2.1: the trace says *which* way the arm failed to
+        // resolve, since only an elapsed `ARM_TIMEOUT` is a genuine timeout
+        // -- an early `None` from the old collapsed `.ok().flatten()` here
+        // read identically whether the page never answered in time or its
+        // query was dropped out from under it (task 029/036's finding).
+        let ack =
+            match tokio::time::timeout(ARM_TIMEOUT, arm_focus_guard(token, &fingerprint, &origin))
                 .await
-                .ok()
-                .flatten();
-        let armed = response
+            {
+                Ok(Ok(ack)) => Some(ack),
+                Ok(Err(failure)) => {
+                    let (event, detail) = arm_failure_trace(&failure);
+                    crate::bridge::trace(event, detail);
+                    None
+                }
+                Err(_elapsed) => {
+                    crate::bridge::trace("source.focus.guard.timeout", token);
+                    None
+                }
+            };
+        let armed = ack
             .as_ref()
             .is_some_and(|ack| ack.token == token && ack.armed);
-        if let Some(ack) = response.as_ref()
+        if let Some(ack) = ack.as_ref()
             && !armed
         {
             crate::bridge::trace(
                 "source.focus.guard.rejected",
                 ack.reason.as_deref().unwrap_or("invalidAcknowledgement"),
             );
-        } else if response.is_none() {
-            crate::bridge::trace("source.focus.guard.timeout", token);
         }
         let resolution = if armed {
             FocusResolution::Armed
@@ -318,11 +338,44 @@ fn focus_target(command: &SourceCommand, current_mode: EditorMode) -> Option<Sou
     }
 }
 
+/// Why [`arm_focus_guard`] did not resolve to a decided acknowledgement
+/// (task 039 §2.1). Each variant gets its own trace event at the call site,
+/// carrying the detail here -- only an elapsed `ARM_TIMEOUT` (the caller's
+/// own `tokio::time::timeout`, not a variant of this type) is a genuine
+/// timeout.
+#[derive(Debug)]
+enum ArmFailure {
+    /// `eval.recv` itself failed, with the `EvalError`'s own text. This is
+    /// the signature of the page's query being dropped before Rust read it
+    /// (task 039 §1): a `recv` failure this early, well inside `ARM_TIMEOUT`,
+    /// is not evidence the page was slow.
+    Unanswered(String),
+    /// The page answered, but its payload did not decode as `GuardArmed`;
+    /// carries the undecodable payload itself.
+    Undecodable(String),
+    /// `ArmRequest` itself did not serialize; carries the encoder's error.
+    /// No eval is ever started in this case.
+    Unencodable(String),
+}
+
+/// The trace event name and detail for one [`ArmFailure`] (task 039 §2.1).
+/// Pure, and the only place that names these three events, so it is unit
+/// tested directly: every variant gets its own name, and none of them is
+/// `source.focus.guard.timeout` -- that name is reserved for an actually
+/// elapsed `ARM_TIMEOUT`, named at the call site instead, not here.
+fn arm_failure_trace(failure: &ArmFailure) -> (&'static str, &str) {
+    match failure {
+        ArmFailure::Unanswered(detail) => ("source.focus.guard.unanswered", detail.as_str()),
+        ArmFailure::Undecodable(detail) => ("source.focus.guard.undecodable", detail.as_str()),
+        ArmFailure::Unencodable(detail) => ("source.focus.guard.unencodable", detail.as_str()),
+    }
+}
+
 async fn arm_focus_guard(
     token: u64,
     fingerprint: &str,
     origin: &SourceInteractionOrigin,
-) -> Option<GuardArmed> {
+) -> Result<GuardArmed, ArmFailure> {
     let request = ArmRequest {
         token,
         fingerprint,
@@ -332,34 +385,59 @@ async fn arm_focus_guard(
         current_mode: origin.current_mode.map(mode_name),
         removal_policy: origin.removal_policy,
     };
-    let payload = serde_json::to_string(&request).ok()?;
+    let payload = serde_json::to_string(&request)
+        .map_err(|error| ArmFailure::Unencodable(error.to_string()))?;
     let mut eval = document::eval(&arm_focus_guard_js(&payload));
-    let payload = eval.recv::<String>().await.ok()?;
-    decode_guard_acknowledgement(&payload)
+    let payload = eval
+        .recv::<String>()
+        .await
+        .map_err(|error| ArmFailure::Unanswered(error.to_string()))?;
+    // Task 039 §2.2: release the page's pinned query now that its
+    // acknowledgement has been read, whether or not it goes on to decode
+    // below -- the page cannot know a decode failure happened on this side,
+    // and its own bound (`GUARD_RELEASE_TIMEOUT_MS`) exists exactly so a
+    // missed release here is not fatal to it either way.
+    let _ = eval.send(true);
+    decode_guard_acknowledgement(&payload).ok_or(ArmFailure::Undecodable(payload))
 }
 
 /// The script that arms a focus guard. `payload` is the serialized
 /// `ArmRequest`; it reaches the page as a string literal the script
 /// `JSON.parse`s (task 031), not as JavaScript source.
+///
+/// Task 039 §2.2: the evaluated function **returns** its promise (the
+/// leading `return`), and that promise does not settle until Rust's release
+/// arrives, or its own bound elapses. Without the `return`, as this script
+/// read before task 039, the IIFE's promise resolves on its own as soon as
+/// it is created, right after `dioxus.send(ack)` -- Dioxus's wrapper then
+/// calls `dioxus.close()`, which only nulls the JS message queue, and its
+/// `FinalizationRegistry` can post the slab-entry drop that frees the
+/// evaluator, and the unread acknowledgement with it, before the spawned
+/// Rust task ever polls `recv` (task 039 §1; the same hazard
+/// `webview_smoke/transport.rs:11-16` documents for the smoke transport).
+/// Re-audit `native_eval.ts`, `query.rs`, `document.rs` and
+/// `dioxus-document` `eval.rs` before updating Dioxus.
 fn arm_focus_guard_js(payload: &str) -> String {
     let payload = crate::bridge::js_string_literal(payload);
     format!(
         r#"
         {FOCUS_GUARD_BOOTSTRAP}
-        (async () => {{
+        return (async () => {{
             const request = JSON.parse({payload});
             const guards = window.__bkFocusGuards;
-            if (!guards
+            const ack = (!guards
                 || guards.protocolVersion !== {FOCUS_GUARD_PROTOCOL_VERSION}
-                || typeof guards.arm !== "function") {{
-                dioxus.send(JSON.stringify({{
-                    token: request.token,
-                    armed: false,
-                    reason: "incompatibleRegistry",
-                }}));
-                return null;
-            }}
-            dioxus.send(JSON.stringify(guards.arm(request)));
+                || typeof guards.arm !== "function")
+                ? {{ token: request.token, armed: false, reason: "incompatibleRegistry" }}
+                : guards.arm(request);
+            dioxus.send(JSON.stringify(ack));
+            // Stay alive until Rust releases this query, bounded so a
+            // dropped ARM_TIMEOUT race (Rust stopped waiting and never
+            // sends a release) cannot leave this promise pending forever.
+            await Promise.race([
+                dioxus.recv(),
+                new Promise((resolve) => setTimeout(resolve, {GUARD_RELEASE_TIMEOUT_MS})),
+            ]);
             return null;
         }})();
         "#,
