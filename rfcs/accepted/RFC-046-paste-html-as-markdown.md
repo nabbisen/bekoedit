@@ -11,7 +11,7 @@ start.
 **Date:** 2026-09-16
 **Related RFCs:** [RFC-011](../done/RFC-011-text-mode-with-codemirror-6.md), [RFC-015](../done/RFC-015-sourcepatch-engine-and-source-preserving-mutation.md), [RFC-016](../done/RFC-016-form-mode-mvp-surface-and-safe-editable-blocks.md), [RFC-017](../done/RFC-017-raw-markdown-islands.md), [RFC-038](../done/RFC-038-advanced-markdown-extension-policy.md), [RFC-041](../done/RFC-041-source-editor-lifecycle-and-synchronization-controller.md), [RFC-044](../done/RFC-044-shell-behaviour-regression-coverage.md)
 **Upstream:** [`mdka`](https://github.com/nabbisen/mdka-rs), maintained by the project owner
-**Upstream pin:** `mdka = "=3.0.0"`, since 2026-09-26 (§6.3); `=2.5.1` from 2026-09-24 (§6.2)
+**Upstream pin:** `mdka = "=3.2.0"`, since 2026-10-01 (§6.4); `=3.0.0` from 2026-09-26 (§6.3); `=2.5.1` from 2026-09-24 (§6.2)
 
 ---
 
@@ -110,6 +110,11 @@ Two constraints, because conversion is asynchronous:
 - **`ConversionMode::Minimal`**, chosen on evidence (§6). Balanced and Semantic
   emit raw `<a id="…"></a>` anchors inside headings. Minimal does not, and it also
   drops page chrome (`nav`, `footer`) that a sloppy selection may include.
+  - **Amended 2026-10-01 (§6.4):** the configuration is now `Balanced` with
+    `drop_interactive_shell(true)` and `preserve_ids(false)`. That is Minimal's
+    two behaviours that matter here, without its wrapper unwrapping. Our corpus
+    measured it byte-identical to `Minimal`. On top of it, `emphasis_from_style
+    (true)`.
 - **Guards applied by bekoedit after conversion:**
   - `data:` URI images are replaced by their alt text. A pasted screenshot must not
     put megabytes of base64 into the document.
@@ -410,7 +415,8 @@ us:** the conversion claims. Slice 1's corpus is where they are measured. The
    **It is not a precondition for slice 2.** The source is correct GFM, and only
    the preview is less faithful than it could be.
 
-**Item 4 is now the gap a user will meet most.** Google Docs expresses bold only
+**Item 4 is now the gap a user will meet most.** *(Resolved 2026-10-01: see
+§6.4.)* Google Docs expresses bold only
 through `font-weight:700` spans, so every bold word in a Google Docs paste arrives
 plain. The text is intact and the document is valid. It is not announced, because
 we cannot detect it without reading `style` ourselves. It is recorded in §7's
@@ -474,7 +480,47 @@ current output, and a suggestion was drafted to upstream
 (`.git-exclude/upstream/mdka/send/2026-10-01-re-3.0.0-and-3.1.0.md`).
 
 Item 4, Google Docs bold through `font-weight:700`, is still not done upstream
-and is not scheduled.
+and is not scheduled. *(Superseded by §6.4: shipped in 3.1.0, fixed in 3.1.1,
+enabled here.)*
+
+### 6.4 `mdka` 3.2.0, 2026-10-01 · **the pin is `=3.2.0`, and item 4 is enabled**
+
+Upstream shipped three releases that day, and wrote twice
+(`.git-exclude/upstream/mdka/receive/2026-10-01-item-4-done-but-not-in-minimal.md`,
+`…/2026-10-01c-shipped-you-can-turn-it-on.md`):
+
+- **3.1.0 added `emphasis_from_style`.** It reads bold and italic from an
+  element's own inline `style`. **It does nothing in `Minimal`**, which unwraps
+  `<span>` before its `style` is read.
+- **3.1.1 stopped it adding emphasis for an element's own restated default**,
+  such as a heading's `font-weight: 700`. Our letter had warned that
+  computed-style clipboard HTML would hit this.
+- **3.2.0 flattens English ordinals** (`1<sup>st</sup>` becomes `1st`), at our
+  suggestion.
+
+**Moved in task 038** (merged as `b78cce9`). Each step was checked over the
+whole corpus before the next:
+
+1. **The first real capture is in the corpus:** `webkitgtk-paste-conversion`.
+   It is the exact `text/html` WebKitGTK handed the page in CI run
+   `36826965725`, 1,971 UTF-16 code units, checked byte-identical against the
+   log.
+   - It shows WebKitGTK restating `font-weight: 400` on `<p>`, `<ul>` and
+     `<table>`, and **no** `font-weight` on `<h1>`, `<th>` or `<td>`.
+2. **`=3.2.0` with the option off:** only the ordinals fixture moved, as
+   upstream predicted.
+3. **`Minimal` became `Balanced`** plus the two options: byte-identical
+   everywhere.
+4. **`emphasis_from_style(true)`:** exactly the two style-bold fixtures moved,
+   both wanted. **No spurious emphasis anywhere**, including the real capture.
+   - **Upstream's one deliberate boundary is pinned as accepted:** bold
+     declared on an ancestor `<div>` still emphasises a heading inside it.
+
+**Live:** run `36829851592` converted the real paste to
+`# Report\n\nSome **bold** text.\n\n- one\n- two\n\n| a | b |\n…`,
+identical to the previous engine's output, and saved it byte-exact.
+
+**Cost:** unchanged dependencies, and 1 MiB converts in about 25 ms.
 
 ## 7. Testing
 
@@ -497,10 +543,14 @@ and is not scheduled.
   form, and stops and reports if it does not hold.
 - **Manual walkthrough.** A real paste from Firefox, Chromium, Google Docs and
   LibreOffice, plus Ctrl+Shift+V. A trusted paste from a real application is
-  something only a person can perform. **Expected, not a defect** (§6.2):
-  - bold from Google Docs arrives plain;
-  - a multi-line table cell previews with a literal `<br>`, until the finding
-    that owns it is decided.
+  something only a person can perform. **Expected, not a defect:**
+  - ~~bold from Google Docs arrives plain~~ *(no longer: §6.4 enables it)*;
+  - ~~a multi-line table cell previews with a literal `<br>`~~ *(no longer: task
+    030 renders a bare inline `<br>`)*;
+  - bold declared on a block around a heading also bolds the heading (§6.4,
+    upstream's deliberate boundary).
+- **In CI, end to end** (slice 2): `paste_probe` and `paste_conversion`, a real
+  X clipboard and real XTEST keys under Xvfb.
 
 ## 8. Cost
 
@@ -529,13 +579,18 @@ Measured by resolving `mdka` 2.2.1 against this workspace's `Cargo.lock`:
   called directly, in a release build, against the 2 s budget.
 - **The cost to the shipped binary**, in size and clean-build time, is measured
   in slice 2, when the app first depends on the crate.
+  - **Measured 2026-09-30, slice 2 part B:** the release binary grows from
+    13,177,848 to 14,487,712 bytes, **about +1.25 MiB**.
+  - The clean-build delta is not comparable: the "before" build reused cached
+    artifacts.
 
 ## 9. Slices
 
 1. **The converter.** The new crate, Minimal mode, §5.3 guards, §5.4 fallback
    rules, and the fixture corpus. Headless; no UI change. **Done:**
    `rfcs/handoffs/046-paste-html-as-markdown/slice-1-the-converter.md`, merged
-   as `cdf486b` (2026-09-26), then moved to `mdka` `=3.0.0` (`a8dca63`).
+   as `cdf486b` (2026-09-26), then moved to `mdka` `=3.0.0` (`a8dca63`) and
+   `=3.2.0`, with item 4 enabled (`b78cce9`, §6.4).
 2. **The paste path.** §5.1's handler, the §5.6 message, §5.2's mapping and
    discard rules, §5.5's plain-paste chord, and §5.4's fallback toasts. Leads with
    the §7 gating assumption.
@@ -554,6 +609,14 @@ Measured by resolving `mdka` 2.2.1 against this workspace's `Cargo.lock`:
    **Both are done (2026-09-25):**
    - the link-scheme filter is task 030, with task 032's click guard;
    - the payload encoding is task 031.
+
+   **Done (2026-10-01):** `rfcs/handoffs/046-paste-html-as-markdown/slice-2-the-paste-path.md`.
+   - **Parts A and A2:** the probe answered every question (`ef63940`,
+     `e49aa83`).
+   - **Part B:** the paste path (`51e3d88`).
+   - **The scenario guard fix** (`8cf7cf3`).
+   - **`paste_conversion` passes end to end in CI**, real clipboard to saved
+     bytes.
 3. **Surfacing.** Documentation and the manual walkthrough items. No settings
    work: §10 Q1 is settled as "no toggle".
 
