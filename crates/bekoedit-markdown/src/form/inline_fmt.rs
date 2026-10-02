@@ -22,6 +22,36 @@ fn require_editable(block: &crate::block::BlockNode) -> Result<(), crate::form::
     }
 }
 
+/// The result of toggling `kind`'s markup around `selected` text: unwrapped
+/// if `selected` is already wrapped in `kind`'s own markers, wrapped
+/// otherwise (RFC-030). The one place this decision is made -- both
+/// [`resolve_toggle_inline`] (a block's own content) and
+/// `form::tables::resolve_toggle_inline_in_table_cell` (one table cell's
+/// content, RFC-048 slice 2) call this, so a fix to how a format wraps or
+/// unwraps (review, 2026-10-02 §3.1: the two had drifted into separate
+/// copies) only has to happen once.
+pub fn toggled_text(selected: &str, kind: InlineFormat, link_url: Option<&str>) -> String {
+    let open_m = kind.open_marker();
+    let close_m = kind.close_marker();
+
+    if selected.starts_with(open_m)
+        && selected.ends_with(close_m)
+        && selected.len() >= open_m.len() + close_m.len()
+    {
+        // Unwrap: strip the markers.
+        selected[open_m.len()..selected.len() - close_m.len()].to_string()
+    } else {
+        // Wrap: add markers.
+        match kind {
+            InlineFormat::Link => {
+                let url = link_url.unwrap_or("");
+                format!("[{selected}]({url})")
+            }
+            _ => format!("{open_m}{selected}{close_m}"),
+        }
+    }
+}
+
 /// Toggles inline markup around a UTF-16-offset selection within the
 /// block's content (RFC-030).
 ///
@@ -56,25 +86,7 @@ pub fn resolve_toggle_inline(
         })?;
 
     let selected = &content_text[byte_start..byte_end_local];
-    let open_m = kind.open_marker();
-    let close_m = kind.close_marker();
-
-    let replacement = if selected.starts_with(open_m)
-        && selected.ends_with(close_m)
-        && selected.len() >= open_m.len() + close_m.len()
-    {
-        // Unwrap: strip the markers.
-        selected[open_m.len()..selected.len() - close_m.len()].to_string()
-    } else {
-        // Wrap: add markers.
-        match kind {
-            InlineFormat::Link => {
-                let url = link_url.unwrap_or("");
-                format!("[{selected}]({url})")
-            }
-            _ => format!("{open_m}{selected}{close_m}"),
-        }
-    };
+    let replacement = toggled_text(selected, kind, link_url);
 
     let abs_start = content.start + byte_start;
     let abs_end = content.start + byte_end_local;

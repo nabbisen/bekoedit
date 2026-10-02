@@ -22,6 +22,12 @@ use crate::i18n::{Lang, tr};
 /// read the same way, since both are UTF-16 code units relative to
 /// whatever `field_id` names -- only the target of the dispatched edit
 /// differs.
+///
+/// `enabled` (review, 2026-10-02 §3.2): a table's toolbar is rendered at
+/// all times, not only once a cell has focus, so the table does not shift
+/// down by the toolbar's own height under the user's pointer on their
+/// first click into it. While no cell has focus the buttons are present
+/// but `disabled`, reserving the space without doing anything.
 #[component]
 pub fn InlineToolbar(
     field_id: String,
@@ -29,6 +35,7 @@ pub fn InlineToolbar(
     revision: u64,
     lang: Lang,
     #[props(default)] cell: Option<(usize, usize)>,
+    #[props(default = true)] enabled: bool,
 ) -> Element {
     let state = use_context::<Signal<AppState>>();
 
@@ -39,6 +46,7 @@ pub fn InlineToolbar(
                 class: "inline-fmt-btn",
                 aria_label: aria,
                 title: aria,
+                disabled: !enabled,
                 // Prevent textarea from losing focus on mousedown.
                 onmousedown: |evt| evt.prevent_default(),
                 onclick: move |_| {

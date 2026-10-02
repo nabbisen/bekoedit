@@ -31,16 +31,24 @@ pub fn TableView(
     // focus (RFC-048 slice 2 §2.3), not one toolbar per cell.
     let mut focused = use_signal::<Option<(usize, usize)>>(|| None);
 
+    // Rendered unconditionally (review, 2026-10-02 §3.2): if the toolbar
+    // only appeared once a cell took focus, the table would shift down by
+    // its height on the user's first click, under their own pointer. Its
+    // buttons are disabled until a cell has focus instead.
+    let current = *focused.read();
+    let toolbar_field_id = current
+        .map(|(row, col)| format!("{field_id}-{row}-{col}"))
+        .unwrap_or_else(|| field_id.clone());
+
     rsx! {
         div { class: "table-block",
-            if let Some((row, col)) = *focused.read() {
-                InlineToolbar {
-                    field_id: format!("{field_id}-{row}-{col}"),
-                    block_id,
-                    revision,
-                    lang,
-                    cell: Some((row, col)),
-                }
+            InlineToolbar {
+                field_id: toolbar_field_id,
+                block_id,
+                revision,
+                lang,
+                cell: current,
+                enabled: current.is_some(),
             }
             table {
                 thead {

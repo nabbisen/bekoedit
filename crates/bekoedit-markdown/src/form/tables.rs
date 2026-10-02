@@ -122,19 +122,7 @@ pub fn resolve_toggle_inline_in_table_cell(
     })?;
 
     let selected = &cell_text[byte_start..byte_end];
-    let open_m = kind.open_marker();
-    let close_m = kind.close_marker();
-    let replaced = if selected.starts_with(open_m)
-        && selected.ends_with(close_m)
-        && selected.len() >= open_m.len() + close_m.len()
-    {
-        selected[open_m.len()..selected.len() - close_m.len()].to_string()
-    } else {
-        match kind {
-            InlineFormat::Link => format!("[{selected}]({})", link_url.unwrap_or("")),
-            _ => format!("{open_m}{selected}{close_m}"),
-        }
-    };
+    let replaced = super::inline_fmt::toggled_text(selected, kind, link_url);
     let new_cell_text = format!(
         "{}{replaced}{}",
         &cell_text[..byte_start],
