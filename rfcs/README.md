@@ -133,6 +133,7 @@ superseded).
 | RFC-032 | [Performance optimization and incremental parsing](proposed/RFC-032-performance-optimization-and-incremental-parsing.md) | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | [Plugin system evaluation](proposed/RFC-039-plugin-system-evaluation.md) | Future evaluation only |
 | RFC-040 | [Sync and collaboration evaluation](proposed/RFC-040-sync-and-collaboration-evaluation.md) | Future evaluation only |
+| RFC-048 | [Form Mode table editing](proposed/RFC-048-form-mode-table-editing.md) | Drafted 2026-10-02 after the owner named easy table editing a key requirement. Every GFM table becomes a Form Mode grid: cells with formatting, row and column insert, delete and move, alignment, and an explicit Tidy; every operation is a minimal patch. Slice 1 is task 045 (a data-loss fix). Four questions for the owner in §10 |
 
 ## Implemented — v0.3.0 (`done/`)
 
