@@ -79,6 +79,11 @@ pub enum DiscardReason {
     RelayLost,
     /// The application is shutting down.
     Shutdown,
+    /// Task 048 §2.2: a Form Mode field was mid-IME-composition, so the
+    /// command was refused before it ever reached the queue this type
+    /// otherwise describes -- reusing the same one-sentence report, not a
+    /// discard the queue itself recorded.
+    Composing,
 }
 
 /// A queued command that will not run, and why. It leaves the controller

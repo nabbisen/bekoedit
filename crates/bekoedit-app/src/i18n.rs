@@ -212,6 +212,8 @@ fn tr_en(key: &str) -> &'static str {
         "queue.reason.busy" => "the editor was busy.",
         "queue.reason.document_changed" => "the document changed before it could run.",
         "queue.reason.unresponsive" => "the editor stopped responding.",
+        // Task 048 §2.2: refused while a Form Mode field was mid-IME-composition.
+        "queue.reason.composing" => "you were still composing text.",
         // Effect, then cause: "{action} — {reason}". `queue.reason.*`'s EN
         // values already end in "." and need nothing added.
         "queue.template" => "{action} — {reason}",
@@ -407,6 +409,7 @@ fn tr_ja(key: &str) -> &'static str {
         "queue.reason.busy" => "エディタが使用中のため、",
         "queue.reason.document_changed" => "実行前にドキュメントが変更されたため、",
         "queue.reason.unresponsive" => "エディタが応答しなくなったため、",
+        "queue.reason.composing" => "文字を入力中のため、",
         // Cause, then effect, as one sentence: "{reason}{action}。".
         "queue.template" => "{reason}{action}。",
         "recovery.restored" => "復元しました",

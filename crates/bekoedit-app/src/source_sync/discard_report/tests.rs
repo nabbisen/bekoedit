@@ -46,6 +46,7 @@ fn every_reported_reason() -> Vec<DiscardReason> {
         DiscardReason::DocumentChanged,
         DiscardReason::EditorUnavailable,
         DiscardReason::RelayLost,
+        DiscardReason::Composing,
     ]
 }
 
@@ -121,6 +122,21 @@ fn document_changed_is_unmistakable_and_distinct_from_busy() {
     assert!(ja.contains("ドキュメントが変更"), "{ja:?}");
 }
 
+/// Task 048 §2.2: refused mid-IME-composition is its own, distinct
+/// reason, not folded into "the editor was busy" or any other existing
+/// clause.
+#[test]
+fn composing_is_unmistakable_and_distinct_from_busy() {
+    let en = reason_clause(DiscardReason::Composing, Lang::En).unwrap();
+    assert!(en.contains("composing"), "{en:?}");
+    assert_ne!(
+        en,
+        reason_clause(DiscardReason::Overflow, Lang::En).unwrap()
+    );
+    let ja = reason_clause(DiscardReason::Composing, Lang::Ja).unwrap();
+    assert!(ja.contains("入力中"), "{ja:?}");
+}
+
 #[test]
 fn shutdown_produces_no_clause_in_either_language() {
     for lang in [Lang::En, Lang::Ja] {
@@ -146,6 +162,18 @@ fn one_discard_is_one_message_naming_the_action() {
     assert_eq!(
         messages,
         vec!["Could not switch to Form — the editor was busy.".to_string()]
+    );
+}
+
+/// Task 048 §2.2: the exact one-sentence report a refused-while-composing
+/// Ctrl+S produces.
+#[test]
+fn a_save_refused_while_composing_names_both_the_action_and_why() {
+    let discards = vec![discard(SourceCommand::SaveNow, DiscardReason::Composing)];
+    let messages = discard_messages(&discards, Lang::En);
+    assert_eq!(
+        messages,
+        vec!["Could not save — you were still composing text.".to_string()]
     );
 }
 

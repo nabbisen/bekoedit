@@ -70,6 +70,7 @@ fn reason_clause(reason: DiscardReason, lang: Lang) -> Option<&'static str> {
         DiscardReason::EditorUnavailable | DiscardReason::RelayLost => {
             Some(tr(lang, "queue.reason.unresponsive"))
         }
+        DiscardReason::Composing => Some(tr(lang, "queue.reason.composing")),
         DiscardReason::Shutdown => None,
     }
 }

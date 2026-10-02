@@ -4,6 +4,12 @@
 //! blur -- a keyboard-triggered command (Ctrl+S, a shortcut mode switch)
 //! never touches DOM focus, so without this the field's pending edit is
 //! silently discarded.
+//!
+//! Review (2026-10-02 §2.2): mid-composition, this reports [`CommitOutcome::Composing`]
+//! and commits nothing, but it is the *caller*'s job to refuse the command
+//! itself in that case -- running it anyway (saving without the pending
+//! text, including text typed before the composition even started) was
+//! the bug this task exists to fix, not an acceptable fallback.
 
 use bekoedit_core::AppState;
 use bekoedit_markdown::{FormBlockDisplay, FormBlockEdit, FormEditCommand, FormProjection};
@@ -119,40 +125,55 @@ fn resolve_pending_commit(
     })
 }
 
+/// What happened when a command tried to commit a Form Mode field's
+/// pending text before running (task 048 D1, extended by the review's
+/// §2.2). The caller decides what to do with each variant; this function
+/// only observes and, when it can, commits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CommitOutcome {
+    /// A pending edit was found and committed.
+    Committed,
+    /// Nothing needed committing: not in Form Mode, no field had focus,
+    /// or its value already matched what was committed.
+    NothingPending,
+    /// A composition is in progress. Nothing was committed -- forcing one
+    /// now would write an intermediate, not-yet-confirmed string, the
+    /// same reason Text Mode never does this either
+    /// (`source_sync/lifecycle/transitions.rs`'s `CompositionActive`
+    /// handling). **The caller must refuse the command itself**, not run
+    /// it without the pending text.
+    Composing,
+}
+
 /// Commits whatever Form Mode field currently has focus and holds
 /// uncommitted text, before the caller goes on to run a command that saves
 /// or otherwise acts on the document's current state (task 048 D1). A
 /// no-op outside Form Mode, if nothing has focus inside it, or if the
 /// value already matches what is committed.
-///
-/// **Never commits mid-IME-composition.** Japanese input is a first-class
-/// case here: forcing a commit while a composition is still open would
-/// write an intermediate, not-yet-confirmed string. The existing Text Mode
-/// rule is the precedent (`source_sync/lifecycle/transitions.rs`'s
-/// `CompositionActive` handling: the command is refused, not queued to
-/// retry) -- the same choice here: a command that arrives mid-composition
-/// commits nothing and proceeds with the document exactly as it already
-/// was, rather than waiting on an event that may never come.
 pub(crate) async fn commit_pending_form_field(
     mut state: Signal<AppState>,
     mode: Signal<EditorMode>,
-) {
+) -> CommitOutcome {
     if *mode.read() != EditorMode::Form {
-        return;
+        return CommitOutcome::NothingPending;
     }
     let Ok(Some(pending)) =
         crate::bridge::eval_body::<Option<PendingField>>(PENDING_FIELD_JS).await
     else {
-        return;
+        return CommitOutcome::NothingPending;
     };
     if pending.composing {
-        return;
+        return CommitOutcome::Composing;
     }
     let Some(projection) = state.read().session.as_ref().map(|s| s.form_projection()) else {
-        return;
+        return CommitOutcome::NothingPending;
     };
-    if let Some(cmd) = resolve_pending_commit(&pending, &projection) {
-        let _ = state.write().edit_form(&cmd, now_ms());
+    match resolve_pending_commit(&pending, &projection) {
+        Some(cmd) => {
+            let _ = state.write().edit_form(&cmd, now_ms());
+            CommitOutcome::Committed
+        }
+        None => CommitOutcome::NothingPending,
     }
 }
 

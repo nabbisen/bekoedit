@@ -29,6 +29,7 @@ use crate::components::{
     toast::{Toast, ToastKind, ToastLayer, push_toast},
 };
 use crate::i18n::{Lang, tr};
+use crate::source_sync::SourceCommandQueue;
 use crate::source_sync::host::SourceEditorControllerHost;
 use crate::source_sync::{
     SourceCommand, SourceSyncState, submit_source_command, submit_source_shortcut_interaction,
@@ -138,7 +139,6 @@ pub fn App() -> Element {
     });
 
     // Background: native fs watcher + autosave + external-change poll.
-    let autosave_mode = use_context::<Signal<EditorMode>>();
     use_future(move || {
         let mut app: Signal<AppState> = state;
         async move {
@@ -175,12 +175,17 @@ pub fn App() -> Element {
                         }
                     }
                 }
-                // Task 048 D1: autosave bypasses the command queue entirely
-                // (it is not a `SourceCommand`), so it needs its own commit
-                // of a Form field's pending text before it writes -- the
-                // same step `submit_source_command_preserving_focus` runs
-                // for every queued command.
-                crate::source_sync::commit_pending_form_field(app, autosave_mode).await;
+                // Task 048, review §2.1: autosave does NOT commit a Form
+                // field's pending text. Autosave writes only the
+                // document's already-committed text; the pending text
+                // stays in the field, and the next blur or command
+                // commits it then -- autosave loses nothing by leaving it
+                // alone. Committing here as well was the per-keystroke
+                // commit §3 prohibits, by a second route: this tick runs
+                // every `TICK_MS` regardless of whether a save is even
+                // due, so while a user types, it would re-render the
+                // field's value out from under them roughly twice a
+                // second, racing the very keystroke it just read.
                 let mut s = app.write();
                 if s.session.is_some() {
                     s.check_external_change();
@@ -272,6 +277,7 @@ pub fn App() -> Element {
     rsx! {
         document::Style { "{STYLE_SOURCE}" }
         document::Script { "{SHORTCUTS_SOURCE}" }
+        SourceCommandQueue {}
         SourceEditorControllerHost {}
         if webview_smoke {
             WebViewSmokeDriver {}

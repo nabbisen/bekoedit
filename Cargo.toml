@@ -35,6 +35,8 @@ bekoedit-ui-contract        = { version = "0.17.0", path = "crates/bekoedit-ui-c
 dioxus                      = "0.7"
 dioxus-swdir-tree           = "0.7"
 dirs                        = "6"
+futures-channel             = "0.3"
+futures-util                = "0.3"
 notify                      = "8"
 rfd                         = { version = "0.17", default-features = false, features = ["xdg-portal", "pollster"] }
 trash                       = "5"

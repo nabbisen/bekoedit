@@ -24,9 +24,13 @@ dioxus                      = { workspace = true, features = ["desktop"] }
 dioxus-swdir-tree           = { workspace = true }
 rfd                         = { workspace = true }
 dirs                        = { workspace = true }
+futures-util                = { workspace = true }
 webbrowser                  = { workspace = true }
 
 serde                       = { workspace = true }
 serde_json                  = { workspace = true }
 tempfile                    = { workspace = true }
 tokio                       = { workspace = true, features = ["time", "process"] }
+
+[dev-dependencies]
+futures-channel              = { workspace = true }

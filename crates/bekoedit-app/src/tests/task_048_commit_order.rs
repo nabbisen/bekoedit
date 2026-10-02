@@ -22,20 +22,19 @@ fn pending_form_field_is_committed_before_a_queued_command_runs() {
     );
 }
 
-/// Autosave bypasses the command queue entirely, so it needs this same
-/// ordering proven at its own call site.
+/// Review §2.1: autosave does **not** commit a Form field's pending
+/// text. Autosave writes only the document's already-committed text; the
+/// pending text stays in the field, and the next blur or command commits
+/// it then, so autosave loses nothing by leaving it alone. Committing on
+/// every tick (`app.rs`'s background loop runs every `TICK_MS`, whether
+/// or not a save is even due) was itself the per-keystroke commit §3
+/// prohibits, by a second route: while a user types, it would re-render
+/// the field's value out from under them roughly twice a second.
 #[test]
-fn pending_form_field_is_committed_before_autosave_ticks() {
+fn the_background_tick_never_commits_a_pending_form_field() {
     let source = include_str!("../app.rs");
-    let commit_at = source
-        .find("crate::source_sync::commit_pending_form_field(app, autosave_mode).await;")
-        .expect("the commit is awaited");
-    let tick_at = source
-        .find("s.autosave_tick(now_ms());")
-        .expect("autosave_tick is called");
     assert!(
-        commit_at < tick_at,
-        "the pending-field commit (byte {commit_at}) must be awaited before \
-         autosave_tick (byte {tick_at}), not after"
+        !source.contains("commit_pending_form_field"),
+        "app.rs's background tick must never call commit_pending_form_field: {source}"
     );
 }
