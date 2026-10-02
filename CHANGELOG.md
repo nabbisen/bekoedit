@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Close Workspace and Export as HTML showed no text in their menus, and the
   Form Mode formatting buttons had no accessible name.
+- Editing a table cell in Form Mode no longer resets column alignment, loses
+  text after an escaped `|` in another cell, or reformats the whole table.
+  Typing `|` in a cell no longer adds a column.
 
 ## [0.17.0] - 2026-10-01
 
