@@ -110,6 +110,14 @@ Empty output means every required library resolves.
 On distributions using AppArmor or SELinux you may also need to allow the
 binary or place it in a permitted path.
 
+### Arch Linux
+
+An AUR package (`bekoedit`) is **planned, not available yet**. It will build
+from source, which sidesteps the `.so.3`/`.so.4` incompatibility above
+entirely, since it links against whatever `libxdo` your own system has.
+Until it is published, use `cargo install bekoedit`, same as any other
+distribution hit by that incompatibility.
+
 ---
 
 ## Why unsigned?

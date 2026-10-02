@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=bekoedit
+GenericName=Markdown Editor
+GenericName[ja]=Markdownエディタ
+Comment=A source-preserving Markdown editor
+Comment[ja]=ソースを保全するMarkdownエディタ
+Exec=bekoedit
+Icon=bekoedit
+Terminal=false
+Categories=Utility;TextEditor;
+Keywords=markdown;editor;notes;
+StartupNotify=true

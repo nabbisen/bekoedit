@@ -30,6 +30,9 @@ jobs:
       - name: Changelog invariants (task 034)
         shell: bash
         run: bash scripts/check-changelog.sh
+      - name: Packaging versions (task 046)
+        shell: bash
+        run: bash scripts/check-packaging-versions.sh
       - name: Release notes self-test (task 043)
         shell: bash
         run: bash scripts/test-release-notes.sh

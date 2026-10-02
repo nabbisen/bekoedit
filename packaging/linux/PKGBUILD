@@ -1,0 +1,51 @@
+# Arch Linux PKGBUILD for bekoedit.
+# makepkg downloads the source directly from GitHub's own per-tag archive.
+
+pkgname=bekoedit
+# Keep pkgver in sync with [workspace.package] version in Cargo.toml --
+# checked on every commit to `main` by scripts/check-packaging-versions.sh,
+# since this project has no post-release version bump (unlike some other
+# projects): the workspace version at any commit on `main` is simply the
+# right packaging version.
+pkgver=0.17.0
+pkgrel=1
+pkgdesc="A source-preserving Markdown editor"
+arch=('x86_64')
+url="https://github.com/nabbisen/bekoedit"
+license=('Apache-2.0')
+# xdotool provides libxdo, which the release binary links (RFC-045: a
+# source build on this machine, readelf -d target/release/bekoedit, shows
+# libxdo.so.4) -- without it the package builds and installs cleanly and
+# then fails to start. Temporary: once Dioxus 0.8 drops the libxdo
+# linkage, this dependency should be removed.
+depends=('webkit2gtk-4.1' 'gtk3' 'xdotool' 'openssl')
+makedepends=('cargo' 'pkg-config')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/nabbisen/bekoedit/archive/refs/tags/$pkgver.tar.gz")
+# SKIP here is permanent, not a gap to close before the next release: a
+# tag's own tarball contains this file, so the file cannot hold the
+# tarball's own hash. The real hash is computed at publish time
+# (updpkgsums) into the copy of this file pushed to the AUR -- never
+# committed here. This file is a template; do not copy it and run
+# `makepkg -si` expecting a verified download.
+sha256sums=('SKIP')
+
+prepare() {
+    cd "$pkgname-$pkgver"
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "$pkgname-$pkgver"
+    cargo build --frozen --release -p bekoedit
+}
+
+package() {
+    cd "$pkgname-$pkgver"
+    install -Dm755 "target/release/bekoedit" "$pkgdir/usr/bin/bekoedit"
+    install -Dm644 "packaging/linux/bekoedit.desktop" \
+        "$pkgdir/usr/share/applications/bekoedit.desktop"
+    install -Dm644 "packaging/windows/Assets/Square150x150Logo.png" \
+        "$pkgdir/usr/share/pixmaps/bekoedit.png"
+    install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 "NOTICE" "$pkgdir/usr/share/licenses/$pkgname/NOTICE"
+}
