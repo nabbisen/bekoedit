@@ -2,7 +2,7 @@
 
 **Project:** bekoedit
 **Status:** Proposed — drafted 2026-10-02, after the owner named easy table
-editing as a key requirement. Awaiting the owner's decision on §10.
+editing as a key requirement. §10 Q1 answered 2026-10-02 (cells as Markdown text); Q2–Q4 await the owner.
 **Track:** Editing
 **Priority:** High — the owner's key requirement, and the current behaviour
 both under-delivers and, until task 045, loses data
@@ -169,7 +169,9 @@ Slices 2–5 are proposed for 0.18.0.
 
 ## 10. Questions for the owner
 
-1. **Cells: Markdown text, or rich text?** *Proposed:* Markdown text, with the
+1. **Cells: Markdown text, or rich text?** **Answered 2026-10-02 by the owner:
+   Markdown text (option A)**, with the toolbar.
+   *Proposed:* Markdown text, with the
    toolbar. Rich editing inside cells is a much larger editor and risks
    rewriting cell source.
 2. **Re-padding: never automatically, with Tidy on request?** *Proposed:* yes.
