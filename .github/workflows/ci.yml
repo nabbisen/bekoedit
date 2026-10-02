@@ -482,8 +482,10 @@ jobs:
         # since `onchange` only fires on blur and the toolbar's buttons
         # `preventDefault` on `mousedown` to keep the field focused), sends a
         # real click at the Bold button, and reports what the field shows and
-        # what Ctrl+S actually saves. It asserts no product behaviour; the soak
-        # RESTARTS at 0 of 10 again from the run that first contains it.
+        # what Ctrl+S actually saves. It asserts no product behaviour. This
+        # step has been blocking since `41a6934`, so the scenario merges
+        # straight into the blocking step, with no soak restart, per this
+        # step's own rule above.
         id: release_checks
         run: |
           failed=0
