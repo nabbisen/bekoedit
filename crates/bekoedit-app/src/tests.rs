@@ -114,6 +114,159 @@ mod app_tests {
         );
     }
 
+    /// Recursively collects `(relative_path, source)` for every `.rs` file
+    /// under `dir`, labeling each with `label` so the relative path matches
+    /// what a reader sees in the repository. Mirrors
+    /// `tests/rfc_042.rs::collect_rust_sources`.
+    fn collect_rust_sources(dir: &std::path::Path, label: &str, out: &mut Vec<(String, String)>) {
+        let entries = std::fs::read_dir(dir)
+            .unwrap_or_else(|error| panic!("read_dir({}): {error}", dir.display()));
+        for entry in entries {
+            let entry = entry.expect("directory entry is readable");
+            let path = entry.path();
+            let file_name = entry.file_name().to_string_lossy().into_owned();
+            if path.is_dir() {
+                collect_rust_sources(&path, &format!("{label}/{file_name}"), out);
+                continue;
+            }
+            if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+            out.push((format!("{label}/{file_name}"), source));
+        }
+    }
+
+    /// Every **string-literal** key passed as `tr(<lang-expr>, "<key>")`
+    /// across `src`, with the file it was found in (task 044 §2.2 -- a key
+    /// used but defined in neither `tr_en` nor `tr_ja` is otherwise
+    /// invisible to `all_keys()`, which only derives from `tr_en`'s own
+    /// source). A call with a variable second argument (`tr(lang, key)`) is
+    /// out of scope here; see the task's review request for that list.
+    ///
+    /// Line comments (`//`, `///`, `//!`) are dropped first, whole line, so
+    /// a comment that merely mentions `tr(...)` as text is never scraped.
+    /// Matching is on raw source bytes, not parsed tokens: a `tr(` is found
+    /// at a word boundary (not preceded by an identifier character, so
+    /// `tr_en(` never matches), its first argument is skipped to the next
+    /// top-level comma (depth-tracked, so a parenthesized lang expression
+    /// would not confuse it, though none exist today), and the key is
+    /// scraped only when the very next non-whitespace byte is an
+    /// unescaped `"` -- a string interpolated like `"{key}"` is not, and is
+    /// correctly left for the dynamic-key list instead.
+    fn literal_tr_keys() -> Vec<(String, String)> {
+        let manifest_dir_string = std::env::var("CARGO_MANIFEST_DIR").expect("run by cargo test");
+        let manifest_dir = std::path::Path::new(&manifest_dir_string);
+        let mut sources = Vec::new();
+        collect_rust_sources(&manifest_dir.join("src"), "src", &mut sources);
+
+        let mut found = Vec::new();
+        for (path, source) in &sources {
+            // This project's test modules are trailing (`#[cfg(test)] mod
+            // tests { ... }` at the end of the file, or a `mod tests;`
+            // declaration pointing at one) -- never interleaved with
+            // production code. Truncating here keeps a deliberate test
+            // fixture like i18n.rs's own `tr(Lang::En, "nope.nope")` (which
+            // tests the fallback for an undefined key, and must stay
+            // undefined) from ever being scraped as a real call site.
+            let production_source = match source.find("#[cfg(test)]") {
+                Some(at) => &source[..at],
+                None => source.as_str(),
+            };
+            let decommented: String = production_source
+                .lines()
+                .map(|line| {
+                    if line.trim_start().starts_with("//") {
+                        ""
+                    } else {
+                        line
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let bytes = decommented.as_bytes();
+            let mut i = 0;
+            while let Some(found_at) = decommented[i..].find("tr(") {
+                let start = i + found_at;
+                let preceded_by_ident = start > 0
+                    && (bytes[start - 1].is_ascii_alphanumeric() || bytes[start - 1] == b'_');
+                i = start + "tr(".len();
+                if preceded_by_ident {
+                    continue;
+                }
+                // Skip the first argument to the next top-level comma.
+                let mut depth = 1i32;
+                let mut j = i;
+                let mut comma_at = None;
+                while j < bytes.len() && depth > 0 {
+                    match bytes[j] {
+                        b'(' => depth += 1,
+                        b')' => depth -= 1,
+                        b',' if depth == 1 => {
+                            comma_at = Some(j);
+                            break;
+                        }
+                        _ => {}
+                    }
+                    j += 1;
+                }
+                let Some(comma_at) = comma_at else { continue };
+                let mut k = comma_at + 1;
+                while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+                    k += 1;
+                }
+                if bytes.get(k) != Some(&b'"') {
+                    continue;
+                }
+                let mut end = k + 1;
+                while end < bytes.len() && bytes[end] != b'"' {
+                    if bytes[end] == b'\\' {
+                        end += 1;
+                    }
+                    end += 1;
+                }
+                if end >= bytes.len() {
+                    continue;
+                }
+                let key = &decommented[k + 1..end];
+                found.push((key.to_string(), path.clone()));
+            }
+        }
+        found
+    }
+
+    #[test]
+    fn every_literal_key_passed_to_tr_is_defined_in_both_languages() {
+        use crate::i18n::{Lang, tr};
+        const MIN_PLAUSIBLE_CALL_SITE_COUNT: usize = 100;
+        let sites = literal_tr_keys();
+        assert!(
+            sites.len() >= MIN_PLAUSIBLE_CALL_SITE_COUNT,
+            "derived call-site count implausibly small ({} sites, expected at \
+             least {}) -- the literal_tr_keys scraper likely broke",
+            sites.len(),
+            MIN_PLAUSIBLE_CALL_SITE_COUNT
+        );
+        let mut missing = Vec::new();
+        for (key, file) in &sites {
+            if tr(Lang::En, key).is_empty() {
+                missing.push(format!("EN missing: {key} (used in {file})"));
+            }
+            if tr(Lang::Ja, key).is_empty() {
+                missing.push(format!("JA missing: {key} (used in {file})"));
+            }
+        }
+        missing.sort();
+        missing.dedup();
+        assert!(
+            missing.is_empty(),
+            "a key literally passed to tr() is undefined in at least one \
+             language:\n{}",
+            missing.join("\n")
+        );
+    }
+
     /// Developer jargon that must not leak into user-visible strings
     /// (RFC-041 §4, DEC-015) — internal terminology stays precise
     /// (`ConflictState`, `RawIsland`, `SourcePatch`); what the user reads
