@@ -122,7 +122,7 @@ fn classify(
         Tag::CodeBlock(kind) => classify_code(builder, kind, start, end),
         Tag::HtmlBlock => PendingBlock::new(BlockKind::HtmlBlock, start, end)
             .island(RawIslandType::HtmlBlock, "HTML block"),
-        Tag::Table(_) => classify_table(subtree, start, end),
+        Tag::Table(_) => classify_table(builder.text, start, end),
         Tag::FootnoteDefinition(_) => PendingBlock::new(BlockKind::Unknown, start, end)
             .island(RawIslandType::Footnote, "footnote definition"),
         _ => PendingBlock::new(BlockKind::Unknown, start, end)
@@ -297,19 +297,22 @@ pub(crate) fn trim_trailing_newlines(text: &str, mut end: usize) -> usize {
     end
 }
 
-/// Classifies a GFM table as `SimpleTable` (all cells plain text,
-/// form-editable) or `ComplexTable` raw island (RFC-027).
-fn classify_table(subtree: &[Ev], start: usize, end: usize) -> PendingBlock {
-    // If any cell contains inline markup events, demote to ComplexTable island.
-    let is_simple = subtree.iter().all(|(ev, _)| {
-        !matches!(
-            ev,
-            Event::Start(Tag::Emphasis | Tag::Strong | Tag::Strikethrough)
-                | Event::Code(_)
-                | Event::InlineHtml(_)
-        )
-    });
-    if is_simple {
+/// Classifies a GFM table as `SimpleTable` (form-editable) or
+/// `ComplexTable` raw island.
+///
+/// RFC-048 slice 2 (2026-10-02): inline formatting in a cell -- bold,
+/// italic, strikethrough, code, inline HTML, a link, an image, an
+/// autolink, an entity -- is no longer a reason to demote. A table is
+/// `SimpleTable` exactly when `crate::gfm::table_cell_ranges` can find
+/// its cells at all: that function gets each cell's boundary from
+/// `pulldown-cmark`'s own `TableCell` event range, which does not depend
+/// on what is inside the cell, only where it starts and ends. This is
+/// the same function the edit path and the projection resolve against
+/// (task 045 review, 2026-10-02), so a table this classifies as
+/// `SimpleTable` can never fail to resolve there.
+fn classify_table(text: &str, start: usize, end: usize) -> PendingBlock {
+    let source = &text[start..end];
+    if crate::gfm::table_cell_ranges(source).is_some() {
         PendingBlock::new(crate::block::BlockKind::SimpleTable, start, end)
     } else {
         PendingBlock::new(crate::block::BlockKind::ComplexTable, start, end)

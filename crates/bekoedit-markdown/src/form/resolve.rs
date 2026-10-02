@@ -80,6 +80,22 @@ pub fn resolve_form_edit(
             *utf16_len,
             link_url.as_deref(),
         )?,
+        FormBlockEdit::ToggleInlineInTableCell {
+            row,
+            col,
+            kind,
+            utf16_start,
+            utf16_len,
+            link_url,
+        } => super::tables::resolve_toggle_inline_in_table_cell(
+            text,
+            block,
+            (*row, *col),
+            *kind,
+            *utf16_start,
+            *utf16_len,
+            link_url.as_deref(),
+        )?,
     };
 
     Ok(SourcePatch {

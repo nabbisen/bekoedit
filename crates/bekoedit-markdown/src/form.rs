@@ -274,6 +274,20 @@ pub enum FormBlockEdit {
         /// URL to use when `kind == Link`.
         link_url: Option<String>,
     },
+    /// Toggle inline markup around a selection inside one table cell
+    /// (RFC-048 slice 2). A separate variant from `ToggleInline`, not an
+    /// extension of it: the offsets below are relative to *the cell's*
+    /// own displayed text (its Markdown source with only `\|` unescaped,
+    /// per `ReplaceTableCell`), never to the table block as a whole.
+    ToggleInlineInTableCell {
+        row: usize,
+        col: usize,
+        kind: InlineFormat,
+        utf16_start: usize,
+        utf16_len: usize,
+        /// URL to use when `kind == Link`.
+        link_url: Option<String>,
+    },
 }
 
 /// A semantic edit command from the UI (RFC-018 §7). Carries no
@@ -306,21 +320,22 @@ pub enum FormEditError {
 }
 
 /// Parses a GFM table source string into (headers, rows) for the
-/// projection, using the same cell boundaries the edit path resolves
-/// against (`tables::table_cell_ranges`, task 045 review 2026-10-02) --
-/// so the columns the user sees always match the columns an edit targets.
+/// projection, using the same cell boundaries the edit path -- and,
+/// RFC-048 slice 2, the indexer's own classifier -- resolve against
+/// (`crate::gfm::table_cell_ranges`, task 045 review 2026-10-02) -- so
+/// the columns the user sees always match the columns an edit targets.
 /// Each cell's own `\|` is unescaped, and nothing else (task 045 §2.2).
 /// Empty if the source does not parse as a single table block, rather
 /// than showing a grid the edit path itself could not resolve against.
 fn parse_simple_table(source: &str) -> (Vec<String>, Vec<Vec<String>>) {
-    let Some(rows) = tables::table_cell_ranges(source) else {
+    let Some(rows) = crate::gfm::table_cell_ranges(source) else {
         return (Vec::new(), Vec::new());
     };
     let mut rows: Vec<Vec<String>> = rows
         .iter()
         .map(|row| {
             row.iter()
-                .map(|range| tables::unescape_pipe(&source[range.clone()]))
+                .map(|range| crate::gfm::unescape_pipe(&source[range.clone()]))
                 .collect()
         })
         .collect();

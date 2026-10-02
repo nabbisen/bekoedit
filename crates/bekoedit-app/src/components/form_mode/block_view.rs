@@ -7,7 +7,7 @@ use bekoedit_markdown::{FormBlockDisplay, FormBlockEdit, fingerprint::BlockId};
 
 use super::dispatch;
 use super::inline_toolbar::InlineToolbar;
-use crate::components::icons::AddIcon;
+use super::table_view::TableView;
 use crate::i18n::{Lang, tr};
 
 // ─── Per-block view ───────────────────────────────────────────────────────────
@@ -175,7 +175,7 @@ pub fn FormBlockView(
             rsx! { hr {} },
         ),
 
-        // ── Simple table (RFC-027) ────────────────────────────────────────────
+        // ── Simple table (RFC-027, extended by RFC-048 slice 2) ────────────────
         FormBlockDisplay::Table {
             headers,
             rows,
@@ -183,60 +183,14 @@ pub fn FormBlockView(
         } => (
             tr(lang, "block.kind.table").to_string(),
             rsx! {
-                div { class: "table-block",
-                    table {
-                        thead {
-                            tr {
-                                for (ci, header) in headers.iter().enumerate() {
-                                    th {
-                                        input {
-                                            r#type: "text",
-                                            class: "table-cell-input",
-                                            value: "{header}",
-                                            onchange: {
-                                                        move |evt: Event<FormData>| dispatch(state, revision, block_id,
-                                                    FormBlockEdit::ReplaceTableCell {
-                                                        row: 0, col: ci, text: evt.value(),
-                                                    })
-                                            },
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        tbody {
-                            for (ri, row) in rows.iter().enumerate() {
-                                tr {
-                                    for (ci, cell) in row.iter().enumerate() {
-                                        td {
-                                            input {
-                                                r#type: "text",
-                                                class: "table-cell-input",
-                                                value: "{cell}",
-                                                onchange: {
-                                                    let ri = ri + 1; // 0=header
-                                                                move |evt: Event<FormData>| dispatch(state, revision, block_id,
-                                                        FormBlockEdit::ReplaceTableCell {
-                                                            row: ri, col: ci, text: evt.value(),
-                                                        })
-                                                },
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    button {
-                        class: "table-add-row",
-                        onclick: move |_| dispatch(state, revision, block_id, FormBlockEdit::AddTableRow),
-                        AddIcon {}
-                        {tr(lang, "table.add_row")}
-                    }
-                    // Warn if col_count == 0 (degenerate table).
-                    if col_count == 0 {
-                        p { class: "muted", {tr(lang, "table.empty")} }
-                    }
+                TableView {
+                    field_id: field_id.clone(),
+                    block_id,
+                    revision,
+                    lang,
+                    headers,
+                    rows,
+                    col_count,
                 }
             },
         ),

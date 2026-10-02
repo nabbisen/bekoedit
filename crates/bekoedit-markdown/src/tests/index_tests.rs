@@ -149,17 +149,56 @@ fn simple_table_is_form_editable_not_a_complex_island() {
     );
 }
 
+/// RFC-048 slice 2 (2026-10-02): inline formatting in a cell is no longer
+/// a reason to demote a table to a raw island -- `classify_table` now
+/// asks only whether `crate::gfm::table_cell_ranges` can find the
+/// table's cells at all, which does not depend on what is inside them.
+/// Before this slice, every one of these demoted to `ComplexTable`.
 #[test]
-fn table_with_bold_cells_is_complex_island() {
-    // A table containing **bold** remains a ComplexTable raw island.
-    let doc = "| **Name** | Score |\n|----------|-------|\n| Alice | 42 |\n";
-    let idx = MarkdownIndex::build(doc, 1);
-    assert!(
-        idx.raw_islands
+fn formatted_tables_are_simple_tables_not_complex_islands() {
+    let cases: [(&str, &str); 6] = [
+        (
+            "bold header",
+            "| **Name** | Score |\n|----------|-------|\n| Alice | 42 |\n",
+        ),
+        (
+            "italic",
+            "| Name | Score |\n|------|-------|\n| *Alice* | 42 |\n",
+        ),
+        (
+            "strikethrough",
+            "| Name | Score |\n|------|-------|\n| ~~Alice~~ | 42 |\n",
+        ),
+        (
+            "code",
+            "| Name | Score |\n|------|-------|\n| `Alice` | 42 |\n",
+        ),
+        (
+            "inline HTML <br>",
+            "| Name | Score |\n|------|-------|\n| Alice<br>Smith | 42 |\n",
+        ),
+        (
+            "a link",
+            "| Name | Score |\n|------|-------|\n| [Alice](x) | 42 |\n",
+        ),
+    ];
+    for (label, doc) in cases {
+        let idx = MarkdownIndex::build(doc, 1);
+        let table = idx
+            .blocks
             .iter()
-            .any(|i| i.island_type == RawIslandType::ComplexTable),
-        "table with inline markup must remain a ComplexTable island"
-    );
+            .find(|b| b.kind == crate::block::BlockKind::SimpleTable);
+        assert!(
+            table.is_some(),
+            "{label}: must be a SimpleTable, got {doc:?}"
+        );
+        assert!(
+            idx.raw_islands
+                .iter()
+                .all(|i| i.island_type != RawIslandType::ComplexTable),
+            "{label}: must not appear as a ComplexTable island"
+        );
+    }
 }
 
 #[test]
@@ -286,4 +325,43 @@ fn section_move_preserves_subsections() {
         result.text
     );
     assert!(result.text.contains("## A.1"));
+}
+
+/// RFC-048 slice 2 §2.1: "Tables in containers Form Mode does not project
+/// keep their current behaviour" -- unchanged by this slice, since the
+/// table never reaches `classify_table` at all in either case: a
+/// blockquote or list containing a table is already demoted to its own
+/// raw island (`ComplexBlockquote`/`ComplexList`) by the container's own
+/// classifier, before the table inside it is considered individually.
+#[test]
+fn a_table_inside_a_blockquote_or_a_list_keeps_demoting_the_whole_container() {
+    let in_blockquote = "> | a | b |\n> |---|---|\n> | 1 | 2 |\n";
+    let idx = MarkdownIndex::build(in_blockquote, 1);
+    assert!(
+        idx.raw_islands
+            .iter()
+            .any(|i| i.island_type == RawIslandType::ComplexBlockquote),
+        "a table inside a blockquote must still demote the whole blockquote"
+    );
+    assert!(
+        idx.blocks
+            .iter()
+            .all(|b| b.kind != crate::block::BlockKind::SimpleTable),
+        "the table inside it must not become an independently editable SimpleTable"
+    );
+
+    let in_list = "- item\n\n  | a | b |\n  |---|---|\n  | 1 | 2 |\n";
+    let idx = MarkdownIndex::build(in_list, 1);
+    assert!(
+        idx.raw_islands
+            .iter()
+            .any(|i| i.island_type == RawIslandType::ComplexList),
+        "a table inside a list item must still demote the whole list"
+    );
+    assert!(
+        idx.blocks
+            .iter()
+            .all(|b| b.kind != crate::block::BlockKind::SimpleTable),
+        "the table inside it must not become an independently editable SimpleTable"
+    );
 }

@@ -203,15 +203,98 @@ fn simple_table_is_form_editable_block() {
     assert_eq!(t.unwrap().editable_policy, EditablePolicy::FormEditable);
 }
 
+// --- RFC-048 slice 2: formatted cells round-trip and edit byte-exact ---
+
 #[test]
-fn bold_table_stays_complex_island() {
+fn a_bold_header_cell_is_untouched_by_editing_a_different_cell() {
     let doc = "| **Name** | Score |\n|----------|-------|\n| Alice | 42 |\n";
-    let idx = MarkdownIndex::build(doc, 1);
-    let t = idx
-        .blocks
-        .iter()
-        .find(|b| b.kind == BlockKind::ComplexTable);
-    assert!(t.is_some());
+    let out = apply_table(
+        doc,
+        FormBlockEdit::ReplaceTableCell {
+            row: 1,
+            col: 1,
+            text: "99".into(),
+        },
+    );
+    assert_eq!(
+        out,
+        "| **Name** | Score |\n|----------|-------|\n| Alice | 99 |\n"
+    );
+}
+
+#[test]
+fn editing_a_bold_cell_replaces_its_markdown_source_not_its_rendered_text() {
+    let doc = "| **Name** | Score |\n|----------|-------|\n| Alice | 42 |\n";
+    let (headers, _) = projection(doc);
+    assert_eq!(
+        headers[0], "**Name**",
+        "the cell's own Markdown source text"
+    );
+    let out = apply_table(
+        doc,
+        FormBlockEdit::ReplaceTableCell {
+            row: 0,
+            col: 0,
+            text: "**Full Name**".into(),
+        },
+    );
+    assert_eq!(
+        out,
+        "| **Full Name** | Score |\n|----------|-------|\n| Alice | 42 |\n"
+    );
+}
+
+#[test]
+fn a_code_cell_with_an_escaped_pipe_round_trips_and_a_different_cell_edits_cleanly() {
+    let doc = "| a | b |\n|---|---|\n| `x\\|y` | 2 |\n";
+    let (_, rows) = projection(doc);
+    assert_eq!(
+        rows[0][0], "`x|y`",
+        "the backtick-span's own source, pipe unescaped"
+    );
+    let out = apply_table(
+        doc,
+        FormBlockEdit::ReplaceTableCell {
+            row: 1,
+            col: 1,
+            text: "Z".into(),
+        },
+    );
+    assert_eq!(out, "| a | b |\n|---|---|\n| `x\\|y` | Z |\n");
+}
+
+#[test]
+fn a_formatted_crlf_table_changes_only_the_edited_cell() {
+    let doc = "| Name | Score |\r\n|------|-------|\r\n| **Alice** | 42 |\r\n";
+    let out = apply_table(
+        doc,
+        FormBlockEdit::ReplaceTableCell {
+            row: 1,
+            col: 1,
+            text: "99".into(),
+        },
+    );
+    assert_eq!(
+        out,
+        "| Name | Score |\r\n|------|-------|\r\n| **Alice** | 99 |\r\n"
+    );
+}
+
+#[test]
+fn a_formatted_japanese_cell_changes_only_the_edited_cell() {
+    let doc = "| 名前 | 点数 |\n|------|------|\n| **太郎** | 90 |\n";
+    let out = apply_table(
+        doc,
+        FormBlockEdit::ReplaceTableCell {
+            row: 1,
+            col: 1,
+            text: "100".into(),
+        },
+    );
+    assert_eq!(
+        out,
+        "| 名前 | 点数 |\n|------|------|\n| **太郎** | 100 |\n"
+    );
 }
 
 #[test]

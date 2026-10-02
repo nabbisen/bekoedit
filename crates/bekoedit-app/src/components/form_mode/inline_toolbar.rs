@@ -14,8 +14,22 @@ use crate::i18n::{Lang, tr};
 /// `field_id` is the DOM id of the associated textarea/input so the JS can
 /// read `selectionStart`/`End` after we prevent the textarea from losing
 /// focus on mousedown.
+///
+/// `cell`, when `Some((row, col))`, targets one table cell (RFC-048 slice
+/// 2 §2.3) instead of the block's own single content range: the same
+/// toolbar, acting on whichever cell last took focus, dispatches
+/// `ToggleInlineInTableCell` rather than `ToggleInline`. Offsets are still
+/// read the same way, since both are UTF-16 code units relative to
+/// whatever `field_id` names -- only the target of the dispatched edit
+/// differs.
 #[component]
-pub fn InlineToolbar(field_id: String, block_id: BlockId, revision: u64, lang: Lang) -> Element {
+pub fn InlineToolbar(
+    field_id: String,
+    block_id: BlockId,
+    revision: u64,
+    lang: Lang,
+    #[props(default)] cell: Option<(usize, usize)>,
+) -> Element {
     let state = use_context::<Signal<AppState>>();
 
     let make_btn = |label: &'static str, aria: &'static str, kind: InlineFormat| {
@@ -57,12 +71,25 @@ pub fn InlineToolbar(field_id: String, block_id: BlockId, revision: u64, lang: L
                             #[derive(serde::Deserialize)]
                             struct Sel { s: usize, e: usize }
                             if let Ok(Sel { s, e }) = serde_json::from_value::<Sel>(raw) {
-                                dispatch(st, rev, bid, FormBlockEdit::ToggleInline {
-                                    kind: k,
-                                    utf16_start: s,
-                                    utf16_len: e.saturating_sub(s),
-                                    link_url: None,
-                                });
+                                let utf16_start = s;
+                                let utf16_len = e.saturating_sub(s);
+                                let edit = match cell {
+                                    Some((row, col)) => FormBlockEdit::ToggleInlineInTableCell {
+                                        row,
+                                        col,
+                                        kind: k,
+                                        utf16_start,
+                                        utf16_len,
+                                        link_url: None,
+                                    },
+                                    None => FormBlockEdit::ToggleInline {
+                                        kind: k,
+                                        utf16_start,
+                                        utf16_len,
+                                        link_url: None,
+                                    },
+                                };
+                                dispatch(st, rev, bid, edit);
                             }
                         }
                     });

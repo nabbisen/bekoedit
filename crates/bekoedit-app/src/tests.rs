@@ -421,7 +421,7 @@ mod app_tests {
         let start = include_str!("components/start_screen.rs");
         let app_bar = include_str!("components/app_bar.rs");
         let header = include_str!("components/editor_header.rs");
-        let form = include_str!("components/form_mode/block_view.rs");
+        let table_view = include_str!("components/form_mode/table_view.rs");
         let toast = include_str!("components/toast.rs");
         let style = include_str!("../assets/style.css");
 
@@ -459,7 +459,10 @@ mod app_tests {
             "Linked from"
         );
         assert!(header.contains("class: \"adv-menu-wrap\""));
-        assert!(form.contains("AddIcon {}"));
+        // RFC-048 slice 2: the table grid moved into its own component
+        // (table_view.rs), so AddIcon is used there now, not inline in
+        // block_view.rs's match.
+        assert!(table_view.contains("AddIcon {}"));
         assert!(include_str!("state.rs").contains("pub struct SettingsOpen"));
         assert!(!include_str!("app.rs").contains("use_context::<Signal<bool>>"));
         assert!(toast.contains("fn ToastItem"));

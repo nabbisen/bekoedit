@@ -55,5 +55,6 @@ fn dispatch(mut state: Signal<AppState>, revision: u64, block_id: BlockId, edit:
 
 mod block_view;
 mod inline_toolbar;
+mod table_view;
 
 use block_view::FormBlockView;
