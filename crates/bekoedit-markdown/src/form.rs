@@ -305,17 +305,29 @@ pub enum FormEditError {
     InvalidEditPayload { reason: String },
 }
 
-/// Parses a GFM table source string into (headers, rows) for the projection.
+/// Parses a GFM table source string into (headers, rows) for the
+/// projection, using the same cell boundaries the edit path resolves
+/// against (`tables::table_cell_ranges`, task 045 review 2026-10-02) --
+/// so the columns the user sees always match the columns an edit targets.
+/// Each cell's own `\|` is unescaped, and nothing else (task 045 §2.2).
+/// Empty if the source does not parse as a single table block, rather
+/// than showing a grid the edit path itself could not resolve against.
 fn parse_simple_table(source: &str) -> (Vec<String>, Vec<Vec<String>>) {
-    let parse_row = |line: &str| -> Vec<String> {
-        let trimmed = line.trim().trim_start_matches('|').trim_end_matches('|');
-        trimmed.split('|').map(|c| c.trim().to_string()).collect()
+    let Some(rows) = tables::table_cell_ranges(source) else {
+        return (Vec::new(), Vec::new());
     };
-    let is_sep = |line: &str| {
-        let t = line.trim();
-        t.chars().all(|c| matches!(c, '|' | '-' | ':' | ' ')) && t.contains('-')
+    let mut rows: Vec<Vec<String>> = rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|range| tables::unescape_pipe(&source[range.clone()]))
+                .collect()
+        })
+        .collect();
+    let headers = if rows.is_empty() {
+        Vec::new()
+    } else {
+        rows.remove(0)
     };
-    let mut rows = source.lines().filter(|l| !is_sep(l)).map(parse_row);
-    let headers = rows.next().unwrap_or_default();
-    (headers, rows.collect())
+    (headers, rows)
 }

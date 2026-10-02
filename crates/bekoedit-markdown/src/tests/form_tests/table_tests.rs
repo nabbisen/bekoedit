@@ -6,6 +6,22 @@
 // whole table on every edit) was invisible to a projection-only check --
 // the projection looked the same even when the separator's alignment,
 // an untouched cell, or the table's own padding had silently changed.
+//
+// Review (2026-10-02): the first version of this fix still lost data,
+// because `form.rs`'s own display projection kept a second, naive
+// splitter that disagreed with the edit path on cell boundaries for an
+// escaped pipe. The fix moved both to one shared `table_cell_ranges`
+// (`form::tables`), which gets boundaries directly from `pulldown-cmark`'s
+// own `TableCell` event ranges rather than comparing two independent
+// guesses' rendered text -- the earlier text-comparison oracle refused
+// every table with a link, image, autolink or entity in any cell, which
+// was itself a regression. The tests below reflect that: projection and
+// edit-path cases both now use the same corpus, and markup-in-a-cell
+// cases assert the table is editable, not refused.
+//
+// The exhaustive corpus checks live in `table_corpus_tests.rs` (ELOC
+// guideline, see `form_tests.rs`); the shared helpers below are
+// `pub(super)` so that sibling module can reuse them.
 
 use crate::block::{BlockKind, EditablePolicy};
 use crate::form::{
@@ -15,7 +31,7 @@ use crate::form::{
 use crate::index::MarkdownIndex;
 use crate::patch::apply_patch;
 
-fn apply_table(doc: &str, edit: FormBlockEdit) -> String {
+pub(super) fn apply_table(doc: &str, edit: FormBlockEdit) -> String {
     let idx = MarkdownIndex::build(doc, 1);
     let table = idx
         .blocks
@@ -62,7 +78,7 @@ fn try_replace_cell(
     Ok(out)
 }
 
-fn projection(doc: &str) -> (Vec<String>, Vec<Vec<String>>) {
+pub(super) fn projection(doc: &str) -> (Vec<String>, Vec<Vec<String>>) {
     let idx = MarkdownIndex::build(doc, 1);
     let proj = FormProjection::build(doc, &idx);
     proj.blocks
@@ -82,30 +98,54 @@ fn projection(doc: &str) -> (Vec<String>, Vec<Vec<String>>) {
         .expect("table block in projection")
 }
 
-/// What `pulldown-cmark` itself parses a standalone table source as: each
-/// row's cell texts, header first. An independent re-derivation from the
-/// production oracle in `form::tables`, kept separate on purpose so this
-/// test does not trust the same code path it is checking.
-fn pulldown_cells(source: &str) -> Vec<Vec<String>> {
+/// `\|` to `|`, and nothing else unescaped -- an independent re-derivation
+/// of `form::tables::unescape_pipe` (not reachable from here; `tables` is
+/// a private submodule of `form`), kept separate on purpose so a check
+/// against it does not trust the same code path it is checking.
+pub(super) fn test_unescape_pipe(cell_source: &str) -> String {
+    let mut out = String::with_capacity(cell_source.len());
+    let mut chars = cell_source.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\\' && chars.peek() == Some(&'|') {
+            out.push('|');
+            chars.next();
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Each row's cell byte ranges in `source`, as `pulldown-cmark` itself
+/// delimits them (a `TableCell`'s own event range, trimmed of whitespace)
+/// -- an independent re-derivation of the production `table_cell_ranges`,
+/// kept separate on purpose so this test does not trust the same code
+/// path it is checking. Working in byte ranges, not rendered text, is
+/// what lets this oracle handle a cell holding a link, image, autolink or
+/// entity correctly: `pulldown-cmark`'s own `Event::Text` for such a cell
+/// only ever gives the rendered label, never the cell's own Markdown
+/// source.
+pub(super) fn pulldown_cell_ranges(source: &str) -> Vec<Vec<std::ops::Range<usize>>> {
     use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
-    let mut rows: Vec<Vec<String>> = Vec::new();
-    let mut row: Option<Vec<String>> = None;
-    let mut cell: Option<String> = None;
-    for (event, _) in Parser::new_ext(source, Options::ENABLE_TABLES).into_offset_iter() {
+    let bytes = source.as_bytes();
+    let mut rows: Vec<Vec<std::ops::Range<usize>>> = Vec::new();
+    let mut row: Option<Vec<std::ops::Range<usize>>> = None;
+    for (event, range) in Parser::new_ext(source, Options::ENABLE_TABLES).into_offset_iter() {
         match event {
             Event::Start(Tag::TableHead) | Event::Start(Tag::TableRow) => row = Some(Vec::new()),
             Event::End(TagEnd::TableHead) | Event::End(TagEnd::TableRow) => {
                 rows.push(row.take().expect("row was open"));
             }
-            Event::Start(Tag::TableCell) => cell = Some(String::new()),
-            Event::End(TagEnd::TableCell) => row
-                .as_mut()
-                .expect("cell inside a row")
-                .push(cell.take().expect("cell was open")),
-            Event::Text(text) => {
-                if let Some(c) = cell.as_mut() {
-                    c.push_str(&text);
+            Event::End(TagEnd::TableCell) => {
+                let mut start = range.start;
+                let mut end = range.end;
+                while start < end && bytes[start].is_ascii_whitespace() {
+                    start += 1;
                 }
+                while end > start && bytes[end - 1].is_ascii_whitespace() {
+                    end -= 1;
+                }
+                row.as_mut().expect("cell inside a row").push(start..end);
             }
             _ => {}
         }
@@ -119,7 +159,7 @@ fn pulldown_cells(source: &str) -> Vec<Vec<String>> {
 /// UTF-8 boundaries (both strings only ever diverge at a boundary a
 /// validated `ByteRange` produced, so clamping is defensive, not load
 /// bearing).
-fn common_affix(old: &str, new: &str) -> (usize, usize) {
+pub(super) fn common_affix(old: &str, new: &str) -> (usize, usize) {
     let (ob, nb) = (old.as_bytes(), new.as_bytes());
     let mut prefix = ob.iter().zip(nb).take_while(|(a, b)| a == b).count();
     while prefix > 0 && !old.is_char_boundary(prefix) {
@@ -144,7 +184,7 @@ fn common_affix(old: &str, new: &str) -> (usize, usize) {
 /// `expected_replacement` -- task 045's core invariant: an edit changes
 /// only the bytes the user changed, nothing else, anywhere in the
 /// document.
-fn assert_only_change_is(old: &str, new: &str, expected_replacement: &str) {
+pub(super) fn assert_only_change_is(old: &str, new: &str, expected_replacement: &str) {
     let (prefix, suffix) = common_affix(old, new);
     let new_middle = &new[prefix..new.len() - suffix];
     assert_eq!(
@@ -272,21 +312,9 @@ fn a_typed_pipe_is_escaped_and_does_not_add_a_column() {
         },
     );
     assert_eq!(out, "| a | b |\n|---|---|\n| p\\|q | 2 |\n");
-    // Checked against pulldown-cmark directly, not `projection()`: the
-    // Form Mode display's own `parse_simple_table` (in `form.rs`, not
-    // touched by this task) still splits on every `|` without respecting
-    // escapes, so it would misreport this row as 3 cells. See this
-    // task's review request for that pre-existing, separate finding.
-    let idx = MarkdownIndex::build(&out, 2);
-    let table = idx
-        .blocks
-        .iter()
-        .find(|b| b.kind == BlockKind::SimpleTable)
-        .unwrap();
-    let source = &out[table.source_range.start..table.source_range.end];
-    let rows = pulldown_cells(source);
-    assert_eq!(rows[1].len(), 2, "the row must still have exactly 2 cells");
-    assert_eq!(rows[1][0], "p|q");
+    let (_, rows) = projection(&out);
+    assert_eq!(rows[0].len(), 2, "the row must still have exactly 2 cells");
+    assert_eq!(rows[0][0], "p|q");
 }
 
 #[test]
@@ -317,21 +345,105 @@ fn a_japanese_header_changes_only_the_edited_cell() {
     assert_eq!(out, "| 氏名 | 年齢 |\n|------|------|\n| Alice | 30 |\n");
 }
 
-// --- The pulldown-cmark disagreement path ---
+// --- The projection: review 2026-10-02's required evidence ---
 
 #[test]
-fn a_cell_with_a_non_pipe_backslash_escape_is_refused_not_guessed_at() {
-    // pulldown-cmark resolves `\*` to `*` inside a cell, same as anywhere
-    // else inline text is parsed; this module's own splitter only ever
-    // unescapes `\|` (task 045 §2.2's Projection rule), so the two
-    // disagree on this cell's text, and the whole table must be refused
-    // rather than silently corrupted.
-    let doc = "| a | b |\n|---|---|\n| x | \\*y\\* |\n";
-    let err = try_replace_cell(doc, 1, 0, "Q").unwrap_err();
-    assert!(
-        matches!(err, FormEditError::UnsupportedEditOperation { .. }),
-        "expected a refusal, got {err:?}"
+fn the_projection_unescapes_a_pipe_and_editing_it_is_byte_exact() {
+    let doc = "| a | b |\n|---|---|\n| x \\| y | 1 |\n";
+    let (_, rows) = projection(doc);
+    assert_eq!(
+        rows[0],
+        vec!["x | y".to_string(), "1".to_string()],
+        "the projection must show two cells, the first with its pipe unescaped"
     );
+    let out = apply_table(
+        doc,
+        FormBlockEdit::ReplaceTableCell {
+            row: 1,
+            col: 0,
+            text: "x | yz".into(),
+        },
+    );
+    assert_eq!(out, "| a | b |\n|---|---|\n| x \\| yz | 1 |\n");
+}
+
+// --- Markup inside a cell: editable, not refused (review 2026-10-02 §3) ---
+
+#[test]
+fn a_table_with_a_link_image_autolink_and_entity_lets_a_different_cell_be_edited() {
+    let doc = "| plain | link | image | auto | entity |\n\
+               |-------|------|-------|------|--------|\n\
+               | 1 | [t](u) | ![a](s) | <http://x> | a &amp; b |\n";
+    let out = apply_table(
+        doc,
+        FormBlockEdit::ReplaceTableCell {
+            row: 1,
+            col: 0,
+            text: "Z".into(),
+        },
+    );
+    assert_eq!(
+        out,
+        "| plain | link | image | auto | entity |\n\
+         |-------|------|-------|------|--------|\n\
+         | Z | [t](u) | ![a](s) | <http://x> | a &amp; b |\n"
+    );
+}
+
+#[test]
+fn editing_a_cell_with_a_link_itself_replaces_only_that_cell() {
+    let doc = "| a | b |\n|---|---|\n| [t](u) | 2 |\n";
+    let out = apply_table(
+        doc,
+        FormBlockEdit::ReplaceTableCell {
+            row: 1,
+            col: 0,
+            text: "plain".into(),
+        },
+    );
+    assert_eq!(out, "| a | b |\n|---|---|\n| plain | 2 |\n");
+}
+
+// --- What "the oracle disagrees" means now, and why it can no longer be
+// --- constructed the way the first version of this fix could refuse a
+// --- table wrongly ---
+
+#[test]
+fn an_unparsable_table_source_is_refused_not_guessed_at() {
+    // Defensive, not a real-world-constructible case: `table_cell_ranges`
+    // only returns `None` when `source` does not parse as a table at all.
+    // For a block `classify_table` already accepted, re-parsing the same
+    // text with the same parser cannot disagree with itself -- there is
+    // no second, independent splitter left to disagree with (that *was*
+    // the bug the review found: a cell's rendered text no longer compared
+    // against this module's boundaries, after the fix below). This test
+    // exercises the refusal path directly, via `FormEditCommand`'s own
+    // guard, by targeting a block that is not a table at all.
+    let doc = "just a paragraph\n";
+    let err = try_replace_cell(doc, 0, 0, "x");
+    assert!(err.is_err(), "there is no table block to find at all");
+}
+
+#[test]
+fn a_cell_with_a_non_pipe_backslash_escape_is_editable_not_falsely_refused() {
+    // The first version of this fix compared pulldown-cmark's *rendered
+    // text* for each cell against this module's own `\|`-only unescape,
+    // and refused on any difference -- which `\*y\*` (rendered `*y*` by
+    // pulldown-cmark, kept literal by `\|`-only unescaping) triggered
+    // even though the cell boundaries themselves agreed completely. The
+    // review found this is a false refusal, not a real one: boundaries
+    // are all that matters for a byte-exact patch, and the two never
+    // disagreed about where this cell starts and ends.
+    let doc = "| a | b |\n|---|---|\n| x | \\*y\\* |\n";
+    let out = apply_table(
+        doc,
+        FormBlockEdit::ReplaceTableCell {
+            row: 1,
+            col: 0,
+            text: "Q".into(),
+        },
+    );
+    assert_eq!(out, "| a | b |\n|---|---|\n| Q | \\*y\\* |\n");
 }
 
 // --- AddTableRow: a pure insertion ---
@@ -352,147 +464,4 @@ fn add_table_row_is_a_prefix_and_suffix_preserving_insertion() {
     let (_, rows) = projection(&out);
     assert_eq!(rows.len(), 2);
     assert!(rows[1].iter().all(|c| c.is_empty()));
-}
-
-// --- The exhaustive corpus: every cell of every table, edited, checked ---
-
-/// Table sources covering: with/without outer pipes, padded/unpadded,
-/// CRLF and LF, an escaped pipe, an already-empty cell, and Japanese
-/// text (task 045 §4's required corpus coverage).
-fn corpus() -> Vec<&'static str> {
-    vec![
-        "| a | b |\n|---|---|\n| 1 | 2 |\n",
-        "a|b\n-|-\n1|2\n",
-        "|a|b|\n|-|-|\n|1|2|\n",
-        "| a | b |\r\n|---|---|\r\n| 1 | 2 |\r\n",
-        "| a | b |\n|---|---|\n| x \\| y | 2 |\n",
-        "| a | b |\n|---|---|\n|  | 2 |\n",
-        "| a | b |\n|---|---|\n|| 2 |\n",
-        "| 名前 | 年齢 |\n|------|------|\n| 太郎 | 20 |\n",
-        "|   a   |   b   |\n|-------|-------|\n|   1   |   2   |\n",
-    ]
-}
-
-#[test]
-fn every_cell_of_every_corpus_table_changes_only_that_cell() {
-    let mut checked = 0;
-    for doc in corpus() {
-        let idx = MarkdownIndex::build(doc, 1);
-        let table = idx
-            .blocks
-            .iter()
-            .find(|b| b.kind == BlockKind::SimpleTable)
-            .unwrap_or_else(|| panic!("{doc:?} must classify as a SimpleTable"));
-        let source = &doc[table.source_range.start..table.source_range.end];
-        let before_rows = pulldown_cells(source);
-        let row_count = before_rows.len();
-        for row in 0..row_count {
-            let col_count = before_rows[row].len();
-            for col in 0..col_count {
-                // A literal `|` in the typed text, on every iteration, so
-                // this loop also exercises escaping it back into the
-                // source, not only the already-escaped cells the corpus
-                // happens to contain untouched.
-                let new_text = format!("ED|TED-{row}-{col}");
-                let cmd = FormEditCommand {
-                    base_revision: 1,
-                    block_id: table.block_id,
-                    client_block_fingerprint: None,
-                    edit: FormBlockEdit::ReplaceTableCell {
-                        row,
-                        col,
-                        text: new_text.clone(),
-                    },
-                };
-                let patch = resolve_form_edit(doc, &idx, &cmd)
-                    .unwrap_or_else(|e| panic!("{doc:?} row {row} col {col}: {e:?}"));
-                let mut out = doc.to_string();
-                apply_patch(&mut out, 1, &patch).unwrap();
-
-                // Only this one cell's bytes may differ, anywhere in the
-                // document, not only inside the table.
-                let escaped = new_text.replace('|', "\\|");
-                assert_only_change_is(doc, &out, &escaped);
-
-                // The result re-parses to the same shape, with the new
-                // text in exactly this cell and every other cell
-                // unchanged.
-                let after_idx = MarkdownIndex::build(&out, 2);
-                let after_table = after_idx
-                    .blocks
-                    .iter()
-                    .find(|b| b.kind == BlockKind::SimpleTable)
-                    .unwrap_or_else(|| {
-                        panic!("{doc:?} row {row} col {col}: table lost after edit")
-                    });
-                let after_source =
-                    &out[after_table.source_range.start..after_table.source_range.end];
-                let after_rows = pulldown_cells(after_source);
-                assert_eq!(after_rows.len(), row_count, "{doc:?} row {row} col {col}");
-                for (r, before_row) in before_rows.iter().enumerate() {
-                    assert_eq!(after_rows[r].len(), before_row.len(), "{doc:?} row {r}");
-                    for (c, before_cell) in before_row.iter().enumerate() {
-                        let expected = if r == row && c == col {
-                            &new_text
-                        } else {
-                            before_cell
-                        };
-                        assert_eq!(
-                            &after_rows[r][c], expected,
-                            "{doc:?} editing row {row} col {col}, checking row {r} col {c}"
-                        );
-                    }
-                }
-                checked += 1;
-            }
-        }
-    }
-    assert!(
-        checked >= 20,
-        "sanity: the corpus should exercise at least 20 cells, got {checked}"
-    );
-}
-
-#[test]
-fn add_table_row_reparses_with_one_more_row_for_every_corpus_table() {
-    for doc in corpus() {
-        let idx = MarkdownIndex::build(doc, 1);
-        let table = idx
-            .blocks
-            .iter()
-            .find(|b| b.kind == BlockKind::SimpleTable)
-            .unwrap();
-        let before_source = &doc[table.source_range.start..table.source_range.end];
-        let before_rows = pulldown_cells(before_source);
-        let cmd = FormEditCommand {
-            base_revision: 1,
-            block_id: table.block_id,
-            client_block_fingerprint: None,
-            edit: FormBlockEdit::AddTableRow,
-        };
-        let patch = resolve_form_edit(doc, &idx, &cmd).unwrap_or_else(|e| panic!("{doc:?}: {e:?}"));
-        let mut out = doc.to_string();
-        apply_patch(&mut out, 1, &patch).unwrap();
-
-        let (prefix, suffix) = common_affix(doc, &out);
-        assert_eq!(
-            prefix + suffix,
-            doc.len(),
-            "{doc:?}: old bytes must be a prefix+suffix of the new document"
-        );
-
-        let after_idx = MarkdownIndex::build(&out, 2);
-        let after_table = after_idx
-            .blocks
-            .iter()
-            .find(|b| b.kind == BlockKind::SimpleTable)
-            .unwrap();
-        let after_source = &out[after_table.source_range.start..after_table.source_range.end];
-        let after_rows = pulldown_cells(after_source);
-        assert_eq!(after_rows.len(), before_rows.len() + 1, "{doc:?}");
-        assert!(
-            after_rows.last().unwrap().iter().all(|c| c.is_empty()),
-            "{doc:?}: the new row must be all empty cells"
-        );
-    }
 }
