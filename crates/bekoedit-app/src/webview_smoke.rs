@@ -38,9 +38,12 @@ pub fn note_start_screen_mounted() {
 
 /// Task 029, extended by task 036: keeps the source editor's focus traces, the
 /// page's and the Rust side's (`bridge::trace`), for a trusted-click run; a
-/// no-op in every other run, and it formats nothing there.
+/// no-op in every other run, and it formats nothing there. Task 049 extends
+/// this again: a release-checks run also keeps its own `source.form_commit.*`
+/// events, so the pending-field commit path is visible in that run's log too.
 pub fn record_source_trace(event: &str, details: impl std::fmt::Display) {
-    trusted_click::record_source_trace(event, details);
+    trusted_click::record_source_trace(event, &details);
+    release_checks::record_form_commit_trace(event, details);
 }
 
 /// Whether this process is a trusted-click run. Unlike `launch_config()`, it
@@ -50,6 +53,14 @@ fn in_trusted_click_run() -> bool {
     LAUNCH_CONFIG
         .get()
         .is_some_and(|config| config.trusted_click.is_some())
+}
+
+/// Whether this process is a release-checks run. Same shape as
+/// `in_trusted_click_run` and for the same reason (task 049).
+fn in_release_checks_run() -> bool {
+    LAUNCH_CONFIG
+        .get()
+        .is_some_and(|config| config.release_checks.is_some())
 }
 
 fn start_screen_mounts() -> usize {

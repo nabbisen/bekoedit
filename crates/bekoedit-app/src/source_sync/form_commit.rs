@@ -87,25 +87,59 @@ fn current_text(display: &FormBlockDisplay, cell: Option<(usize, usize)>) -> Opt
     }
 }
 
+/// Why [`resolve_pending_commit`] found nothing to dispatch -- task 049
+/// §2.2: distinguished so `commit_pending_form_field` can trace *which*
+/// of these happened, not just that nothing committed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NoCommitReason {
+    /// `parse_field_id` rejected the pending field's own `id`.
+    IdDidNotParse,
+    /// The id parsed, but no block in the live projection has that
+    /// ordinal and content hash.
+    NoMatchingBlock,
+    /// The block matched, but `current_text` could not read a value from
+    /// it at the given cell address (a block whose kind changed under a
+    /// stale id, or a cell address the table no longer has).
+    KindsDidNotMatch,
+    /// The field's live value already matches what is committed.
+    ValueUnchanged,
+}
+
+impl NoCommitReason {
+    /// The exact wording task 049 §2.2 names for each reason, so the
+    /// trace and this type's own documentation cannot drift apart.
+    pub(crate) const fn trace_label(self) -> &'static str {
+        match self {
+            Self::IdDidNotParse => "the id did not parse",
+            Self::NoMatchingBlock => "no block matched",
+            Self::KindsDidNotMatch => "the kinds did not match",
+            Self::ValueUnchanged => "the value was unchanged",
+        }
+    }
+}
+
 /// Builds the commit command for `pending` against `projection` -- pure, so
-/// it is tested headlessly without a live WebView. `None` when nothing
-/// should be dispatched: the id does not resolve to a block the live
-/// projection still has, or the field's value already matches what is
-/// committed.
+/// it is tested headlessly without a live WebView. `Err` when nothing
+/// should be dispatched, naming why (task 049 §2.2).
 fn resolve_pending_commit(
     pending: &PendingField,
     projection: &FormProjection,
-) -> Option<FormEditCommand> {
+) -> Result<FormEditCommand, NoCommitReason> {
     let ParsedFieldId {
         ordinal,
         content_hash,
         cell,
-    } = parse_field_id(&pending.id)?;
-    let block = projection.blocks.iter().find(|b| {
-        b.block_id.ordinal == ordinal && b.block_id.fingerprint.content_hash == content_hash
-    })?;
-    if current_text(&block.display, cell)? == pending.value {
-        return None;
+    } = parse_field_id(&pending.id).ok_or(NoCommitReason::IdDidNotParse)?;
+    let block = projection
+        .blocks
+        .iter()
+        .find(|b| {
+            b.block_id.ordinal == ordinal && b.block_id.fingerprint.content_hash == content_hash
+        })
+        .ok_or(NoCommitReason::NoMatchingBlock)?;
+    let stored = current_text(&block.display, cell).ok_or(NoCommitReason::KindsDidNotMatch)?;
+    if stored == pending.value {
+        return Err(NoCommitReason::ValueUnchanged);
     }
     let edit = match cell {
         None => FormBlockEdit::ReplacePlainText {
@@ -117,7 +151,7 @@ fn resolve_pending_commit(
             text: pending.value.clone(),
         },
     };
-    Some(FormEditCommand {
+    Ok(FormEditCommand {
         base_revision: projection.document_revision,
         block_id: block.block_id,
         client_block_fingerprint: Some(block.block_id.fingerprint),
@@ -155,25 +189,58 @@ pub(crate) async fn commit_pending_form_field(
     mode: Signal<EditorMode>,
 ) -> CommitOutcome {
     if *mode.read() != EditorMode::Form {
+        crate::bridge::trace("source.form_commit.skip", "mode is not Form");
         return CommitOutcome::NothingPending;
     }
-    let Ok(Some(pending)) =
-        crate::bridge::eval_body::<Option<PendingField>>(PENDING_FIELD_JS).await
-    else {
-        return CommitOutcome::NothingPending;
+    let read = crate::bridge::eval_body::<Option<PendingField>>(PENDING_FIELD_JS).await;
+    let pending = match read {
+        Ok(Some(pending)) => {
+            crate::bridge::trace(
+                "source.form_commit.read",
+                format!(
+                    "id={} value_len={} composing={}",
+                    pending.id,
+                    pending.value.chars().count(),
+                    pending.composing
+                ),
+            );
+            pending
+        }
+        Ok(None) => {
+            crate::bridge::trace(
+                "source.form_commit.read",
+                "null (nothing in .form-mode has focus)",
+            );
+            return CommitOutcome::NothingPending;
+        }
+        Err(error) => {
+            crate::bridge::trace("source.form_commit.read.error", error);
+            return CommitOutcome::NothingPending;
+        }
     };
     if pending.composing {
+        crate::bridge::trace("source.form_commit.composing", &pending.id);
         return CommitOutcome::Composing;
     }
     let Some(projection) = state.read().session.as_ref().map(|s| s.form_projection()) else {
+        crate::bridge::trace("source.form_commit.skip", "no open session");
         return CommitOutcome::NothingPending;
     };
     match resolve_pending_commit(&pending, &projection) {
-        Some(cmd) => {
-            let _ = state.write().edit_form(&cmd, now_ms());
-            CommitOutcome::Committed
+        Ok(cmd) => match state.write().edit_form(&cmd, now_ms()) {
+            Ok(()) => {
+                crate::bridge::trace("source.form_commit.committed", &pending.id);
+                CommitOutcome::Committed
+            }
+            Err(error) => {
+                crate::bridge::trace("source.form_commit.edit_form.error", error);
+                CommitOutcome::NothingPending
+            }
+        },
+        Err(reason) => {
+            crate::bridge::trace("source.form_commit.no_commit", reason.trace_label());
+            CommitOutcome::NothingPending
         }
-        None => CommitOutcome::NothingPending,
     }
 }
 

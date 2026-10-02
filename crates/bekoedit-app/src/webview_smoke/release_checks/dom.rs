@@ -72,6 +72,18 @@ pub(super) async fn form_paragraph_present() -> Result<bool, String> {
     returned("document.querySelector('.form-mode .paragraph-input') !== null").await
 }
 
+/// Whether the seeded paragraph field's own live value is exactly
+/// `expected` -- used to wait for real keystrokes (task 049 §2.1) to have
+/// landed before the scenario's own act under test.
+pub(super) async fn paragraph_field_value_is(expected: &str) -> Result<bool, String> {
+    let expected = crate::bridge::js_string_literal(expected);
+    returned(&format!(
+        "(() => {{ const el = document.querySelector('.form-mode .paragraph-input'); \
+         return !!el && el.value === {expected}; }})()"
+    ))
+    .await
+}
+
 /// The Preview tab is the selected mode tab.
 pub(super) async fn preview_selected() -> Result<bool, String> {
     returned(

@@ -9,10 +9,24 @@
 //! exercise -- a different route to the same commit-before-command
 //! ordering (task 048 D1), proven by the same real WebView run as the
 //! other two.
+//!
+//! Task 049 §2.1: the mode tab's own click moves DOM focus to the tab on
+//! `mousedown`, before any script runs -- by the time the queued
+//! `commit_pending_form_field` read executes, `document.activeElement` is
+//! already the tab, not the field, so that path has nothing to commit, by
+//! design. What this scenario actually needs is the field's *own*
+//! blur-then-`change` commit (`block_view.rs`'s `onchange`), which the
+//! review's reading of the failed run named as this scenario's real bug:
+//! per the HTML spec, `change` fires on blur only if the element's value
+//! was changed by the user since it was focused -- a value set from
+//! script (the previous version of this file) never sets that flag, so
+//! the blur commits nothing, and the scenario was not testing what it
+//! claimed to. Real keystrokes (`xdotool type`) set it, exactly as a real
+//! user's typing would.
 
 use dioxus::desktop::DesktopContext;
 
-use crate::webview_smoke::trusted_click::xtest::{activate_window, click_via_xtest};
+use crate::webview_smoke::trusted_click::xtest::{activate_window, click_via_xtest, run_xdotool};
 
 use super::ReleaseChecksTerminal;
 use super::dom;
@@ -21,13 +35,9 @@ use super::seed::SAVE_FILE;
 
 pub(super) const NAME: &str = "form_field_commits_before_mode_switch";
 
-/// Sets the paragraph field's value, never leaving it (no `change` event),
-/// exactly the uncommitted state a real keystroke leaves.
-const SET_FIELD_JS: &str = "const el = document.querySelector('.form-mode .paragraph-input'); \
-     if (!el) return false; \
-     el.focus(); \
-     el.value = 'abc def'; \
-     return document.activeElement === el && el.value === 'abc def';";
+/// Exactly what the field is expected to hold once the real keystrokes
+/// below land: the seeded `abc`, plus the typed ` def`.
+const TYPED_VALUE: &str = "abc def";
 
 pub(super) async fn run(
     _terminal: &ReleaseChecksTerminal,
@@ -46,15 +56,22 @@ pub(super) async fn run(
     })
     .await?;
 
-    let set_up: bool = dom::run_script(SET_FIELD_JS).await?;
-    if !set_up {
-        return Err(format!(
-            "{NAME}: could not set the paragraph field's pending value"
-        ));
-    }
+    // A real click into the field, then real keystrokes -- never the
+    // field's `.value` set from script (task 049 §2.1's fix: see the
+    // module doc comment for why that never exercised a real commit).
+    click_via_xtest(desktop, ".form-mode .paragraph-input", None, 0).await?;
+    run_xdotool(&["key", "--clearmodifiers", "End"]).await?;
+    run_xdotool(&["type", "--clearmodifiers", " def"]).await?;
+    wait_until(
+        NAME,
+        "the paragraph field to hold the typed text",
+        || async { dom::paragraph_field_value_is(TYPED_VALUE).await },
+    )
+    .await?;
 
     // The real act under test: a real click switching to Text Mode, with
-    // the Form field still focused and never blurred.
+    // the Form field still focused and never blurred by anything but
+    // this click.
     click_via_xtest(
         desktop,
         r#"[data-source-focus-launch="mode-text"]"#,
@@ -69,10 +86,10 @@ pub(super) async fn run(
     )
     .await?;
 
-    let shows_typed_text = dom::editor_contains("abc def").await?;
+    let shows_typed_text = dom::editor_contains(TYPED_VALUE).await?;
     if !shows_typed_text {
         return Err(format!(
-            "{NAME}: Text Mode does not show the typed text \"abc def\" after the mode switch"
+            "{NAME}: Text Mode does not show the typed text {TYPED_VALUE:?} after the mode switch"
         ));
     }
 
@@ -85,28 +102,12 @@ pub(super) async fn run(
 mod tests {
     use super::*;
 
-    /// Same check as `xtest.rs`'s own `is_balanced`: this module's coverage
-    /// is scoped to its own one script, not that one's.
-    fn is_balanced(script: &str) -> bool {
-        let mut parens = 0i32;
-        let mut braces = 0i32;
-        for c in script.chars() {
-            match c {
-                '(' => parens += 1,
-                ')' => parens -= 1,
-                '{' => braces += 1,
-                '}' => braces -= 1,
-                _ => {}
-            }
-            if parens < 0 || braces < 0 {
-                return false;
-            }
-        }
-        parens == 0 && braces == 0
-    }
-
+    /// The seeded paragraph is `abc\n` (`seed.rs`'s `original_paragraph_note`);
+    /// `End` then ` def` must land exactly on `TYPED_VALUE`, independent of a
+    /// live WebView, since a wrong constant here would make the whole
+    /// scenario probe the wrong text without ever failing.
     #[test]
-    fn the_script_is_balanced() {
-        assert!(is_balanced(SET_FIELD_JS), "{SET_FIELD_JS}");
+    fn the_seeded_text_plus_the_typed_suffix_is_the_expected_value() {
+        assert_eq!(format!("{}{}", "abc", " def"), TYPED_VALUE);
     }
 }

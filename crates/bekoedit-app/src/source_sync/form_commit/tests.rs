@@ -138,7 +138,10 @@ fn an_unchanged_value_resolves_to_no_commit() {
         value: "A paragraph.".to_string(),
         composing: false,
     };
-    assert_eq!(resolve_pending_commit(&pending, &projection), None);
+    assert_eq!(
+        resolve_pending_commit(&pending, &projection),
+        Err(NoCommitReason::ValueUnchanged)
+    );
 }
 
 #[test]
@@ -191,7 +194,10 @@ fn an_id_naming_no_block_in_the_projection_resolves_to_no_commit() {
         value: "anything".to_string(),
         composing: false,
     };
-    assert_eq!(resolve_pending_commit(&pending, &projection), None);
+    assert_eq!(
+        resolve_pending_commit(&pending, &projection),
+        Err(NoCommitReason::NoMatchingBlock)
+    );
 }
 
 #[test]
@@ -202,5 +208,45 @@ fn a_malformed_id_resolves_to_no_commit() {
         value: "anything".to_string(),
         composing: false,
     };
-    assert_eq!(resolve_pending_commit(&pending, &projection), None);
+    assert_eq!(
+        resolve_pending_commit(&pending, &projection),
+        Err(NoCommitReason::IdDidNotParse)
+    );
+}
+
+#[test]
+fn a_cell_address_the_table_does_not_have_resolves_to_kinds_did_not_match() {
+    let projection = projection_for("| a | b |\n|---|---|\n| 1 | 2 |\n");
+    let id = format!("{}-9-9", table_id(&projection));
+    let pending = PendingField {
+        id,
+        value: "anything".to_string(),
+        composing: false,
+    };
+    assert_eq!(
+        resolve_pending_commit(&pending, &projection),
+        Err(NoCommitReason::KindsDidNotMatch)
+    );
+}
+
+// ---------------------------------------------------------- NoCommitReason
+
+#[test]
+fn each_reason_has_its_own_trace_label() {
+    assert_eq!(
+        NoCommitReason::IdDidNotParse.trace_label(),
+        "the id did not parse"
+    );
+    assert_eq!(
+        NoCommitReason::NoMatchingBlock.trace_label(),
+        "no block matched"
+    );
+    assert_eq!(
+        NoCommitReason::KindsDidNotMatch.trace_label(),
+        "the kinds did not match"
+    );
+    assert_eq!(
+        NoCommitReason::ValueUnchanged.trace_label(),
+        "the value was unchanged"
+    );
 }

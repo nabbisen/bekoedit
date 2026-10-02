@@ -495,6 +495,19 @@ jobs:
         # step has been blocking since `41a6934`, so all three merge straight
         # into the blocking step, with no soak restart, per this step's own
         # rule above.
+        # That run showed `save_pending_field` and
+        # `form_field_commits_before_mode_switch` both FAILED (main went red
+        # at `b38057f`). Task 049 diagnosed the mode-switch one: its real
+        # click on the Text tab moves DOM focus to the tab on `mousedown`,
+        # before the queued commit's read can run, and the field's `.value`
+        # set from script (not a real keystroke) never set the HTML "dirty
+        # value" flag either, so neither commit path had anything to act on
+        # -- the scenario did not test what it claimed to. Fixed by typing
+        # the pending text with real keystrokes (`xdotool type`) after a
+        # real click into the field, so the field's own blur-then-`change`
+        # commits it. `save_pending_field`'s own cause is still open: task
+        # 049 adds a `source.form_commit.*` trace (this step's own log,
+        # every run) to answer it on the next one.
         id: release_checks
         run: |
           failed=0
