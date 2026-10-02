@@ -1,8 +1,10 @@
 # RFC-048: Form Mode table editing
 
 **Project:** bekoedit
-**Status:** Proposed — drafted 2026-10-02, after the owner named easy table
-editing as a key requirement. §10 Q1 answered 2026-10-02 (cells as Markdown text); Q2–Q4 await the owner.
+**Status:** Accepted — approved by the owner on 2026-10-02, the day it was
+drafted, after the owner named easy table editing as a key requirement. All of
+§10 is answered.
+**Handoffs:** [`handoffs/048-form-mode-table-editing/`](../handoffs/048-form-mode-table-editing/)
 **Track:** Editing
 **Priority:** High — the owner's key requirement, and the current behaviour
 both under-delivers and, until task 045, loses data
@@ -158,28 +160,31 @@ before adding it.
 
 ## 9. Slices
 
-1. **Cells as minimal patches**: task 045, a defect fix. It ships in 0.17.1.
+1. **Cells as minimal patches**: task 045, a defect fix. It ships in the next
+   release; there is no 0.17.1 (§10 Q4).
 2. **Formatted cells become editable**: the classification change in §5.1,
    with the toolbar in cells.
 3. **Row operations.**
 4. **Column operations and alignment.**
 5. **Tidy, keyboard, accessibility pass**, docs and the README.
 
-Slices 2–5 are proposed for 0.18.0.
+Slices 1–5 target 0.18.0.
 
-## 10. Questions for the owner
+## 10. Questions — all four answered 2026-10-02
 
 1. **Cells: Markdown text, or rich text?** **Answered 2026-10-02 by the owner:
    Markdown text (option A)**, with the toolbar.
    *Proposed:* Markdown text, with the
    toolbar. Rich editing inside cells is a much larger editor and risks
    rewriting cell source.
-2. **Re-padding: never automatically, with Tidy on request?** *Proposed:* yes.
+2. **Re-padding: never automatically, with Tidy on request?** **Answered: yes,
+   as proposed.** *Proposed:* yes.
    Automatic re-padding rewrites every line on every edit, which fills Git
    diffs. That is the problem this app exists to avoid.
 3. **Scope: the full grid (§5.2), or a smaller first step**, such as rows only
-   in 0.18.0? *Proposed:* the full grid across slices 2–5. Each slice is
+   in 0.18.0? **Answered: the full grid, as proposed.** *Proposed:* the full grid across slices 2–5. Each slice is
    independently releasable.
 4. **The Microsoft Store:** submit with 0.17.1 (an honest listing, after task
-   045), or wait for slices 2–5? *Proposed:* do not wait. A Store update is
-   cheap, and the listing only claims what exists.
+   045), or wait for slices 2–5? *Proposed:* do not wait. **Answered: no 0.17.1
+   is cut, to keep release cost down.** Tasks 044 and 045 ship with the next
+   release, and the Store submission follows that release.

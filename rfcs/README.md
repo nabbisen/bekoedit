@@ -92,6 +92,7 @@ to `done/` when the work ships.
 | RFC | Title | Notes |
 |-----|-------|-------|
 | RFC-045 | [Release artifact portability and completeness](accepted/RFC-045-release-artifact-portability-and-completeness.md) | Accepted 2026-08-17. Slices 1–2 shipped to `main`: the platform scripts now ship in every archive, and a cross-distribution `ldd` check gates both pull requests and the publish job. Slice 3 (Linux portability) is open — see its §10 Q1. Handoffs: [`handoffs/045-release-artifact-portability-and-completeness/`](handoffs/045-release-artifact-portability-and-completeness/) |
+| RFC-048 | [Form Mode table editing](accepted/RFC-048-form-mode-table-editing.md) | Accepted 2026-10-02, the day it was drafted. Every GFM table becomes a Form Mode grid: cells edited as Markdown text (formatted cells included), row and column insert, delete and move, alignment, and an explicit Tidy; every operation is a minimal patch. Slice 1 is task 045 (a data-loss fix); slices 1–5 target 0.18.0 |
 
 ## Implemented — merged to `main`, not yet released (`done/`)
 
@@ -133,7 +134,6 @@ superseded).
 | RFC-032 | [Performance optimization and incremental parsing](proposed/RFC-032-performance-optimization-and-incremental-parsing.md) | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | [Plugin system evaluation](proposed/RFC-039-plugin-system-evaluation.md) | Future evaluation only |
 | RFC-040 | [Sync and collaboration evaluation](proposed/RFC-040-sync-and-collaboration-evaluation.md) | Future evaluation only |
-| RFC-048 | [Form Mode table editing](proposed/RFC-048-form-mode-table-editing.md) | Drafted 2026-10-02 after the owner named easy table editing a key requirement. Every GFM table becomes a Form Mode grid: cells with formatting, row and column insert, delete and move, alignment, and an explicit Tidy; every operation is a minimal patch. Slice 1 is task 045 (a data-loss fix). Four questions for the owner in §10 |
 
 ## Implemented — v0.3.0 (`done/`)
 
