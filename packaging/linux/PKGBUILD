@@ -13,11 +13,12 @@ pkgdesc="A source-preserving Markdown editor"
 arch=('x86_64')
 url="https://github.com/nabbisen/bekoedit"
 license=('Apache-2.0')
-# xdotool provides libxdo, which the release binary links (RFC-045: a
-# source build on this machine, readelf -d target/release/bekoedit, shows
-# libxdo.so.4) -- without it the package builds and installs cleanly and
-# then fails to start. Temporary: once Dioxus 0.8 drops the libxdo
-# linkage, this dependency should be removed.
+# xdotool provides libxdo, which the binary links. A source build links
+# the host's own libxdo, for example libxdo.so.4 on Arch (RFC-045: readelf
+# -d on this machine's own release build confirms it) -- without xdotool
+# installed the package builds and installs cleanly and then fails to
+# start. Temporary: once Dioxus 0.8 drops the libxdo linkage, this
+# dependency should be removed.
 depends=('webkit2gtk-4.1' 'gtk3' 'xdotool' 'openssl')
 makedepends=('cargo' 'pkg-config')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/nabbisen/bekoedit/archive/refs/tags/$pkgver.tar.gz")
@@ -31,11 +32,14 @@ sha256sums=('SKIP')
 
 prepare() {
     cd "$pkgname-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
     cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
 }
 
 build() {
     cd "$pkgname-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
     cargo build --frozen --release -p bekoedit
 }
 
