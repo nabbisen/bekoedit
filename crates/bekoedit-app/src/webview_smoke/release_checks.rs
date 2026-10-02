@@ -32,6 +32,7 @@ use crate::i18n::Lang;
 
 mod bytes;
 mod dom;
+mod form_field_commits_before_mode_switch;
 mod launch;
 mod link_clicks;
 mod link_judge;
@@ -41,6 +42,7 @@ mod paste_conversion;
 mod paste_probe;
 mod paste_report;
 mod save;
+mod save_pending_field;
 mod seed;
 mod toolbar_probe;
 pub(super) use seed::prepare;
@@ -65,11 +67,18 @@ pub enum ReleaseScenario {
     /// RFC-046 slice 2, part B §3.6: the paste handler end to end -- a real
     /// Ctrl+V converts and saves, a real Ctrl+Shift+V pastes plain.
     PasteConversion,
-    /// Task 047 Part A: does a Form Mode toolbar click commit the field's
-    /// pending (typed, never-blurred) text along with the toggle, or only
-    /// the document's last-committed text? Reports; asserts no product
-    /// behaviour.
+    /// Task 047 Part A, task 048 D1+D2: a Form Mode toolbar click commits
+    /// the field's pending (typed, never-blurred) text, then applies the
+    /// toggle, as one patch.
     ToolbarProbe,
+    /// Task 048 D1 (§2.1/§2.4), isolated from the toolbar: with no toolbar
+    /// click at all, a real Ctrl+S alone commits a Form Mode field's
+    /// pending text.
+    SavePendingField,
+    /// Task 048 D1 (§2.4), via the other command path: a mode switch
+    /// (claiming editor focus, `source_sync::focus`'s async arming) also
+    /// commits a Form Mode field's pending text first.
+    FormFieldCommitsBeforeModeSwitch,
 }
 
 impl ReleaseScenario {
@@ -85,6 +94,8 @@ impl ReleaseScenario {
             Self::PasteProbe => paste_probe::NAME,
             Self::PasteConversion => paste_conversion::NAME,
             Self::ToolbarProbe => toolbar_probe::NAME,
+            Self::SavePendingField => save_pending_field::NAME,
+            Self::FormFieldCommitsBeforeModeSwitch => form_field_commits_before_mode_switch::NAME,
         }
     }
 
@@ -100,6 +111,8 @@ impl ReleaseScenario {
             Self::PasteProbe,
             Self::PasteConversion,
             Self::ToolbarProbe,
+            Self::SavePendingField,
+            Self::FormFieldCommitsBeforeModeSwitch,
         ]
         .into_iter()
         .find(|scenario| scenario.name() == name)
@@ -108,7 +121,8 @@ impl ReleaseScenario {
                 "unknown release-checks scenario {name:?}; expected reopen_usable, \
                  reopen_missing, reopen_disabled, save_preserves_bytes, \
                  save_preserves_crlf_bytes, mode_switch_preserves_bytes link_clicks_reach_only_the_browser, \
-                 paste_probe, paste_conversion or toolbar_probe"
+                 paste_probe, paste_conversion, toolbar_probe, save_pending_field or \
+                 form_field_commits_before_mode_switch"
             )
         })
     }
@@ -190,6 +204,12 @@ pub fn WebViewReleaseChecksDriver() -> Element {
                     paste_conversion::run(&terminal, &desktop).await
                 }
                 ReleaseScenario::ToolbarProbe => toolbar_probe::run(&terminal, &desktop).await,
+                ReleaseScenario::SavePendingField => {
+                    save_pending_field::run(&terminal, &desktop).await
+                }
+                ReleaseScenario::FormFieldCommitsBeforeModeSwitch => {
+                    form_field_commits_before_mode_switch::run(&terminal, &desktop).await
+                }
                 _ => launch::run(&terminal, state, toasts, lang).await,
             };
             match outcome.and_then(|checks| terminal.accept().map(|()| checks)) {

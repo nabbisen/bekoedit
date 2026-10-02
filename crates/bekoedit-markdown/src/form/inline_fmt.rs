@@ -7,7 +7,7 @@
 use crate::block::BlockNode;
 use crate::form::{FormEditError, InlineFormat};
 use crate::patch::PatchOrigin;
-use crate::range::{ByteRange, utf16_to_utf8_offset};
+use crate::range::utf16_to_utf8_offset;
 
 // Type alias matching resolve.rs convention.
 type Resolved = (crate::range::ByteRange, String, crate::patch::PatchOrigin);
@@ -109,14 +109,21 @@ pub fn toggled_text(selected: &str, kind: InlineFormat, link_url: Option<&str>) 
     }
 }
 
-/// Toggles inline markup around a UTF-16-offset selection within the
-/// block's content (RFC-030).
+/// Toggles inline markup around a UTF-16-offset selection within
+/// `current_text` -- the block's own field as it currently stands in the
+/// browser, not the document's last-committed text (task 048 D2). The
+/// offsets are relative to `current_text`, since that is what the
+/// browser's own `selectionStart`/`End` describe.
 ///
 /// If the selected text is already wrapped in the same markers, the
-/// markers are removed (unwrap). Otherwise they are added (wrap).
+/// markers are removed (unwrap). Otherwise they are added (wrap). The
+/// result is **one** patch spanning the block's whole content range,
+/// replacing it with `current_text` (the pending edit) plus the toggle --
+/// so a click commits the field's own pending text and applies the
+/// toggle together, never one without the other.
 pub fn resolve_toggle_inline(
-    text: &str,
     block: &BlockNode,
+    current_text: &str,
     kind: InlineFormat,
     utf16_start: usize,
     utf16_len: usize,
@@ -128,28 +135,26 @@ pub fn resolve_toggle_inline(
         .ok_or_else(|| FormEditError::UnsupportedEditOperation {
             reason: "block has no content range".into(),
         })?;
-    let content_text = &text[content.start..content.end];
 
-    let byte_start = utf16_to_utf8_offset(content_text, utf16_start).ok_or_else(|| {
+    let byte_start = utf16_to_utf8_offset(current_text, utf16_start).ok_or_else(|| {
         FormEditError::InvalidEditPayload {
             reason: "invalid UTF-16 start offset".into(),
         }
     })?;
-    let byte_end_local =
-        utf16_to_utf8_offset(content_text, utf16_start + utf16_len).ok_or_else(|| {
+    let byte_end =
+        utf16_to_utf8_offset(current_text, utf16_start + utf16_len).ok_or_else(|| {
             FormEditError::InvalidEditPayload {
                 reason: "invalid UTF-16 end offset".into(),
             }
         })?;
 
-    let selected = &content_text[byte_start..byte_end_local];
+    let selected = &current_text[byte_start..byte_end];
     let replacement = toggled_text(selected, kind, link_url);
+    let new_text = format!(
+        "{}{replacement}{}",
+        &current_text[..byte_start],
+        &current_text[byte_end..]
+    );
 
-    let abs_start = content.start + byte_start;
-    let abs_end = content.start + byte_end_local;
-    Ok((
-        ByteRange::new(abs_start, abs_end),
-        replacement,
-        PatchOrigin::FormMode,
-    ))
+    Ok((content, new_text, PatchOrigin::FormMode))
 }

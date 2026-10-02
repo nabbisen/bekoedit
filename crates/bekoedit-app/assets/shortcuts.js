@@ -31,4 +31,12 @@
       }
     }
   });
+
+  // Task 048 D1: a Form Mode field's pending text must never be
+  // force-committed mid-IME-composition. Captured at the window level, like
+  // the shortcut listener above, so it sees every field regardless of which
+  // one has focus.
+  window.__bk_form_composing = false;
+  window.addEventListener("compositionstart", () => { window.__bk_form_composing = true; }, true);
+  window.addEventListener("compositionend", () => { window.__bk_form_composing = false; }, true);
 })();

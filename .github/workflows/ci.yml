@@ -484,15 +484,21 @@ jobs:
         # uncommitted state a user's own typing leaves before a toolbar click,
         # since `onchange` only fires on blur and the toolbar's buttons
         # `preventDefault` on `mousedown` to keep the field focused), sends a
-        # real click at the Bold button, and reports what the field shows and
-        # what Ctrl+S actually saves. It asserts no product behaviour. This
-        # step has been blocking since `41a6934`, so the scenario merges
-        # straight into the blocking step, with no soak restart, per this
-        # step's own rule above.
+        # real click at the Bold button, and reported what the field showed
+        # and what Ctrl+S actually saved. It reported, asserting no product
+        # behaviour; its first real run confirmed the data loss.
+        # Task 048 D1+D2 fixed that data loss and turned `toolbar_probe` into
+        # an assertion (the saved bytes must be `abc **def**\n`), and added two
+        # more: `save_pending_field` (Ctrl+S alone, no toolbar click, must
+        # commit the pending text) and `form_field_commits_before_mode_switch`
+        # (a mode switch, the other command path, must commit it too). This
+        # step has been blocking since `41a6934`, so all three merge straight
+        # into the blocking step, with no soak restart, per this step's own
+        # rule above.
         id: release_checks
         run: |
           failed=0
-          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe paste_conversion toolbar_probe; do
+          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe paste_conversion toolbar_probe save_pending_field form_field_commits_before_mode_switch; do
             RELEASE_CHECKS_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-release-checks.XXXXXX")"
             echo "release-checks scenario: $scenario"
             # Task 033: only this scenario gets stub openers. $BROWSER is the

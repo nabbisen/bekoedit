@@ -265,9 +265,19 @@ pub enum FormBlockEdit {
     /// Append a new empty row to a simple table (RFC-027).
     AddTableRow,
     /// Toggle inline markup around a JS-editor selection (RFC-030).
-    /// Offsets are UTF-16 code units relative to the block's content range
-    /// start; Rust converts them to UTF-8 before patching.
+    /// Offsets are UTF-16 code units relative to `current_text`, not to
+    /// whatever the document currently has stored.
+    ///
+    /// `current_text` (task 048 D2) is the field's own live value, sent
+    /// alongside the selection: the toggle is resolved against *that*, not
+    /// the document's last-committed text, and the result is one patch
+    /// that both commits `current_text` and applies the toggle. Before
+    /// this, a toolbar click committed nothing of its own, so a pending
+    /// (typed, not yet blurred) edit was silently discarded by every
+    /// click, or -- when the stale offsets happened to still fit the
+    /// stored text -- wrapped the wrong characters.
     ToggleInline {
+        current_text: String,
         kind: InlineFormat,
         utf16_start: usize,
         utf16_len: usize,
@@ -275,13 +285,16 @@ pub enum FormBlockEdit {
         link_url: Option<String>,
     },
     /// Toggle inline markup around a selection inside one table cell
-    /// (RFC-048 slice 2). A separate variant from `ToggleInline`, not an
-    /// extension of it: the offsets below are relative to *the cell's*
-    /// own displayed text (its Markdown source with only `\|` unescaped,
-    /// per `ReplaceTableCell`), never to the table block as a whole.
+    /// (RFC-048 slice 2, extended by task 048 D2). A separate variant
+    /// from `ToggleInline`, not an extension of it: the offsets below are
+    /// relative to *the cell's* own displayed text (its Markdown source
+    /// with only `\|` unescaped, per `ReplaceTableCell`), never to the
+    /// table block as a whole. `current_text` is that same displayed
+    /// text, as the cell's input currently shows it -- see `ToggleInline`.
     ToggleInlineInTableCell {
         row: usize,
         col: usize,
+        current_text: String,
         kind: InlineFormat,
         utf16_start: usize,
         utf16_len: usize,

@@ -178,10 +178,13 @@ pub(super) fn judge(
         | ReleaseScenario::LinkClicksReachOnlyTheBrowser
         | ReleaseScenario::PasteProbe
         | ReleaseScenario::PasteConversion
-        | ReleaseScenario::ToolbarProbe => {
+        | ReleaseScenario::ToolbarProbe
+        | ReleaseScenario::SavePendingField
+        | ReleaseScenario::FormFieldCommitsBeforeModeSwitch => {
             unreachable!(
                 "save.rs, mode_switch.rs, link_clicks.rs, paste_probe.rs, \
-                 paste_conversion.rs and toolbar_probe.rs run these scenarios"
+                 paste_conversion.rs, toolbar_probe.rs, save_pending_field.rs and \
+                 form_field_commits_before_mode_switch.rs run these scenarios"
             )
         }
     }

@@ -150,7 +150,9 @@ pub(in crate::webview_smoke) fn prepare(
             let file = workspace.join(SAVE_FILE);
             (workspace, "Save Project".to_string(), original, Some(file))
         }
-        ReleaseScenario::ToolbarProbe => {
+        ReleaseScenario::ToolbarProbe
+        | ReleaseScenario::SavePendingField
+        | ReleaseScenario::FormFieldCommitsBeforeModeSwitch => {
             let original = original_paragraph_note();
             let workspace = make_workspace(&root, "save-project", &[(SAVE_FILE, &original)])?;
             let file = workspace.join(SAVE_FILE);
@@ -166,8 +168,13 @@ pub(in crate::webview_smoke) fn prepare(
         default_mode: if scenario == ReleaseScenario::LinkClicksReachOnlyTheBrowser {
             // The links are clicked in the rendered note.
             EditorMode::Preview
-        } else if scenario == ReleaseScenario::ToolbarProbe {
-            // The toolbar being probed is Form Mode's own.
+        } else if matches!(
+            scenario,
+            ReleaseScenario::ToolbarProbe
+                | ReleaseScenario::SavePendingField
+                | ReleaseScenario::FormFieldCommitsBeforeModeSwitch
+        ) {
+            // Each of these three starts with a Form Mode field.
             EditorMode::Form
         } else {
             EditorMode::Text

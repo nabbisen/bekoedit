@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod rfc_042;
+#[cfg(test)]
+mod task_048_commit_order;
 
 #[cfg(test)]
 mod app_tests {
@@ -509,7 +511,7 @@ mod app_tests {
             "no click handler may install its own keep-alive loop: {toolbar}"
         );
         assert!(
-            toolbar.contains("crate::bridge::eval_body::<Sel>(&js)"),
+            toolbar.contains("crate::bridge::eval_body::<Option<Sel>>(&js)"),
             "a click must read the selection through the shared one-shot eval: {toolbar}"
         );
     }

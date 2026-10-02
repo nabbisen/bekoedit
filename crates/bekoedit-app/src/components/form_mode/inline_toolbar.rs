@@ -61,12 +61,17 @@ pub fn InlineToolbar(
                 // Prevent textarea from losing focus on mousedown.
                 onmousedown: |evt| evt.prevent_default(),
                 onclick: move |_| {
-                    // Read the textarea's selection in one bounded,
-                    // self-releasing round trip (task 047 Part B), then
-                    // dispatch the command.
+                    // Read the textarea's current value and selection in
+                    // one bounded, self-releasing round trip (task 047
+                    // Part B), then dispatch the command. `null` (task 048
+                    // D2, review §4) when the field cannot be found at
+                    // all -- nothing is dispatched then, rather than the
+                    // old `{s:0,e:0}` default, which inserted empty
+                    // markers at the start of whatever was last committed.
                     let js = format!(
                         "const el = document.getElementById({id}); \
-                         return {{ s: el ? el.selectionStart : 0, e: el ? el.selectionEnd : 0 }};",
+                         if (!el) return null; \
+                         return {{ s: el.selectionStart, e: el.selectionEnd, text: el.value }};",
                         id = crate::bridge::js_string_literal(&fid)
                     );
                     let bid = block_id;
@@ -75,20 +80,28 @@ pub fn InlineToolbar(
                     let st = state;
                     spawn(async move {
                         #[derive(serde::Deserialize)]
-                        struct Sel { s: usize, e: usize }
-                        if let Ok(Sel { s, e }) = crate::bridge::eval_body::<Sel>(&js).await {
+                        struct Sel {
+                            s: usize,
+                            e: usize,
+                            text: String,
+                        }
+                        if let Ok(Some(Sel { s, e, text })) =
+                            crate::bridge::eval_body::<Option<Sel>>(&js).await
+                        {
                             let utf16_start = s;
                             let utf16_len = e.saturating_sub(s);
                             let edit = match cell {
                                 Some((row, col)) => FormBlockEdit::ToggleInlineInTableCell {
                                     row,
                                     col,
+                                    current_text: text,
                                     kind: k,
                                     utf16_start,
                                     utf16_len,
                                     link_url: None,
                                 },
                                 None => FormBlockEdit::ToggleInline {
+                                    current_text: text,
                                     kind: k,
                                     utf16_start,
                                     utf16_len,

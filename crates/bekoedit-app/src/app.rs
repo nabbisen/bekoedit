@@ -138,6 +138,7 @@ pub fn App() -> Element {
     });
 
     // Background: native fs watcher + autosave + external-change poll.
+    let autosave_mode = use_context::<Signal<EditorMode>>();
     use_future(move || {
         let mut app: Signal<AppState> = state;
         async move {
@@ -174,6 +175,12 @@ pub fn App() -> Element {
                         }
                     }
                 }
+                // Task 048 D1: autosave bypasses the command queue entirely
+                // (it is not a `SourceCommand`), so it needs its own commit
+                // of a Form field's pending text before it writes -- the
+                // same step `submit_source_command_preserving_focus` runs
+                // for every queued command.
+                crate::source_sync::commit_pending_form_field(app, autosave_mode).await;
                 let mut s = app.write();
                 if s.session.is_some() {
                     s.check_external_change();

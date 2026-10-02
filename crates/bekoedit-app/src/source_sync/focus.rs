@@ -285,7 +285,8 @@ fn submit_interaction(
         }
         finalize_launch_ui();
         let outcome =
-            submit_source_command_preserving_focus(sync, state, mode, toasts, command, Some(token));
+            submit_source_command_preserving_focus(sync, state, mode, toasts, command, Some(token))
+                .await;
         crate::bridge::trace("source.focus.command.queued", format!("{outcome:?}"));
         if matches!(
             outcome,

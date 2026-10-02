@@ -1,29 +1,23 @@
-//! Task 047 Part A, scenario `toolbar_probe`: does a Form Mode toolbar
-//! click commit the field's pending text along with the toggle, or only
-//! the document's last-committed text?
+//! Task 047 Part A / task 048 §2.4, scenario `toolbar_probe`: a Form Mode
+//! toolbar click must commit the field's pending text along with the
+//! toggle, not just the document's last-committed text.
 //!
-//! The hypothesis, from reading only -- it is not a finding:
-//! 1. A Form Mode field commits its text on `onchange`, which fires only
-//!    when the field loses focus.
-//! 2. The toolbar's buttons `preventDefault` on `mousedown` precisely so
-//!    the field keeps focus -- `onchange` therefore never fires before the
-//!    click's own toggle is resolved.
-//! 3. The toggle is resolved against the *document's* text (the last
-//!    `ReplacePlainText` commit), not whatever the user just typed. The
-//!    browser's selection offsets, though, refer to the typed text.
+//! Originally a *reporting* scenario (task 047 Part A): it set the field's
+//! pending value and selection, clicked **B**, and reported what was saved
+//! without asserting anything. Its first real run, `36975693053` on
+//! `1492cac`, confirmed the hypothesis the hard way -- the toolbar click
+//! committed neither the pending text nor the toggle; Ctrl+S wrote back
+//! exactly the seeded `abc\n`, with the field still *showing* `abc def` on
+//! screen. Task 048 D1/D2 fix this (`form_commit::commit_pending_form_field`
+//! orders a commit before every command; `resolve_toggle_inline` resolves
+//! against the field's current value, sent with the selection, as one
+//! patch), so this scenario now asserts the fixed bytes instead of merely
+//! reporting them.
 //!
-//! If that is right, a user who types into a paragraph, selects part of
-//! what they just typed, and clicks a toolbar button loses that typed text
-//! (or gets markers at the wrong byte positions) once the document
-//! re-renders the field from the committed source.
-//!
-//! This scenario sets the field's value and selection from script -- which,
-//! like typing, fires no `change` event, exactly the uncommitted state the
-//! hypothesis describes -- then sends a real click at the **B** button, and
-//! reports what the field shows and what Ctrl+S actually saves. It asserts
-//! no product behaviour: it reports, so the hypothesis can be confirmed or
-//! not confirmed from real CI evidence before task 047 Part A2 is written
-//! (task 047 §1, "I write the fix only once the cause is shown").
+//! Sets the field's value and selection from script -- which, like typing,
+//! fires no `change` event, exactly the uncommitted state a real keystroke
+//! leaves -- then sends a real click at the **B** button, a real Ctrl+S,
+//! and asserts the saved bytes.
 
 use std::time::Duration;
 
@@ -53,6 +47,10 @@ const READ_FIELD_JS: &str = "const el = document.querySelector('.form-mode .para
 /// What a save settles to within, past the autosave/Ctrl+S write -- the same
 /// margin `save.rs`'s own poll uses.
 const SAVE_DEADLINE: Duration = Duration::from_secs(10);
+
+/// The fixed, correct outcome: the pending " def" is committed, and the
+/// toggle wraps exactly what was selected (task 048 D1+D2, one patch).
+const EXPECTED_SAVED_TEXT: &str = "abc **def**\n";
 
 pub(super) async fn run(
     terminal: &ReleaseChecksTerminal,
@@ -109,25 +107,17 @@ pub(super) async fn run(
         tokio::time::sleep(Duration::from_millis(50)).await;
     };
     let saved_text = String::from_utf8_lossy(&saved).into_owned();
-
-    // What the hypothesis predicts if it is right: the toggle landed on
-    // "abc" (the document's last commit), not on the pending "def" the
-    // selection pointed at, and the typed " def" is nowhere on disk.
-    let typed_text_survived = saved_text.contains("def");
-    let toggle_hit_the_selection = saved_text.contains("**def**");
+    if saved_text != EXPECTED_SAVED_TEXT {
+        return Err(format!(
+            "{NAME}: expected the saved bytes to be {EXPECTED_SAVED_TEXT:?} (the pending \
+             edit committed, then the toggle applied, as one patch), got {saved_text:?}; the \
+             field showed {field_value_after_click:?} right after the click"
+        ));
+    }
 
     Ok(vec![
         format!("field value right after the click: {field_value_after_click:?}"),
         format!("file on disk after Ctrl+S: {saved_text:?}"),
-        format!(
-            "hypothesis (the click loses the pending edit): {}",
-            if !toggle_hit_the_selection {
-                "confirmed"
-            } else {
-                "not confirmed"
-            }
-        ),
-        format!("the typed text survived onto disk at all: {typed_text_survived}"),
     ])
 }
 

@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   Typing `|` in a cell no longer adds a column.
 - Applying code formatting to text that already contained a backtick no
   longer produced a broken code span.
+- In Form Mode, text typed into a field is now saved when you press Ctrl+S
+  or switch mode without leaving the field first. Applying bold or italic
+  right after typing no longer loses what you typed.
 
 ## [0.17.0] - 2026-10-01
 

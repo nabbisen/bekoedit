@@ -68,13 +68,14 @@ pub fn resolve_form_edit(
         } => super::tables::resolve_replace_table_cell(text, block, *row, *col, cell_text)?,
         FormBlockEdit::AddTableRow => super::tables::resolve_add_table_row(text, block)?,
         FormBlockEdit::ToggleInline {
+            current_text,
             kind,
             utf16_start,
             utf16_len,
             link_url,
         } => super::inline_fmt::resolve_toggle_inline(
-            text,
             block,
+            current_text,
             *kind,
             *utf16_start,
             *utf16_len,
@@ -83,6 +84,7 @@ pub fn resolve_form_edit(
         FormBlockEdit::ToggleInlineInTableCell {
             row,
             col,
+            current_text,
             kind,
             utf16_start,
             utf16_len,
@@ -91,9 +93,9 @@ pub fn resolve_form_edit(
             text,
             block,
             (*row, *col),
+            current_text,
             *kind,
-            *utf16_start,
-            *utf16_len,
+            (*utf16_start, *utf16_len),
             link_url.as_deref(),
         )?,
     };

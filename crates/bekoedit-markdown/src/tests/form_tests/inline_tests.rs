@@ -30,6 +30,7 @@ fn toggle_bold_wraps_selection() {
     let out = apply_inline(
         doc,
         FormBlockEdit::ToggleInline {
+            current_text: "Hello world".to_string(),
             kind: InlineFormat::Bold,
             utf16_start: 6,
             utf16_len: 5,
@@ -46,6 +47,7 @@ fn toggle_bold_unwraps_existing_markers() {
     let out = apply_inline(
         doc,
         FormBlockEdit::ToggleInline {
+            current_text: "Hello **world**".to_string(),
             kind: InlineFormat::Bold,
             utf16_start: 6,
             utf16_len: 9,
@@ -62,6 +64,7 @@ fn toggle_italic_wraps() {
     let out = apply_inline(
         doc,
         FormBlockEdit::ToggleInline {
+            current_text: "some text".to_string(),
             kind: InlineFormat::Italic,
             utf16_start: 5,
             utf16_len: 4,
@@ -78,6 +81,7 @@ fn toggle_link_wraps_with_url() {
     let out = apply_inline(
         doc,
         FormBlockEdit::ToggleInline {
+            current_text: "Click here".to_string(),
             kind: InlineFormat::Link,
             utf16_start: 6,
             utf16_len: 4,
@@ -86,6 +90,31 @@ fn toggle_link_wraps_with_url() {
     )
     .unwrap();
     assert_eq!(out, "# T\n\nClick [here](https://example.com)\n");
+}
+
+// ---- task 048 D2: the toggle commits the field's own pending text, not
+// just the document's last-committed text ----
+
+#[test]
+fn a_toggle_commits_the_fields_pending_text_along_with_the_toggle() {
+    // The document still has "abc"; the field's live value is "abc def"
+    // (typed, never blurred/committed) -- exactly `toolbar_probe`'s own
+    // scenario (task 047/048). Selecting "def" (UTF-16 offsets 4..7) and
+    // toggling bold must both commit the pending " def" and wrap it, in
+    // one patch.
+    let doc = "# T\n\nabc\n";
+    let out = apply_inline(
+        doc,
+        FormBlockEdit::ToggleInline {
+            current_text: "abc def".to_string(),
+            kind: InlineFormat::Bold,
+            utf16_start: 4,
+            utf16_len: 3,
+            link_url: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(out, "# T\n\nabc **def**\n");
 }
 
 // ---- task 047 Part C: a code span's fence is never broken by a backtick
@@ -115,6 +144,7 @@ fn code_round_trip(original: &str, expected_wrapped: &str) {
     let wrapped_doc = apply_inline(
         &doc,
         FormBlockEdit::ToggleInline {
+            current_text: format!("{original} end"),
             kind: InlineFormat::Code,
             utf16_start: 0,
             utf16_len: original.encode_utf16().count(),
@@ -128,6 +158,7 @@ fn code_round_trip(original: &str, expected_wrapped: &str) {
     let back = apply_inline(
         &wrapped_doc,
         FormBlockEdit::ToggleInline {
+            current_text: format!("{expected_wrapped} end"),
             kind: InlineFormat::Code,
             utf16_start: 0,
             utf16_len: expected_wrapped.encode_utf16().count(),
@@ -165,6 +196,7 @@ fn inline_format_multibyte_utf16() {
     let out = apply_inline(
         doc,
         FormBlockEdit::ToggleInline {
+            current_text: "こんにちは世界".to_string(),
             kind: InlineFormat::Italic,
             utf16_start: 5,
             utf16_len: 2,
