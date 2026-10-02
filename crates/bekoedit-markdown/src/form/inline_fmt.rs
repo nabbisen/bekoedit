@@ -22,6 +22,58 @@ fn require_editable(block: &crate::block::BlockNode) -> Result<(), crate::form::
     }
 }
 
+/// The longest run of consecutive backticks anywhere in `text`.
+fn longest_backtick_run(text: &str) -> usize {
+    let mut longest = 0;
+    let mut current = 0;
+    for ch in text.chars() {
+        if ch == '`' {
+            current += 1;
+            longest = longest.max(current);
+        } else {
+            current = 0;
+        }
+    }
+    longest
+}
+
+/// Wraps `selected` in a code span the way CommonMark requires (task 047
+/// Part C): the backtick fence is one longer than the longest backtick run
+/// already inside `selected`, so the fence can never be mistaken for part
+/// of the content, and a single space pads each side when `selected`
+/// itself begins or ends with a backtick, so that backtick is never read
+/// as touching the fence.
+fn wrap_code(selected: &str) -> String {
+    let fence = "`".repeat(longest_backtick_run(selected) + 1);
+    if selected.starts_with('`') || selected.ends_with('`') {
+        format!("{fence} {selected} {fence}")
+    } else {
+        format!("{fence}{selected}{fence}")
+    }
+}
+
+/// The inverse of [`wrap_code`]: `None` if `selected` is not a backtick
+/// span at all (no matching, nonzero backtick run at both ends), so the
+/// caller falls through to wrapping it instead of double-unwrapping
+/// something `wrap_code` would never have produced.
+fn unwrap_code(selected: &str) -> Option<String> {
+    let leading = selected.chars().take_while(|&c| c == '`').count();
+    let trailing = selected.chars().rev().take_while(|&c| c == '`').count();
+    if leading == 0 || leading != trailing || selected.len() < leading + trailing {
+        return None;
+    }
+    let inner = &selected[leading..selected.len() - trailing];
+    if let Some(unpadded) = inner.strip_prefix(' ').and_then(|s| s.strip_suffix(' '))
+        && (unpadded.starts_with('`') || unpadded.ends_with('`') || unpadded.is_empty())
+    {
+        // The space either side exists only because `wrap_code` had to pad
+        // a leading/trailing backtick (or an empty selection); it is not
+        // part of the original text.
+        return Some(unpadded.to_string());
+    }
+    Some(inner.to_string())
+}
+
 /// The result of toggling `kind`'s markup around `selected` text: unwrapped
 /// if `selected` is already wrapped in `kind`'s own markers, wrapped
 /// otherwise (RFC-030). The one place this decision is made -- both
@@ -29,8 +81,13 @@ fn require_editable(block: &crate::block::BlockNode) -> Result<(), crate::form::
 /// `form::tables::resolve_toggle_inline_in_table_cell` (one table cell's
 /// content, RFC-048 slice 2) call this, so a fix to how a format wraps or
 /// unwraps (review, 2026-10-02 §3.1: the two had drifted into separate
-/// copies) only has to happen once.
+/// copies) only has to happen once -- including task 047 Part C's
+/// backtick-safe code span, below.
 pub fn toggled_text(selected: &str, kind: InlineFormat, link_url: Option<&str>) -> String {
+    if kind == InlineFormat::Code {
+        return unwrap_code(selected).unwrap_or_else(|| wrap_code(selected));
+    }
+
     let open_m = kind.open_marker();
     let close_m = kind.close_marker();
 

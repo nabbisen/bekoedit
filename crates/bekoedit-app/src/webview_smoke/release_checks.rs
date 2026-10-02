@@ -42,6 +42,7 @@ mod paste_probe;
 mod paste_report;
 mod save;
 mod seed;
+mod toolbar_probe;
 pub(super) use seed::prepare;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,6 +65,11 @@ pub enum ReleaseScenario {
     /// RFC-046 slice 2, part B §3.6: the paste handler end to end -- a real
     /// Ctrl+V converts and saves, a real Ctrl+Shift+V pastes plain.
     PasteConversion,
+    /// Task 047 Part A: does a Form Mode toolbar click commit the field's
+    /// pending (typed, never-blurred) text along with the toggle, or only
+    /// the document's last-committed text? Reports; asserts no product
+    /// behaviour.
+    ToolbarProbe,
 }
 
 impl ReleaseScenario {
@@ -78,6 +84,7 @@ impl ReleaseScenario {
             Self::LinkClicksReachOnlyTheBrowser => link_judge::NAME,
             Self::PasteProbe => paste_probe::NAME,
             Self::PasteConversion => paste_conversion::NAME,
+            Self::ToolbarProbe => toolbar_probe::NAME,
         }
     }
 
@@ -92,6 +99,7 @@ impl ReleaseScenario {
             Self::LinkClicksReachOnlyTheBrowser,
             Self::PasteProbe,
             Self::PasteConversion,
+            Self::ToolbarProbe,
         ]
         .into_iter()
         .find(|scenario| scenario.name() == name)
@@ -100,7 +108,7 @@ impl ReleaseScenario {
                 "unknown release-checks scenario {name:?}; expected reopen_usable, \
                  reopen_missing, reopen_disabled, save_preserves_bytes, \
                  save_preserves_crlf_bytes, mode_switch_preserves_bytes link_clicks_reach_only_the_browser, \
-                 paste_probe or paste_conversion"
+                 paste_probe, paste_conversion or toolbar_probe"
             )
         })
     }
@@ -181,6 +189,7 @@ pub fn WebViewReleaseChecksDriver() -> Element {
                 ReleaseScenario::PasteConversion => {
                     paste_conversion::run(&terminal, &desktop).await
                 }
+                ReleaseScenario::ToolbarProbe => toolbar_probe::run(&terminal, &desktop).await,
                 _ => launch::run(&terminal, state, toasts, lang).await,
             };
             match outcome.and_then(|checks| terminal.accept().map(|()| checks)) {

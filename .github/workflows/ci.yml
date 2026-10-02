@@ -476,10 +476,18 @@ jobs:
         # paste handler itself (a real Ctrl+V converts and saves; a real
         # Ctrl+Shift+V pastes plain); the soak RESTARTS at 0 of 10 again from the
         # run that first contains it.
+        # Task 047 Part A then added `toolbar_probe`, which sets a Form Mode
+        # paragraph field's value and selection from script (the same
+        # uncommitted state a user's own typing leaves before a toolbar click,
+        # since `onchange` only fires on blur and the toolbar's buttons
+        # `preventDefault` on `mousedown` to keep the field focused), sends a
+        # real click at the Bold button, and reports what the field shows and
+        # what Ctrl+S actually saves. It asserts no product behaviour; the soak
+        # RESTARTS at 0 of 10 again from the run that first contains it.
         id: release_checks
         run: |
           failed=0
-          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe paste_conversion; do
+          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe paste_conversion toolbar_probe; do
             RELEASE_CHECKS_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-release-checks.XXXXXX")"
             echo "release-checks scenario: $scenario"
             # Task 033: only this scenario gets stub openers. $BROWSER is the

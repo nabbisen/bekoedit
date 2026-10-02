@@ -490,6 +490,30 @@ mod app_tests {
         assert_eq!(used_width(180, 120), 104);
     }
 
+    /// Task 047 Part B: the inline-formatting toolbar used to install a
+    /// brand-new `window.__bk_form_relay` plus a `while (true)` keep-alive
+    /// loop on every click, rebinding the one over the last without ever
+    /// releasing it -- each click left its predecessor's query running
+    /// forever, accumulating over a session. The fix reads the selection
+    /// through `bridge::eval_body`'s bounded, release-after-recv, never
+    /// `join`ed one-shot instead, which has nothing left to accumulate.
+    #[test]
+    fn inline_toolbar_reads_selection_through_the_one_shot_eval_not_a_persistent_relay() {
+        let toolbar = include_str!("components/form_mode/inline_toolbar.rs");
+        assert!(
+            !toolbar.contains("__bk_form_relay"),
+            "the old per-click relay must be gone entirely: {toolbar}"
+        );
+        assert!(
+            !toolbar.contains("while(true)") && !toolbar.contains("while (true)"),
+            "no click handler may install its own keep-alive loop: {toolbar}"
+        );
+        assert!(
+            toolbar.contains("crate::bridge::eval_body::<Sel>(&js)"),
+            "a click must read the selection through the shared one-shot eval: {toolbar}"
+        );
+    }
+
     #[test]
     fn task_005_settings_layer_cleanup_contracts() {
         let fs_lib = include_str!("../../bekoedit-fs/src/lib.rs");

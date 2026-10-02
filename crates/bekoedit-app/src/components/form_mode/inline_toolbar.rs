@@ -28,6 +28,17 @@ use crate::i18n::{Lang, tr};
 /// down by the toolbar's own height under the user's pointer on their
 /// first click into it. While no cell has focus the buttons are present
 /// but `disabled`, reserving the space without doing anything.
+///
+/// A click reads the selection through `crate::bridge::eval_body` (task 047
+/// Part B): one bounded, self-releasing round trip per click, exactly the
+/// shape `release_checks::dom`'s one-shot reads already used. Before this,
+/// every click installed a brand-new window-bound relay function plus its
+/// own never-ending keep-alive loop, rebinding the one over the last
+/// without ever releasing it -- each click left its predecessor's loop and
+/// query running forever, accumulating over the session. A one-shot read
+/// has nothing left to accumulate: its query is released, and its
+/// page-side promise resolves, within the same round trip that answers
+/// the click.
 #[component]
 pub fn InlineToolbar(
     field_id: String,
@@ -50,55 +61,41 @@ pub fn InlineToolbar(
                 // Prevent textarea from losing focus on mousedown.
                 onmousedown: |evt| evt.prevent_default(),
                 onclick: move |_| {
-                    // Read selection from the textarea, then dispatch the command.
+                    // Read the textarea's selection in one bounded,
+                    // self-releasing round trip (task 047 Part B), then
+                    // dispatch the command.
                     let js = format!(
-                        r#"
-                        (function() {{
-                            var el = document.getElementById({id});
-                            var s = el ? el.selectionStart : 0;
-                            var e = el ? el.selectionEnd   : 0;
-                            window.__bk_form_relay?.(JSON.stringify({{s:s,e:e}}));
-                        }})();
-                        "#,
+                        "const el = document.getElementById({id}); \
+                         return {{ s: el ? el.selectionStart : 0, e: el ? el.selectionEnd : 0 }};",
                         id = crate::bridge::js_string_literal(&fid)
                     );
-                    // Receive the selection asynchronously then dispatch.
-                    let bid   = block_id;
-                    let rev   = revision;
-                    let k     = kind;
+                    let bid = block_id;
+                    let rev = revision;
+                    let k = kind;
                     let st = state;
                     spawn(async move {
-                        let relay_js = r#"
-                            window.__bk_form_relay = (msg) => dioxus.send(msg);
-                            (async()=>{ while(true){ await new Promise(r=>setTimeout(r,86400000));} })();
-                        "#;
-                        let mut relay = document::eval(relay_js);
-                        // Fire the selection-read JS, then wait for the reply.
-                        document::eval(&js);
-                        if let Ok(raw) = relay.recv().await {
-                            #[derive(serde::Deserialize)]
-                            struct Sel { s: usize, e: usize }
-                            if let Ok(Sel { s, e }) = serde_json::from_value::<Sel>(raw) {
-                                let utf16_start = s;
-                                let utf16_len = e.saturating_sub(s);
-                                let edit = match cell {
-                                    Some((row, col)) => FormBlockEdit::ToggleInlineInTableCell {
-                                        row,
-                                        col,
-                                        kind: k,
-                                        utf16_start,
-                                        utf16_len,
-                                        link_url: None,
-                                    },
-                                    None => FormBlockEdit::ToggleInline {
-                                        kind: k,
-                                        utf16_start,
-                                        utf16_len,
-                                        link_url: None,
-                                    },
-                                };
-                                dispatch(st, rev, bid, edit);
-                            }
+                        #[derive(serde::Deserialize)]
+                        struct Sel { s: usize, e: usize }
+                        if let Ok(Sel { s, e }) = crate::bridge::eval_body::<Sel>(&js).await {
+                            let utf16_start = s;
+                            let utf16_len = e.saturating_sub(s);
+                            let edit = match cell {
+                                Some((row, col)) => FormBlockEdit::ToggleInlineInTableCell {
+                                    row,
+                                    col,
+                                    kind: k,
+                                    utf16_start,
+                                    utf16_len,
+                                    link_url: None,
+                                },
+                                None => FormBlockEdit::ToggleInline {
+                                    kind: k,
+                                    utf16_start,
+                                    utf16_len,
+                                    link_url: None,
+                                },
+                            };
+                            dispatch(st, rev, bid, edit);
                         }
                     });
                 },

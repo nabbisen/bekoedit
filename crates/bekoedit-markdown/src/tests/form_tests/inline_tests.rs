@@ -88,6 +88,76 @@ fn toggle_link_wraps_with_url() {
     assert_eq!(out, "# T\n\nClick [here](https://example.com)\n");
 }
 
+// ---- task 047 Part C: a code span's fence is never broken by a backtick
+// already inside the selection ----
+
+fn assert_single_code_event(markdown: &str, expected_text: &str) {
+    let events: Vec<String> = pulldown_cmark::Parser::new(markdown)
+        .filter_map(|event| match event {
+            pulldown_cmark::Event::Code(text) => Some(text.into_string()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        events,
+        vec![expected_text.to_string()],
+        "parsing {markdown:?}"
+    );
+}
+
+/// Wraps `original`, checks the exact fence `wrap_code` must produce and
+/// that `pulldown-cmark` parses it back to one `Code` event holding
+/// `original` verbatim, then unwraps it again and checks the bytes are
+/// exactly the original document -- "unwrap recognises what it wrapped"
+/// (task 047 §3).
+fn code_round_trip(original: &str, expected_wrapped: &str) {
+    let doc = format!("# T\n\n{original} end\n");
+    let wrapped_doc = apply_inline(
+        &doc,
+        FormBlockEdit::ToggleInline {
+            kind: InlineFormat::Code,
+            utf16_start: 0,
+            utf16_len: original.encode_utf16().count(),
+            link_url: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(wrapped_doc, format!("# T\n\n{expected_wrapped} end\n"));
+    assert_single_code_event(&wrapped_doc, original);
+
+    let back = apply_inline(
+        &wrapped_doc,
+        FormBlockEdit::ToggleInline {
+            kind: InlineFormat::Code,
+            utf16_start: 0,
+            utf16_len: expected_wrapped.encode_utf16().count(),
+            link_url: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(back, doc);
+}
+
+#[test]
+fn code_with_no_backtick_uses_a_single_backtick_fence() {
+    code_round_trip("ab", "`ab`");
+}
+
+#[test]
+fn code_around_one_contained_backtick_uses_a_double_backtick_fence() {
+    code_round_trip("a`b", "``a`b``");
+}
+
+#[test]
+fn code_around_a_contained_double_backtick_uses_a_triple_backtick_fence() {
+    code_round_trip("a``b", "```a``b```");
+}
+
+#[test]
+fn code_around_a_leading_backtick_is_padded_with_spaces() {
+    code_round_trip("`x", "`` `x ``");
+}
+
 #[test]
 fn inline_format_multibyte_utf16() {
     // "世界" starts at UTF-16 offset 5 (こんにちは = 5 × 1 UTF-16 unit each)

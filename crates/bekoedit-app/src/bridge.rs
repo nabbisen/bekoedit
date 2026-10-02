@@ -7,7 +7,9 @@
 //! - Embeds the BRIDGE_SCHEMA_VERSION so the JS side can detect mismatches.
 
 use bekoedit_ui_contract::BRIDGE_SCHEMA_VERSION;
+use dioxus::prelude::*;
 use std::fmt::Display;
+use std::time::Duration;
 
 const SOURCE_TRACE_ENV: &str = "BEKOEDIT_SOURCE_TRACE";
 
@@ -78,6 +80,92 @@ pub fn clear_relay_js(relay_name: &str, generation: u64) -> String {
     )
 }
 
+const EVAL_TIMEOUT: Duration = Duration::from_secs(3);
+/// Longer than `EVAL_TIMEOUT`, so the ordinary path always resolves via the
+/// release, not this bound -- it exists only so a dropped `EVAL_TIMEOUT`
+/// race (Rust gave up waiting, so it never sends a release) cannot leave the
+/// page's promise, and the query it keeps reachable, pending forever (same
+/// reasoning as `source_sync::focus`'s `GUARD_RELEASE_TIMEOUT_MS`).
+const RELEASE_TIMEOUT_MS: u64 = EVAL_TIMEOUT.as_millis() as u64 + 1000;
+
+/// What the page sent back: either the body's own return value, or -- if it
+/// threw -- the exception's own message, so a thrown script is reported as
+/// that error rather than read as a silent timeout.
+#[derive(Debug, serde::Deserialize)]
+struct EvalEnvelope {
+    ok: bool,
+    #[serde(default)]
+    value: serde_json::Value,
+    #[serde(default)]
+    error: String,
+}
+
+/// The script that wraps one function `body` (which may itself `return` a
+/// value) in a send/wait-for-release envelope (tasks 039/040's eval-lifetime
+/// rules): the evaluated function does not resolve, and so cannot be closed
+/// and collected, until the release arrives or the bound elapses, which is
+/// what keeps a one-shot read safe from the Dioxus 0.7.9 drop race
+/// `source_sync::focus`'s `arm_focus_guard_js` doc comment documents in full.
+fn eval_envelope_js(body: &str) -> String {
+    format!(
+        r#"
+        return (async () => {{
+            let result;
+            try {{
+                const value = await (async () => {{ {body} }})();
+                result = {{ ok: true, value }};
+            }} catch (error) {{
+                result = {{ ok: false, error: String(error) }};
+            }}
+            dioxus.send(result);
+            // Stay alive until Rust releases this query, bounded so a
+            // dropped EVAL_TIMEOUT race (Rust stopped waiting and never
+            // sends a release) cannot leave this promise pending forever.
+            await Promise.race([
+                dioxus.recv(),
+                new Promise((resolve) => setTimeout(resolve, {RELEASE_TIMEOUT_MS})),
+            ]);
+            return null;
+        }})();
+        "#,
+    )
+}
+
+/// What `eval_body` does with the page's envelope once it has it: the body's
+/// own return value decoded as `T`, or -- if the body threw -- the
+/// exception's message, verbatim, as the `Err`. Pure, so it is tested
+/// directly without a live WebView.
+fn decode_envelope<T: serde::de::DeserializeOwned>(envelope: EvalEnvelope) -> Result<T, String> {
+    if envelope.ok {
+        serde_json::from_value(envelope.value)
+            .map_err(|error| format!("could not decode the page's answer: {error}"))
+    } else {
+        Err(envelope.error)
+    }
+}
+
+/// Evaluates `body` (a function body; it may `return` a value) and decodes
+/// its return value as `T`. One self-contained, bounded, release-after-recv,
+/// never-`join`ed round trip per call (tasks 039/040) -- the shared place
+/// every one-shot read or command in this app goes through, so there is one
+/// copy of the eval/recv/release shape to re-audit before a Dioxus update.
+/// Never leaves a lingering `window`-bound relay or keep-alive loop behind:
+/// unlike a persistent relay, nothing here outlives the single call that
+/// created it (task 047 Part B, moved here from `release_checks::dom` since
+/// the inline-formatting toolbar needed the exact same one-shot shape).
+pub async fn eval_body<T: serde::de::DeserializeOwned>(body: &str) -> Result<T, String> {
+    let mut eval = document::eval(&eval_envelope_js(body));
+    let envelope: EvalEnvelope = tokio::time::timeout(EVAL_TIMEOUT, eval.recv())
+        .await
+        .map_err(|_| format!("no answer within {EVAL_TIMEOUT:?}"))?
+        .map_err(|error| error.to_string())?;
+    // Released after `recv` returns, whether or not the envelope goes on to
+    // decode below, and never `join`ed -- there is nothing left to read
+    // after this that could lose anything.
+    let _ = eval.send(true);
+    decode_envelope(envelope)
+}
+
 pub const RELAY_RESTART_BASE_MS: u64 = 100;
 pub const RELAY_RESTART_CAP_MS: u64 = 400;
 
@@ -90,35 +178,4 @@ pub fn relay_restart_delay_ms(consecutive_failures: u32) -> u64 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn relay_backoff_caps_without_exhausting() {
-        let delays: Vec<_> = (1..=20).map(relay_restart_delay_ms).collect();
-        assert_eq!(&delays[..3], &[100, 200, 400]);
-        assert!(delays[3..].iter().all(|delay| *delay == 400));
-    }
-
-    #[test]
-    fn relay_scripts_bind_and_clear_only_the_exact_generation() {
-        let install = relay_js("__test_relay", 41);
-        let clear = clear_relay_js("__test_relay", 41);
-        assert!(install.contains("relay.__bkGeneration = 41"));
-        assert!(install.contains("relayGenerationReady"));
-        assert!(clear.contains("relay.__bkGeneration === 41"));
-        assert!(clear.contains("delete window.__test_relay"));
-    }
-
-    #[test]
-    fn a_literal_escapes_both_line_separators_and_round_trips() {
-        let text = "a\u{2028}b\u{2029}c \"q\" \\ </script> \u{1} é日本🙂\r\n";
-        let literal = js_string_literal(text);
-        assert!(literal.starts_with('"') && literal.ends_with('"'));
-        assert!(literal.contains("\\u2028") && literal.contains("\\u2029"));
-        assert!(!literal.contains('\u{2028}') && !literal.contains('\u{2029}'));
-        // A JSON parser (which follows the same escape rules as a JS string
-        // literal for these) recovers the original exactly.
-        assert_eq!(serde_json::from_str::<String>(&literal).unwrap(), text);
-    }
-}
+mod tests;

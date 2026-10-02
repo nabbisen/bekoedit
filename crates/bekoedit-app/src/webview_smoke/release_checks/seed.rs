@@ -22,6 +22,13 @@ pub(super) const OPENER_LOG_ENV: &str = "BEKOEDIT_LINK_OPENER_LOG";
 /// Typed into the seeded file by the save scenario. Absent from the original.
 pub(super) const EDIT_MARKER: &str = "ZQ7";
 
+/// `toolbar_probe`: a single paragraph, simple enough that Form Mode renders
+/// exactly one `InlineToolbar` -- the hypothesis is about that one toolbar's
+/// one click, not about a whole document's worth of blocks.
+pub(super) fn original_paragraph_note() -> Vec<u8> {
+    b"abc\n".to_vec()
+}
+
 /// Mixed line endings (CRLF around one bare LF, and an unterminated last
 /// line), plus constructs the parser preserves: a table, a fenced block and an
 /// HTML comment. The first line is CRLF, and it is the one the scenario edits.
@@ -143,6 +150,12 @@ pub(in crate::webview_smoke) fn prepare(
             let file = workspace.join(SAVE_FILE);
             (workspace, "Save Project".to_string(), original, Some(file))
         }
+        ReleaseScenario::ToolbarProbe => {
+            let original = original_paragraph_note();
+            let workspace = make_workspace(&root, "save-project", &[(SAVE_FILE, &original)])?;
+            let file = workspace.join(SAVE_FILE);
+            (workspace, "Save Project".to_string(), original, Some(file))
+        }
     };
     recents.record(workspace.clone(), display_name.clone(), 2);
 
@@ -153,6 +166,9 @@ pub(in crate::webview_smoke) fn prepare(
         default_mode: if scenario == ReleaseScenario::LinkClicksReachOnlyTheBrowser {
             // The links are clicked in the rendered note.
             EditorMode::Preview
+        } else if scenario == ReleaseScenario::ToolbarProbe {
+            // The toolbar being probed is Form Mode's own.
+            EditorMode::Form
         } else {
             EditorMode::Text
         },

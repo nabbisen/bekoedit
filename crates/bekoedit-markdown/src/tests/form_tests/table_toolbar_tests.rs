@@ -81,6 +81,15 @@ fn code_applied_in_a_cell_with_an_escaped_pipe_changes_only_the_selection() {
 }
 
 #[test]
+fn code_around_a_backtick_already_in_a_cell_uses_a_longer_fence() {
+    // Confirms task 047 Part C's fix lands here too: the cell's wrap goes
+    // through the same shared `toggled_text` as a paragraph's.
+    let doc = "| a | b |\n|---|---|\n| x | a`b |\n";
+    let out = toggle_in_cell(doc, 1, 1, InlineFormat::Code, 0, 3);
+    assert_eq!(out, "| a | b |\n|---|---|\n| x | ``a`b`` |\n");
+}
+
+#[test]
 fn bold_in_a_japanese_cell_changes_only_that_cell() {
     let doc = "| 名前 | 点数 |\n|------|------|\n| 太郎 | 90 |\n";
     let out = toggle_in_cell(doc, 1, 0, InlineFormat::Bold, 0, 2);

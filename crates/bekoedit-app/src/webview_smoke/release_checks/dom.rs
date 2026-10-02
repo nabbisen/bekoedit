@@ -1,109 +1,20 @@
 //! One-shot DOM reads for the release-checks driver.
 //!
-//! Task 039's sighting showed that awaiting a `join` immediately, with
-//! nothing else in between, does not protect it: between the page's `return`
-//! message waking the spawned task and that task's next poll, a
-//! garbage-collection `drop` can free the evaluator (the generational
-//! `Owner` a `QueryEntry`'s slab entry holds -- see `focus.rs`'s own
-//! `arm_focus_guard_js` doc comment for the full mechanism, confirmed
-//! against the real `dioxus-desktop` 0.7.9 sources). Every read here uses the
-//! same shape as that fix instead: the page sends its value with
-//! `dioxus.send`, then waits for Rust's release, bounded; Rust reads with
-//! `recv`, sends the release, and never `join`s.
+//! Every read here goes through `crate::bridge::eval_body`, the bounded,
+//! release-after-recv, never-`join`ed one-shot eval shared across the app
+//! (task 039/040's eval-lifetime rules; task 047 Part B generalised it from
+//! this module into `bridge.rs` so the inline-formatting toolbar's one-shot
+//! selection read could use the exact same shape).
 
-use std::time::Duration;
-
-use dioxus::prelude::*;
 use serde::Deserialize;
 
-const EVAL_TIMEOUT: Duration = Duration::from_secs(3);
-/// Longer than `EVAL_TIMEOUT`, so the ordinary path always resolves via the
-/// release, not this bound -- it exists only so a dropped `EVAL_TIMEOUT`
-/// race (Rust gave up waiting, so it never sends a release) cannot leave the
-/// page's promise, and the query it keeps reachable, pending forever (same
-/// reasoning as `focus.rs`'s `GUARD_RELEASE_TIMEOUT_MS`).
-const RELEASE_TIMEOUT_MS: u64 = EVAL_TIMEOUT.as_millis() as u64 + 1000;
+use crate::bridge::eval_body;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct DomSnapshot {
     pub start_screen: bool,
     pub tree_rows: usize,
-}
-
-/// What the page sent back: either the body's own return value, or -- if it
-/// threw -- the exception's own message, so a thrown script is reported as
-/// that error rather than read as a silent timeout.
-#[derive(Debug, Deserialize)]
-struct EvalEnvelope {
-    ok: bool,
-    #[serde(default)]
-    value: serde_json::Value,
-    #[serde(default)]
-    error: String,
-}
-
-/// The script that wraps one function `body` (which may itself `return` a
-/// value) in the send/wait-for-release envelope every read here shares. The
-/// leading `return` matters exactly as it does in `arm_focus_guard_js`: the
-/// evaluated function does not resolve, and so cannot be closed and
-/// collected, until the release arrives or the bound elapses.
-fn eval_envelope_js(body: &str) -> String {
-    format!(
-        r#"
-        return (async () => {{
-            let result;
-            try {{
-                const value = await (async () => {{ {body} }})();
-                result = {{ ok: true, value }};
-            }} catch (error) {{
-                result = {{ ok: false, error: String(error) }};
-            }}
-            dioxus.send(result);
-            // Stay alive until Rust releases this query, bounded so a
-            // dropped EVAL_TIMEOUT race (Rust stopped waiting and never
-            // sends a release) cannot leave this promise pending forever.
-            await Promise.race([
-                dioxus.recv(),
-                new Promise((resolve) => setTimeout(resolve, {RELEASE_TIMEOUT_MS})),
-            ]);
-            return null;
-        }})();
-        "#,
-    )
-}
-
-/// Evaluates `body` (a function body; `returned` below wraps a bare
-/// expression in one `return` statement to reuse this) and decodes its
-/// return value as `T`. The one place every read here goes through, so
-/// there is one copy of the eval/recv/release shape to re-audit before a
-/// Dioxus update (`focus.rs`'s `arm_focus_guard_js` doc comment names the
-/// files).
-async fn eval_body<T: serde::de::DeserializeOwned>(body: &str) -> Result<T, String> {
-    let mut eval = document::eval(&eval_envelope_js(body));
-    let envelope: EvalEnvelope = tokio::time::timeout(EVAL_TIMEOUT, eval.recv())
-        .await
-        .map_err(|_| format!("no answer within {EVAL_TIMEOUT:?}"))?
-        .map_err(|error| error.to_string())?;
-    // Task 040 §2.1: released after `recv` returns, whether or not the
-    // envelope goes on to decode below, and never `join`ed -- there is
-    // nothing left to read after this that could lose anything.
-    let _ = eval.send(true);
-    decode_envelope(envelope)
-}
-
-/// What `eval_body` does with the page's envelope once it has it: the body's
-/// own return value decoded as `T`, or -- if the body threw -- the exception's
-/// message, verbatim, as the `Err`. Pure, so it is tested directly without a
-/// live WebView; `eval_body` is the only caller, and the only place a live
-/// `document::eval` is involved.
-fn decode_envelope<T: serde::de::DeserializeOwned>(envelope: EvalEnvelope) -> Result<T, String> {
-    if envelope.ok {
-        serde_json::from_value(envelope.value)
-            .map_err(|error| format!("could not decode the page's answer: {error}"))
-    } else {
-        Err(envelope.error)
-    }
 }
 
 /// Names `expression` in a failed read's error, as `join`'s own error did
@@ -154,6 +65,11 @@ pub(super) async fn editor_contains(needle: &str) -> Result<bool, String> {
         "Boolean(window.__bk?._view?.state.doc.toString().includes({needle}))"
     ))
     .await
+}
+
+/// Form Mode is showing its one seeded paragraph field (`toolbar_probe`).
+pub(super) async fn form_paragraph_present() -> Result<bool, String> {
+    returned("document.querySelector('.form-mode .paragraph-input') !== null").await
 }
 
 /// The Preview tab is the selected mode tab.
