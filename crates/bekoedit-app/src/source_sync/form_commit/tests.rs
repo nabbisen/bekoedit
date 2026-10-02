@@ -250,3 +250,60 @@ fn each_reason_has_its_own_trace_label() {
         "the value was unchanged"
     );
 }
+
+// ------------------------------------------------- active-element description
+
+fn is_balanced(script: &str) -> bool {
+    let mut parens = 0i32;
+    let mut braces = 0i32;
+    for c in script.chars() {
+        match c {
+            '(' => parens += 1,
+            ')' => parens -= 1,
+            '{' => braces += 1,
+            '}' => braces -= 1,
+            _ => {}
+        }
+        if parens < 0 || braces < 0 {
+            return false;
+        }
+    }
+    parens == 0 && braces == 0
+}
+
+#[test]
+fn pending_field_js_and_describe_active_element_js_are_balanced() {
+    assert!(is_balanced(&pending_field_js()), "{}", pending_field_js());
+    assert!(
+        is_balanced(&describe_active_element_js()),
+        "{}",
+        describe_active_element_js()
+    );
+}
+
+/// Task 050 §2.3: the description must never read the active element's
+/// value or text, only what identifies it. A string-level check, since
+/// that is what the task's own evidence requirement asks for.
+#[test]
+fn the_description_never_reads_value_or_text() {
+    for forbidden in ["el.value", "textContent", "innerText"] {
+        assert!(
+            !DESCRIBE_ACTIVE_ELEMENT_JS.contains(forbidden),
+            "{DESCRIBE_ACTIVE_ELEMENT_JS} contains {forbidden:?}"
+        );
+    }
+}
+
+#[test]
+fn trace_line_names_every_field() {
+    let description = ActiveElementDescription {
+        tag: "button".to_string(),
+        id: "tree-row-3".to_string(),
+        classes: vec!["tree-row".to_string(), "tree-file".to_string()],
+        in_form_mode: false,
+    };
+    assert_eq!(
+        description.trace_line(),
+        "tag=\"button\" id=\"tree-row-3\" classes=[\"tree-row\", \"tree-file\"] in_form_mode=false"
+    );
+}

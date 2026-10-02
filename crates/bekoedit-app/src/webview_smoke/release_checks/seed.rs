@@ -152,7 +152,8 @@ pub(in crate::webview_smoke) fn prepare(
         }
         ReleaseScenario::ToolbarProbe
         | ReleaseScenario::SavePendingField
-        | ReleaseScenario::FormFieldCommitsBeforeModeSwitch => {
+        | ReleaseScenario::FormFieldCommitsBeforeModeSwitch
+        | ReleaseScenario::KeyboardModeSwitchCommitsPendingField => {
             let original = original_paragraph_note();
             let workspace = make_workspace(&root, "save-project", &[(SAVE_FILE, &original)])?;
             let file = workspace.join(SAVE_FILE);
@@ -173,8 +174,9 @@ pub(in crate::webview_smoke) fn prepare(
             ReleaseScenario::ToolbarProbe
                 | ReleaseScenario::SavePendingField
                 | ReleaseScenario::FormFieldCommitsBeforeModeSwitch
+                | ReleaseScenario::KeyboardModeSwitchCommitsPendingField
         ) {
-            // Each of these three starts with a Form Mode field.
+            // Each of these four starts with a Form Mode field.
             EditorMode::Form
         } else {
             EditorMode::Text

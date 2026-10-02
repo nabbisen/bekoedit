@@ -34,6 +34,7 @@ mod bytes;
 mod dom;
 mod form_commit_trace;
 mod form_field_commits_before_mode_switch;
+mod keyboard_mode_switch_commits_pending_field;
 mod launch;
 mod link_clicks;
 mod link_judge;
@@ -81,6 +82,11 @@ pub enum ReleaseScenario {
     /// (claiming editor focus, `source_sync::focus`'s async arming) also
     /// commits a Form Mode field's pending text first.
     FormFieldCommitsBeforeModeSwitch,
+    /// Task 050 §2.2: the same commit, via a **keyboard** mode switch
+    /// (Ctrl+1) with the field still focused and never clicked away from
+    /// -- `save_pending_field`'s own keyboard path, for a mode switch
+    /// instead of Ctrl+S, the gap the task 049 review named.
+    KeyboardModeSwitchCommitsPendingField,
 }
 
 impl ReleaseScenario {
@@ -98,6 +104,9 @@ impl ReleaseScenario {
             Self::ToolbarProbe => toolbar_probe::NAME,
             Self::SavePendingField => save_pending_field::NAME,
             Self::FormFieldCommitsBeforeModeSwitch => form_field_commits_before_mode_switch::NAME,
+            Self::KeyboardModeSwitchCommitsPendingField => {
+                keyboard_mode_switch_commits_pending_field::NAME
+            }
         }
     }
 
@@ -115,6 +124,7 @@ impl ReleaseScenario {
             Self::ToolbarProbe,
             Self::SavePendingField,
             Self::FormFieldCommitsBeforeModeSwitch,
+            Self::KeyboardModeSwitchCommitsPendingField,
         ]
         .into_iter()
         .find(|scenario| scenario.name() == name)
@@ -123,8 +133,9 @@ impl ReleaseScenario {
                 "unknown release-checks scenario {name:?}; expected reopen_usable, \
                  reopen_missing, reopen_disabled, save_preserves_bytes, \
                  save_preserves_crlf_bytes, mode_switch_preserves_bytes link_clicks_reach_only_the_browser, \
-                 paste_probe, paste_conversion, toolbar_probe, save_pending_field or \
-                 form_field_commits_before_mode_switch"
+                 paste_probe, paste_conversion, toolbar_probe, save_pending_field, \
+                 form_field_commits_before_mode_switch or \
+                 keyboard_mode_switch_commits_pending_field"
             )
         })
     }
@@ -211,6 +222,9 @@ pub fn WebViewReleaseChecksDriver() -> Element {
                 }
                 ReleaseScenario::FormFieldCommitsBeforeModeSwitch => {
                     form_field_commits_before_mode_switch::run(&terminal, &desktop).await
+                }
+                ReleaseScenario::KeyboardModeSwitchCommitsPendingField => {
+                    keyboard_mode_switch_commits_pending_field::run(&terminal, &desktop).await
                 }
                 _ => launch::run(&terminal, state, toasts, lang).await,
             };

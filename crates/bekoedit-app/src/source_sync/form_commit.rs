@@ -19,18 +19,83 @@ use serde::Deserialize;
 
 use crate::state::now_ms;
 
+/// `el`'s own tag, id, first two classes, and whether it is inside
+/// `.form-mode` -- never its value or text (task 050 §2.3). A function
+/// *body* operating on a variable named `el` already in scope, shared,
+/// unchanged, by [`pending_field_js`]'s own two early returns and by
+/// [`describe_active_element_js`] -- one description, so a trace inside
+/// the commit path and the `save_pending_field` scenario's own
+/// focus-thief report (task 050 §2.4) can never disagree about what "no
+/// field" means.
+const DESCRIBE_ACTIVE_ELEMENT_JS: &str = "\
+    const classes = el && el.className ? String(el.className).split(/\\s+/).filter(Boolean).slice(0, 2) : []; \
+    return { tag: el ? el.tagName.toLowerCase() : '', id: (el && el.id) || '', classes, inFormMode: !!(el && el.closest && el.closest('.form-mode')) };";
+
+/// A standalone script describing `document.activeElement`, for use
+/// outside the commit path itself -- task 050 §2.4's "what has focus,
+/// right now" report.
+pub(crate) fn describe_active_element_js() -> String {
+    format!("const el = document.activeElement; {DESCRIBE_ACTIVE_ELEMENT_JS}")
+}
+
 /// Finds the focused Form Mode field, if any, and reads its live value and
 /// whether an IME composition is in progress, in one bounded round trip
-/// (`bridge::eval_body`). `null` (decodes to `None`) whenever nothing
-/// inside `.form-mode` has focus.
-const PENDING_FIELD_JS: &str = "\
-    const el = document.activeElement; \
-    if (!el || typeof el.value !== 'string' || !el.closest || !el.closest('.form-mode')) return null; \
-    const id = el.id || ''; \
-    if (!id.startsWith('fb-')) return null; \
-    return { id, value: el.value, composing: window.__bk_form_composing === true };";
+/// (`bridge::eval_body`). `NoField` (task 050 §2.3, replacing a bare
+/// `null`) whenever nothing inside `.form-mode` has focus, carrying a
+/// description of whatever *does*.
+fn pending_field_js() -> String {
+    format!(
+        "const describe = (el) => {{ {DESCRIBE_ACTIVE_ELEMENT_JS} }}; \
+         const el = document.activeElement; \
+         if (!el || typeof el.value !== 'string' || !el.closest || !el.closest('.form-mode')) {{ \
+             return {{ kind: 'noField', description: describe(el) }}; \
+         }} \
+         const id = el.id || ''; \
+         if (!id.startsWith('fb-')) {{ \
+             return {{ kind: 'noField', description: describe(el) }}; \
+         }} \
+         return {{ kind: 'field', id, value: el.value, composing: window.__bk_form_composing === true }};"
+    )
+}
 
+/// `document.activeElement`'s own tag, id, first two classes, and
+/// whether it is inside `.form-mode` -- task 050 §2.3. Never its value
+/// or text: `describe_active_element_js`/`DESCRIBE_ACTIVE_ELEMENT_JS`
+/// never reads either.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ActiveElementDescription {
+    tag: String,
+    id: String,
+    classes: Vec<String>,
+    in_form_mode: bool,
+}
+
+impl ActiveElementDescription {
+    pub(crate) fn trace_line(&self) -> String {
+        format!(
+            "tag={:?} id={:?} classes={:?} in_form_mode={}",
+            self.tag, self.id, self.classes, self.in_form_mode
+        )
+    }
+}
+
+/// What [`pending_field_js`]'s eval answered: a committable field, or a
+/// description of whatever else had focus (task 050 §2.3).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum PendingRead {
+    Field {
+        id: String,
+        value: String,
+        composing: bool,
+    },
+    NoField {
+        description: ActiveElementDescription,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct PendingField {
     id: String,
     value: String,
@@ -192,24 +257,32 @@ pub(crate) async fn commit_pending_form_field(
         crate::bridge::trace("source.form_commit.skip", "mode is not Form");
         return CommitOutcome::NothingPending;
     }
-    let read = crate::bridge::eval_body::<Option<PendingField>>(PENDING_FIELD_JS).await;
+    let read = crate::bridge::eval_body::<PendingRead>(&pending_field_js()).await;
     let pending = match read {
-        Ok(Some(pending)) => {
+        Ok(PendingRead::Field {
+            id,
+            value,
+            composing,
+        }) => {
             crate::bridge::trace(
                 "source.form_commit.read",
                 format!(
                     "id={} value_len={} composing={}",
-                    pending.id,
-                    pending.value.chars().count(),
-                    pending.composing
+                    id,
+                    value.chars().count(),
+                    composing
                 ),
             );
-            pending
+            PendingField {
+                id,
+                value,
+                composing,
+            }
         }
-        Ok(None) => {
+        Ok(PendingRead::NoField { description }) => {
             crate::bridge::trace(
                 "source.form_commit.read",
-                "null (nothing in .form-mode has focus)",
+                format!("no field: {}", description.trace_line()),
             );
             return CommitOutcome::NothingPending;
         }

@@ -508,10 +508,29 @@ jobs:
         # commits it. `save_pending_field`'s own cause is still open: task
         # 049 adds a `source.form_commit.*` trace (this step's own log,
         # every run) to answer it on the next one.
+        # That run's own trace (still at `3a8554f`) showed `source.form_commit.read
+        # null (nothing in .form-mode has focus)` for `save_pending_field`: focus
+        # was NOT on the field when the commit ran, although the field's own
+        # `el.focus()` had succeeded at that exact moment and nothing in the
+        # scenario clicked anywhere else. Task 050 reads this as, again, mostly
+        # the test's own model: a script-set value never sets the HTML "dirty
+        # value" flag `onchange` needs on blur, so whatever moved focus would
+        # lose script-set text even if D1's commit worked perfectly -- a real
+        # user's typing would not. Fixed the same way as the mode-switch
+        # scenario: real keystrokes. It also separates the `null` read's two
+        # causes (focus outside `.form-mode`, or an id not starting with `fb-`)
+        # into a traced description of whatever has focus (tag, id, first two
+        # classes, in `.form-mode` or not -- never its value or text), reports
+        # (does not fail on) a focus-thief difference between right after the
+        # click into the field and right before Ctrl+S, and adds
+        # `keyboard_mode_switch_commits_pending_field`: the same pending text,
+        # then Ctrl+1 with no click at all after focusing the field -- D1's
+        # keyboard path for a mode switch, which `form_field_commits_before_mode_switch`
+        # (a click-launched switch) cannot exercise.
         id: release_checks
         run: |
           failed=0
-          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe paste_conversion toolbar_probe save_pending_field form_field_commits_before_mode_switch; do
+          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe paste_conversion toolbar_probe save_pending_field form_field_commits_before_mode_switch keyboard_mode_switch_commits_pending_field; do
             RELEASE_CHECKS_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-release-checks.XXXXXX")"
             echo "release-checks scenario: $scenario"
             # Task 033: only this scenario gets stub openers. $BROWSER is the

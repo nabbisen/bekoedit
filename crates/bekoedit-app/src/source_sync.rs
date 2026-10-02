@@ -15,7 +15,7 @@ mod commands;
 mod controller;
 mod discard_report;
 mod focus;
-mod form_commit;
+pub(crate) mod form_commit;
 mod handoff;
 pub mod host;
 pub mod lifecycle;
