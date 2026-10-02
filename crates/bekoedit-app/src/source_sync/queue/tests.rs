@@ -25,11 +25,11 @@ fn run<F: std::future::Future>(future: F) -> F::Output {
 #[test]
 fn enqueue_preserves_send_order_in_the_channel() {
     let (tx, mut rx) = futures_channel::mpsc::unbounded();
-    tx.unbounded_send(Submission::Direct {
+    tx.unbounded_send(Submission::WithoutFocusClaim {
         command: SourceCommand::SaveNow,
     })
     .unwrap();
-    tx.unbounded_send(Submission::Direct {
+    tx.unbounded_send(Submission::WithoutFocusClaim {
         command: SourceCommand::OpenSettings,
     })
     .unwrap();
@@ -38,8 +38,8 @@ fn enqueue_preserves_send_order_in_the_channel() {
         let mut names = Vec::new();
         while let Some(submission) = rx.next().await {
             names.push(match submission {
-                Submission::Direct { command } => format!("{command:?}"),
-                Submission::Interaction { command, .. } => format!("{command:?}"),
+                Submission::WithoutFocusClaim { command } => format!("{command:?}"),
+                Submission::WithFocusClaim { command, .. } => format!("{command:?}"),
             });
         }
         names

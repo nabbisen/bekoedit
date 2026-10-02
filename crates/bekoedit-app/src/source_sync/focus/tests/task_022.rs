@@ -115,15 +115,25 @@ fn submit_interaction_asks_the_controller_not_a_local_mode_comparison() {
     // (it spawns a guard round trip), so it cannot be driven headlessly the
     // way `claims_focus` above can. This pins its wiring the same way
     // `handoff.rs`'s own untestable paths are pinned: by reading the source.
+    //
+    // Re-review, 2026-10-02 §2.1: `submit_interaction` now calls
+    // `claims_focus` itself rather than repeating its formula, so the two
+    // can never disagree (`submit_interaction_decides_by_calling_claims_focus_itself`,
+    // above, pins that call directly). `claims_focus` itself still asks the
+    // controller -- `sync.is_same_source_mode(command)`, not a bare
+    // `current_mode == ` comparison -- confirmed just above by
+    // `handoff_shortcut_follows_the_controllers_in_flight_switch_not_the_ui_signal`
+    // and friends; this test only needs to confirm `submit_interaction`
+    // defers to `claims_focus` for the same decision, not duplicate it.
     let source = include_str!("../../focus.rs");
     let body = source
         .split("fn submit_interaction(")
         .nth(1)
-        .and_then(|rest| rest.split("let target = target.expect").next())
+        .and_then(|rest| rest.split("let target =\n").next())
         .expect("submit_interaction's early-return body");
     assert!(
-        body.contains("sync.read().is_same_source_mode(&command)"),
-        "the no-op check must ask the controller, not a local mode comparison"
+        body.contains("claims_focus(&command, current_mode, &sync.read())"),
+        "the no-op check must ask claims_focus, not repeat its formula"
     );
     assert!(
         !body.contains("current_mode == "),

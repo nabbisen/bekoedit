@@ -13,10 +13,20 @@
 //! channel, so two calls in the same tick land in the channel in the
 //! exact order they were made -- and one coroutine, mounted once
 //! ([`SourceCommandQueue`]), drains the channel and `.await`s each
-//! [`Submission`] fully (commit, then -- for one that claims editor focus
-//! -- the arm sequence, then the actual submit) before taking the next.
-//! Nothing about any individual submission's own logic changed; only when
-//! it runs relative to the others did.
+//! [`Submission`] fully before taking the next.
+//!
+//! **Only the async remainder is queued** (the pending-field commit;
+//! for one that claims editor focus, the arm sequence too). The
+//! re-review (§2) found that queueing the *decision* of whether a
+//! submission claims focus at all -- not just its async remainder --
+//! broke two things that depend on that decision being made at the same
+//! instant the user's input arrived: `claims_focus`'s own prediction
+//! (`handoff.rs`), and a later direct command's synchronous
+//! `cancel_focus_interactions` correctly cancelling an earlier click's
+//! claim. [`Submission`] therefore always carries an *already-decided*
+//! outcome -- [`Submission::WithFocusClaim`] carries the token
+//! `submit_interaction` already allocated, synchronously, before
+//! enqueueing.
 
 use std::cell::RefCell;
 
@@ -31,19 +41,23 @@ use crate::i18n::Lang;
 use super::focus::SourceInteractionOrigin;
 use super::{AppSignals, SourceCommand, SourceSyncState};
 
-/// One submission, carrying exactly what the old `spawn` body for each
-/// path needed -- `sync`/`state`/`mode`/`toasts`/`lang` are not part of
-/// this type because they are the same signals throughout the app; the
-/// consumer captures them once, from its own component context.
+/// One submission, with its focus-claim decision already made,
+/// synchronously, by `submit_interaction` itself (re-review §2) --
+/// `sync`/`state`/`mode`/`toasts`/`lang` are not part of this type
+/// because they are the same signals throughout the app; the consumer
+/// captures them once, from its own component context.
 pub(super) enum Submission {
-    /// `submit_source_command`'s own shape: no focus-claim decision at
-    /// all.
-    Direct { command: SourceCommand },
-    /// `submit_interaction`'s own shape: decide whether `command` claims
-    /// editor focus, and if so, run the arm sequence, before submitting.
-    Interaction {
+    /// No focus claim: a direct command, or an interaction that decided,
+    /// at submission time, not to claim one after all.
+    WithoutFocusClaim { command: SourceCommand },
+    /// `token`/`fingerprint` were already allocated for `target`,
+    /// synchronously, before this was enqueued. Only the arm sequence
+    /// (needing a real round trip) and the submit itself are queued.
+    WithFocusClaim {
         command: SourceCommand,
         origin: SourceInteractionOrigin,
+        token: u64,
+        fingerprint: String,
         finalize_launch_ui: Box<dyn FnOnce()>,
     },
 }
@@ -86,16 +100,25 @@ pub fn SourceCommandQueue() -> Element {
     let coroutine = use_coroutine(move |mut rx: UnboundedReceiver<Submission>| async move {
         while let Some(submission) = rx.next().await {
             match submission {
-                Submission::Direct { command } => {
+                Submission::WithoutFocusClaim { command } => {
                     super::process_direct_submission(signals, command).await;
                 }
-                Submission::Interaction {
+                Submission::WithFocusClaim {
                     command,
                     origin,
+                    token,
+                    fingerprint,
                     finalize_launch_ui,
                 } => {
-                    super::focus::run_interaction(signals, command, origin, finalize_launch_ui)
-                        .await;
+                    super::focus::run_interaction(
+                        signals,
+                        command,
+                        origin,
+                        token,
+                        fingerprint,
+                        finalize_launch_ui,
+                    )
+                    .await;
                 }
             }
         }

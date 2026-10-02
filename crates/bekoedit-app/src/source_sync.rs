@@ -95,12 +95,15 @@ pub fn submit_source_command(
     if let Some(token) = sync.write().cancel_focus_interactions() {
         focus::cancel_focus_guards_through(token);
     }
-    queue::enqueue(queue::Submission::Direct { command });
+    queue::enqueue(queue::Submission::WithoutFocusClaim { command });
 }
 
-/// What [`queue::SourceCommandQueue`] does for a [`queue::Submission::Direct`],
-/// in the order its `enqueue` call landed. The direct path's old body,
-/// unchanged, just no longer `spawn`ed per call.
+/// What [`queue::SourceCommandQueue`] does for a
+/// [`queue::Submission::WithoutFocusClaim`], in the order its `enqueue`
+/// call landed. The direct path's old body, unchanged, just no longer
+/// `spawn`ed per call. Also reused by `focus::run_interaction` for a
+/// claim that went stale while queued (re-review §2.3): that path has
+/// already decided not to claim focus either, just later than this one.
 pub(super) async fn process_direct_submission(signals: AppSignals, command: SourceCommand) {
     submit_source_command_preserving_focus(signals, command, None).await;
 }

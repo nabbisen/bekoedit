@@ -325,3 +325,99 @@ fn the_consume_script_parses_its_identity_and_quotes_its_fingerprint() {
     );
     assert!(!script.contains('\u{2028}'));
 }
+
+// ---- re-review, 2026-10-02 §2: the synchronous half moved back to the
+// moment of submission ----
+
+/// §2.1: `submit_interaction` must call `claims_focus` itself, not repeat
+/// its formula -- the only way the two can never disagree about whether a
+/// submission claims focus, including when something else is already
+/// queued ahead of it (`claims_focus` already reads `sync.is_same_source_mode`,
+/// which itself checks `has_queued_mode_switch`; calling it is what makes
+/// both "evaluated at submission time" the same evaluation). A source
+/// check, since the real decision needs a live `Signal` to call.
+#[test]
+fn submit_interaction_decides_by_calling_claims_focus_itself() {
+    let source = include_str!("../focus.rs");
+    assert!(
+        source.contains("!claims_focus(&command, current_mode, &sync.read())"),
+        "submit_interaction must call claims_focus directly: {source}"
+    );
+}
+
+/// §2.2: a click's claim, once allocated, is found and removed by a
+/// later direct command's own synchronous `cancel_focus_interactions` --
+/// the controller-level mechanics `submit_interaction`/
+/// `submit_source_command` both rely on now that allocation happens at
+/// submission time, not deferred into the queue.
+#[test]
+fn a_later_direct_cancellation_finds_an_earlier_allocated_claim() {
+    let mut sync = SourceSyncState::default();
+    let (token, superseded) = sync
+        .allocate_focus_interaction(SourceEditorId::Text, "fp".to_string())
+        .expect("a fresh state always allocates");
+    assert_eq!(superseded, None);
+    assert_eq!(sync.cancel_focus_interactions(), Some(token));
+}
+
+/// §2.3: a claim cancelled out from under it (by the scenario above, or
+/// by a newer interaction superseding it) must read back as `Stale` when
+/// the arm sequence later tries to claim it -- the condition
+/// `run_interaction` now runs the command without focus for, instead of
+/// silently dropping it.
+#[test]
+fn a_cancelled_claim_is_stale_when_the_arm_sequence_tries_to_claim_it() {
+    let mut sync = SourceSyncState::default();
+    let (token, _) = sync
+        .allocate_focus_interaction(SourceEditorId::Text, "fp".to_string())
+        .expect("a fresh state always allocates");
+    sync.cancel_focus_interactions();
+    assert_eq!(
+        sync.claim_focus_interaction(token, FocusResolution::Armed),
+        FocusClaim::Stale
+    );
+}
+
+/// §2.1/§2.2: `allocate_focus_interaction` must be called by
+/// `submit_interaction` itself (synchronously, at submission time), never
+/// by `run_interaction` (which only runs later, from inside the queue) --
+/// a source check, since the real call sites need a live `Signal`.
+#[test]
+fn allocation_happens_in_submit_interaction_not_in_run_interaction() {
+    let source = include_str!("../focus.rs");
+    let submit_interaction_body = source
+        .split("fn submit_interaction(")
+        .nth(1)
+        .and_then(|rest| rest.split("\nfn enqueue_without_focus_claim").next())
+        .expect("submit_interaction's own body");
+    assert!(
+        submit_interaction_body.contains("allocate_focus_interaction("),
+        "submit_interaction must allocate the claim itself: {submit_interaction_body}"
+    );
+    let run_interaction_body = source
+        .split("pub(super) async fn run_interaction(")
+        .nth(1)
+        .expect("run_interaction's own body");
+    assert!(
+        !run_interaction_body.contains("allocate_focus_interaction("),
+        "run_interaction must not allocate -- that decision is already made \
+         by the time it runs: {run_interaction_body}"
+    );
+}
+
+/// §2.3: a claim that went stale while queued must still run its command,
+/// through the same no-focus path a direct submission uses -- not return
+/// without submitting anything, which is what dropped it silently before.
+#[test]
+fn run_interaction_runs_a_stale_claims_command_without_focus() {
+    let source = include_str!("../focus.rs");
+    let stale_branch = source
+        .split("== FocusClaim::Stale {")
+        .nth(1)
+        .and_then(|rest| rest.split("\n    }\n").next())
+        .expect("the Stale branch of run_interaction");
+    assert!(
+        stale_branch.contains("process_direct_submission(signals, command)"),
+        "a stale claim must still submit its command, without focus: {stale_branch}"
+    );
+}
