@@ -3,7 +3,8 @@
  * Installed once by the App shell; works regardless of which component
  * has DOM focus.
  *
- * Shortcuts forwarded to Rust as: dioxus.send(JSON.stringify({type:"shortcut", key}))
+ * Shortcuts forwarded to Rust as:
+ *   dioxus.send(JSON.stringify({type:"shortcut", key, composing}))
  * where `key` matches the action names in the Rust handler.
  *
  * Text-Mode editing keys (Ctrl+Z, Ctrl+F, etc.) are handled by CM6 directly
@@ -26,16 +27,32 @@
 
     if (key) {
       e.preventDefault();
+      // Task 051 §2.1: a Form field commits only on `onchange`, which
+      // fires on blur -- a keyboard shortcut never touches DOM focus, so
+      // without this the field's pending text would be left behind.
+      // Dioxus delivers this `change` to Rust through a *synchronous*
+      // XHR (`dioxus-interpreter-js`'s `handleVirtualdomEventSync`), so
+      // by the time `dispatchEvent` returns here, Rust has already
+      // committed the text -- well before the relay below even runs.
+      let composing = false;
+      const el = document.activeElement;
+      if (el && typeof el.value === "string" && el.closest && el.closest(".form-mode")) {
+        composing = e.isComposing || window.__bk_form_composing === true;
+        if (!composing) {
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      }
       if (window.dioxus) {
-        window.__bk_shortcut_relay?.(JSON.stringify({ type: "shortcut", key }));
+        window.__bk_shortcut_relay?.(JSON.stringify({ type: "shortcut", key, composing }));
       }
     }
   });
 
-  // Task 048 D1: a Form Mode field's pending text must never be
-  // force-committed mid-IME-composition. Captured at the window level, like
-  // the shortcut listener above, so it sees every field regardless of which
-  // one has focus.
+  // A Form Mode field's pending text must never be force-committed
+  // mid-IME-composition (task 051 §2.1 reads this to decide whether to
+  // flush above). Captured at the window level, like the shortcut
+  // listener above, so it sees every field regardless of which one has
+  // focus.
   window.__bk_form_composing = false;
   window.addEventListener("compositionstart", () => { window.__bk_form_composing = true; }, true);
   window.addEventListener("compositionend", () => { window.__bk_form_composing = false; }, true);

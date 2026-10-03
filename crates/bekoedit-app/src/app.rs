@@ -29,10 +29,10 @@ use crate::components::{
     toast::{Toast, ToastKind, ToastLayer, push_toast},
 };
 use crate::i18n::{Lang, tr};
-use crate::source_sync::SourceCommandQueue;
 use crate::source_sync::host::SourceEditorControllerHost;
 use crate::source_sync::{
-    SourceCommand, SourceSyncState, submit_source_command, submit_source_shortcut_interaction,
+    SourceCommand, SourceSyncState, refuse_source_shortcut_while_composing, submit_source_command,
+    submit_source_shortcut_interaction,
 };
 use crate::state::{
     BacklinksOpen, ExplorerCollapsed, HistoryOpen, MenuEntryIntent, NewFileOpen, OpenMenu,
@@ -50,7 +50,28 @@ const TICK_MS: u64 = 500;
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum AppMsg {
-    Shortcut { key: String },
+    Shortcut {
+        key: String,
+        /// Task 051 §2.1: `shortcuts.js` itself decides this, from
+        /// `document.activeElement` at the moment the shortcut fired --
+        /// true only when a Form Mode field had focus and an IME
+        /// composition was open on it.
+        composing: bool,
+    },
+}
+
+/// The command one shortcut key names, pulled out pure so the normal
+/// dispatch below and the `composing` refusal path agree on it -- task
+/// 051.
+fn shortcut_command(key: &str) -> Option<SourceCommand> {
+    match key {
+        "save" => Some(SourceCommand::SaveNow),
+        "mode_text" => Some(SourceCommand::SwitchMode(EditorMode::Text)),
+        "mode_form" => Some(SourceCommand::SwitchMode(EditorMode::Form)),
+        "mode_preview" => Some(SourceCommand::SwitchMode(EditorMode::Preview)),
+        "mode_split" => Some(SourceCommand::SwitchMode(EditorMode::Split)),
+        _ => None,
+    }
 }
 
 #[component]
@@ -200,6 +221,7 @@ pub fn App() -> Element {
     let app_st: Signal<AppState> = state;
     let source_sync_for_shortcuts = source_sync;
     let toasts_for_shortcuts = use_context::<Signal<Vec<Toast>>>();
+    let lang_for_shortcuts = use_context::<Signal<Lang>>();
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
         // Auto-restarting shortcut relay (RFC-002 hardening).
         let mut consecutive_failures = 0_u32;
@@ -210,9 +232,21 @@ pub fn App() -> Element {
             let mut relay = document::eval(&relay_js);
             while let Ok(raw) = relay.recv().await {
                 consecutive_failures = 0;
-                if let Ok(AppMsg::Shortcut { key }) = serde_json::from_value(raw) {
-                    match key.as_str() {
-                        "save" => {
+                if let Ok(AppMsg::Shortcut { key, composing }) = serde_json::from_value(raw) {
+                    match shortcut_command(&key) {
+                        // Task 051 §2.1: refused outright, exactly as
+                        // Text Mode's own `CompositionActive` handling
+                        // refuses one -- `shortcuts.js` already decided
+                        // not to flush the field, so there is nothing to
+                        // retry here either.
+                        Some(command) if composing => {
+                            refuse_source_shortcut_while_composing(
+                                toasts_for_shortcuts,
+                                &command,
+                                *lang_for_shortcuts.read(),
+                            );
+                        }
+                        Some(SourceCommand::SaveNow) => {
                             submit_source_command(
                                 source_sync_for_shortcuts,
                                 app_st,
@@ -221,35 +255,14 @@ pub fn App() -> Element {
                                 SourceCommand::SaveNow,
                             );
                         }
-                        "mode_text" => submit_source_shortcut_interaction(
+                        Some(command) => submit_source_shortcut_interaction(
                             source_sync_for_shortcuts,
                             app_st,
                             mode_sig,
                             toasts_for_shortcuts,
-                            SourceCommand::SwitchMode(EditorMode::Text),
+                            command,
                         ),
-                        "mode_form" => submit_source_shortcut_interaction(
-                            source_sync_for_shortcuts,
-                            app_st,
-                            mode_sig,
-                            toasts_for_shortcuts,
-                            SourceCommand::SwitchMode(EditorMode::Form),
-                        ),
-                        "mode_preview" => submit_source_shortcut_interaction(
-                            source_sync_for_shortcuts,
-                            app_st,
-                            mode_sig,
-                            toasts_for_shortcuts,
-                            SourceCommand::SwitchMode(EditorMode::Preview),
-                        ),
-                        "mode_split" => submit_source_shortcut_interaction(
-                            source_sync_for_shortcuts,
-                            app_st,
-                            mode_sig,
-                            toasts_for_shortcuts,
-                            SourceCommand::SwitchMode(EditorMode::Split),
-                        ),
-                        _ => {}
+                        None => {}
                     }
                 }
             }
@@ -277,7 +290,6 @@ pub fn App() -> Element {
     rsx! {
         document::Style { "{STYLE_SOURCE}" }
         document::Script { "{SHORTCUTS_SOURCE}" }
-        SourceCommandQueue {}
         SourceEditorControllerHost {}
         if webview_smoke {
             WebViewSmokeDriver {}

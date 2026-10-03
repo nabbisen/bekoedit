@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod rfc_042;
 #[cfg(test)]
-mod task_048_commit_order;
+mod task_051_shortcut_flush;
 
 #[cfg(test)]
 mod app_tests {

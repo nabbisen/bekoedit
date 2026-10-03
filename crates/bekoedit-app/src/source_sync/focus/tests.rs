@@ -363,8 +363,8 @@ fn a_later_direct_cancellation_finds_an_earlier_allocated_claim() {
 /// §2.3: a claim cancelled out from under it (by the scenario above, or
 /// by a newer interaction superseding it) must read back as `Stale` when
 /// the arm sequence later tries to claim it -- the condition
-/// `run_interaction` now runs the command without focus for, instead of
-/// silently dropping it.
+/// `submit_interaction`'s own spawned arm sequence now runs the command
+/// without focus for, instead of silently dropping it.
 #[test]
 fn a_cancelled_claim_is_stale_when_the_arm_sequence_tries_to_claim_it() {
     let mut sync = SourceSyncState::default();
@@ -378,46 +378,46 @@ fn a_cancelled_claim_is_stale_when_the_arm_sequence_tries_to_claim_it() {
     );
 }
 
-/// §2.1/§2.2: `allocate_focus_interaction` must be called by
-/// `submit_interaction` itself (synchronously, at submission time), never
-/// by `run_interaction` (which only runs later, from inside the queue) --
-/// a source check, since the real call sites need a live `Signal`.
+/// §2.1/§2.2 (closed by task 051, which removed the command queue but
+/// kept this invariant): `allocate_focus_interaction` must be called
+/// synchronously, in `submit_interaction`'s own body, before the
+/// `spawn` -- never inside the spawned arm sequence, which only runs
+/// later and must not still be deciding whether to claim focus at all.
 #[test]
-fn allocation_happens_in_submit_interaction_not_in_run_interaction() {
+fn allocation_happens_before_the_spawned_arm_sequence_not_inside_it() {
     let source = include_str!("../focus.rs");
-    let submit_interaction_body = source
+    let body = source
         .split("fn submit_interaction(")
         .nth(1)
-        .and_then(|rest| rest.split("\nfn enqueue_without_focus_claim").next())
         .expect("submit_interaction's own body");
+    let (before_spawn, spawned) = body
+        .split_once("spawn(async move {")
+        .expect("submit_interaction spawns the arm sequence");
     assert!(
-        submit_interaction_body.contains("allocate_focus_interaction("),
-        "submit_interaction must allocate the claim itself: {submit_interaction_body}"
+        before_spawn.contains("allocate_focus_interaction("),
+        "submit_interaction must allocate the claim itself, before spawning: {before_spawn}"
     );
-    let run_interaction_body = source
-        .split("pub(super) async fn run_interaction(")
-        .nth(1)
-        .expect("run_interaction's own body");
     assert!(
-        !run_interaction_body.contains("allocate_focus_interaction("),
-        "run_interaction must not allocate -- that decision is already made \
-         by the time it runs: {run_interaction_body}"
+        !spawned.contains("allocate_focus_interaction("),
+        "the spawned arm sequence must not allocate -- that decision is \
+         already made by the time it runs: {spawned}"
     );
 }
 
-/// §2.3: a claim that went stale while queued must still run its command,
-/// through the same no-focus path a direct submission uses -- not return
-/// without submitting anything, which is what dropped it silently before.
+/// §2.3: a claim that went stale while its arm sequence was in flight
+/// must still run its command, through the same no-focus path a direct
+/// submission uses -- not return without submitting anything, which
+/// would drop it silently.
 #[test]
-fn run_interaction_runs_a_stale_claims_command_without_focus() {
+fn a_stale_claim_still_submits_its_command_without_focus() {
     let source = include_str!("../focus.rs");
     let stale_branch = source
         .split("== FocusClaim::Stale {")
         .nth(1)
-        .and_then(|rest| rest.split("\n    }\n").next())
-        .expect("the Stale branch of run_interaction");
+        .and_then(|rest| rest.split("\n        }\n").next())
+        .expect("the Stale branch of submit_interaction's spawned arm sequence");
     assert!(
-        stale_branch.contains("process_direct_submission(signals, command)"),
+        stale_branch.contains("submit_source_command_preserving_focus("),
         "a stale claim must still submit its command, without focus: {stale_branch}"
     );
 }

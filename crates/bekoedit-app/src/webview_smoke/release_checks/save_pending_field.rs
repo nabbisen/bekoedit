@@ -27,16 +27,23 @@
 //! thief) is visible without being asserted into a failure -- it would
 //! be a usability defect, not data loss, since a real user's typing
 //! commits through blur regardless.
+//!
+//! Task 051: that trace, and the mode-switch scenario's own "something
+//! moved focus" symptom, led to redesigning D1 entirely -- there is no
+//! longer a queued commit at all. `shortcuts.js` now flushes a focused
+//! Form field's pending text with a real `change` event *before*
+//! relaying the shortcut; Dioxus delivers it to Rust through a
+//! synchronous XHR, so the commit lands before Ctrl+S's own relay
+//! message is even sent. This scenario is exactly what proves that path.
 
 use std::time::Duration;
 
 use dioxus::desktop::DesktopContext;
 
-use crate::source_sync::form_commit::{ActiveElementDescription, describe_active_element_js};
 use crate::webview_smoke::trusted_click::xtest::{activate_window, click_via_xtest, run_xdotool};
 
 use super::ReleaseChecksTerminal;
-use super::dom;
+use super::dom::{self, ActiveElementDescription};
 use super::save::wait_until;
 use super::seed::SAVE_FILE;
 
@@ -81,8 +88,7 @@ pub(super) async fn run(
     // field's `.value` set from script (task 050 §2.1's fix: see the
     // module doc comment for why that was never a valid model here).
     click_via_xtest(desktop, ".form-mode .paragraph-input", None, 0).await?;
-    let focus_after_click: ActiveElementDescription =
-        dom::run_script(&describe_active_element_js()).await?;
+    let focus_after_click: ActiveElementDescription = dom::active_element().await?;
 
     run_xdotool(&["key", "--clearmodifiers", "End"]).await?;
     run_xdotool(&["type", "--clearmodifiers", " def"]).await?;
@@ -97,8 +103,7 @@ pub(super) async fn run(
     // test, reported alongside the post-click reading below -- a
     // difference names a focus thief without failing the scenario over
     // it (§2.4 is a report, not an assertion).
-    let focus_before_save: ActiveElementDescription =
-        dom::run_script(&describe_active_element_js()).await?;
+    let focus_before_save: ActiveElementDescription = dom::active_element().await?;
 
     // The real act under test: a real Ctrl+S, with the field still
     // focused -- no toolbar click, no blur, nothing else in play.

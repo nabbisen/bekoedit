@@ -84,6 +84,43 @@ pub(super) async fn paragraph_field_value_is(expected: &str) -> Result<bool, Str
     .await
 }
 
+/// `document.activeElement`'s own tag, id, first two classes, and
+/// whether it is inside `.form-mode` -- never its value or text. Used
+/// only to name what has focus (`save_pending_field`'s own focus-thief
+/// report), never to read or compare field content.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct ActiveElementDescription {
+    tag: String,
+    id: String,
+    classes: Vec<String>,
+    in_form_mode: bool,
+}
+
+impl ActiveElementDescription {
+    pub(super) fn trace_line(&self) -> String {
+        format!(
+            "tag={:?} id={:?} classes={:?} in_form_mode={}",
+            self.tag, self.id, self.classes, self.in_form_mode
+        )
+    }
+}
+
+/// Builds [`ActiveElementDescription`] from `document.activeElement` --
+/// never `el.value` or any text, only what identifies it.
+const ACTIVE_ELEMENT_JS: &str = "(() => { const el = document.activeElement; \
+     const classes = el && el.className \
+         ? String(el.className).split(/\\s+/).filter(Boolean).slice(0, 2) : []; \
+     return { tag: el ? el.tagName.toLowerCase() : '', id: (el && el.id) || '', \
+         classes, inFormMode: !!(el && el.closest && el.closest('.form-mode')) }; })()";
+
+/// What has focus right now: `document.activeElement`'s tag, id, first
+/// two classes, and whether it is inside `.form-mode`. Never its value
+/// or text.
+pub(super) async fn active_element() -> Result<ActiveElementDescription, String> {
+    returned(ACTIVE_ELEMENT_JS).await
+}
+
 /// The Preview tab is the selected mode tab.
 pub(super) async fn preview_selected() -> Result<bool, String> {
     returned(

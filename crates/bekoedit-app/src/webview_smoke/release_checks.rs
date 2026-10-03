@@ -32,7 +32,6 @@ use crate::i18n::Lang;
 
 mod bytes;
 mod dom;
-mod form_commit_trace;
 mod form_field_commits_before_mode_switch;
 mod keyboard_mode_switch_commits_pending_field;
 mod launch;
@@ -47,7 +46,6 @@ mod save;
 mod save_pending_field;
 mod seed;
 mod toolbar_probe;
-pub(super) use form_commit_trace::record_form_commit_trace;
 pub(super) use seed::prepare;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -228,12 +226,6 @@ pub fn WebViewReleaseChecksDriver() -> Element {
                 }
                 _ => launch::run(&terminal, state, toasts, lang).await,
             };
-            // Task 049: the pending-field commit path's own trace, on
-            // every run, before the verdict line -- `toolbar_probe`'s
-            // own first real run showed a headless-passing mechanism can
-            // still fail live, so a passing run's trace is also kept, to
-            // compare a failing one against.
-            form_commit_trace::print_final_trace();
             match outcome.and_then(|checks| terminal.accept().map(|()| checks)) {
                 Ok(checks) => {
                     for check in &checks {

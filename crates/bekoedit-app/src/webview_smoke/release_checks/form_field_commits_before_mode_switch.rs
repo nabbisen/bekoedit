@@ -11,10 +11,10 @@
 //! other two.
 //!
 //! Task 049 §2.1: the mode tab's own click moves DOM focus to the tab on
-//! `mousedown`, before any script runs -- by the time the queued
-//! `commit_pending_form_field` read executes, `document.activeElement` is
-//! already the tab, not the field, so that path has nothing to commit, by
-//! design. What this scenario actually needs is the field's *own*
+//! `mousedown`, before anything else can run -- so a flush keyed on
+//! `document.activeElement` being the field (task 051 §2.1's own
+//! mechanism, which keyboard commands rely on) would already be too
+//! late here. What this scenario actually needs is the field's *own*
 //! blur-then-`change` commit (`block_view.rs`'s `onchange`), which the
 //! review's reading of the failed run named as this scenario's real bug:
 //! per the HTML spec, `change` fires on blur only if the element's value

@@ -14,7 +14,7 @@ use crate::components::toast::Toast;
 
 use super::{
     SourceCommand, SourceSyncState, SubmitOutcome, controller::FocusClaim,
-    controller::FocusResolution,
+    controller::FocusResolution, submit_source_command, submit_source_command_preserving_focus,
 };
 
 const ARM_TIMEOUT: Duration = Duration::from_millis(250);
@@ -167,62 +167,67 @@ struct GuardArmed {
 
 pub fn submit_source_interaction(
     sync: Signal<SourceSyncState>,
-    _state: Signal<AppState>,
+    state: Signal<AppState>,
     mode: Signal<EditorMode>,
-    _toasts: Signal<Vec<Toast>>,
+    toasts: Signal<Vec<Toast>>,
     command: SourceCommand,
     origin: SourceInteractionOrigin,
     finalize_launch_ui: impl FnOnce() + 'static,
 ) {
-    submit_interaction(sync, mode, command, origin, finalize_launch_ui);
+    submit_interaction(
+        sync,
+        state,
+        mode,
+        toasts,
+        command,
+        origin,
+        finalize_launch_ui,
+    );
 }
 
 pub fn submit_source_shortcut_interaction(
     sync: Signal<SourceSyncState>,
-    _state: Signal<AppState>,
+    state: Signal<AppState>,
     mode: Signal<EditorMode>,
-    _toasts: Signal<Vec<Toast>>,
+    toasts: Signal<Vec<Toast>>,
     command: SourceCommand,
 ) {
     let current_mode = *mode.read();
     submit_interaction(
         sync,
+        state,
         mode,
+        toasts,
         command,
         SourceInteractionOrigin::shortcut(current_mode),
         || {},
     );
 }
 
-/// Decides, synchronously, at the moment of submission (re-review,
-/// 2026-10-02 §2: the first queueing pass moved this decision into the
-/// queue, which broke two things -- see below -- so it moves back here).
-/// [`claims_focus`] must predict this decision exactly (its own doc
-/// comment), which only holds if both read the same `sync`/`mode` state
-/// at the same instant; deferring the decision into the queue let
-/// something queued ahead of it change that state first (§2.1).
-/// `submit_source_command`'s own `cancel_focus_interactions` also runs
-/// synchronously, so a direct command submitted just after a click still
-/// cancels that click's claim -- which only holds if the claim was
-/// already allocated by the time the direct command's own cancellation
-/// runs, not allocated later from inside the queue (§2.2).
+/// Decides, synchronously, at the moment of submission, whether `command`
+/// claims editor focus -- [`claims_focus`] must predict this decision
+/// exactly (its own doc comment), which only holds if both read the same
+/// `sync`/`mode` state at the same instant. Calls `claims_focus` itself,
+/// rather than repeating its formula here, so the two can never disagree.
 ///
-/// Only the async remainder -- arm, claim, finalize, submit -- is
-/// queued, in [`run_interaction`].
+/// Only the async remainder -- arm, claim, finalize, submit -- runs in
+/// the `spawn`ed task below; the decision and the claim's allocation
+/// both happen here, before it, so a later direct command's own
+/// synchronous `cancel_focus_interactions` can still find and cancel
+/// this claim.
 fn submit_interaction(
     mut sync: Signal<SourceSyncState>,
+    state: Signal<AppState>,
     mode: Signal<EditorMode>,
+    toasts: Signal<Vec<Toast>>,
     command: SourceCommand,
     origin: SourceInteractionOrigin,
     finalize_launch_ui: impl FnOnce() + 'static,
 ) {
     let current_mode = *mode.read();
-    // Calls `claims_focus` itself, rather than repeating its formula here,
-    // so the two can never disagree about whether this moment's `command`
-    // claims focus -- the exact property the re-review's §2.1 needs.
     if !claims_focus(&command, current_mode, &sync.read()) {
         finalize_launch_ui();
-        enqueue_without_focus_claim(sync, command);
+        submit_source_command(sync, state, mode, toasts, command);
         return;
     }
     let target =
@@ -240,118 +245,79 @@ fn submit_interaction(
     else {
         cancel_source_focus(sync);
         finalize_launch_ui();
-        enqueue_without_focus_claim(sync, command);
+        submit_source_command(sync, state, mode, toasts, command);
         return;
     };
     if let Some(old_token) = superseded {
         cancel_focus_guards_through(old_token);
     }
     crate::bridge::trace("source.focus.interaction.allocate", token);
-    super::queue::enqueue(super::queue::Submission::WithFocusClaim {
-        command,
-        origin,
-        token,
-        fingerprint,
-        finalize_launch_ui: Box::new(finalize_launch_ui),
-    });
-}
 
-/// `submit_source_command`'s own synchronous cleanup -- cancelling
-/// whatever focus interaction is currently pending -- shared with
-/// `submit_interaction`'s two "does not claim focus after all" branches,
-/// so they do exactly what calling the public `submit_source_command`
-/// did before this module enqueued instead of calling it directly.
-fn enqueue_without_focus_claim(mut sync: Signal<SourceSyncState>, command: SourceCommand) {
-    if let Some(token) = sync.write().cancel_focus_interactions() {
-        cancel_focus_guards_through(token);
-    }
-    super::queue::enqueue(super::queue::Submission::WithoutFocusClaim { command });
-}
-
-/// What [`super::queue::SourceCommandQueue`] does for a
-/// [`super::queue::Submission::WithFocusClaim`], in the order its
-/// `enqueue` call landed: the arm sequence, `submit_interaction`'s own
-/// old body, unchanged in its own logic, just no longer `spawn`ed per
-/// call -- it now runs as part of the single consumer's own `.await`
-/// chain, so the *next* submission in the queue cannot reach
-/// `submit_with_focus` before this one does. `token`/`fingerprint` were
-/// already decided, synchronously, by `submit_interaction` itself.
-pub(super) async fn run_interaction(
-    signals: super::AppSignals,
-    command: SourceCommand,
-    origin: SourceInteractionOrigin,
-    token: u64,
-    fingerprint: String,
-    finalize_launch_ui: Box<dyn FnOnce()>,
-) {
-    let mut sync = signals.sync;
-
-    // No `spawn` here -- already running inside the single consumer task
-    // (task 048 §2.3), so the next queued submission waits for this
-    // `.await` chain to finish, exactly as it waits for everything above.
-    //
-    // Task 039 §2.1, and the review's §3.1: the trace says *which* way the
-    // arm failed to resolve, since only an elapsed `ARM_TIMEOUT` is a
-    // genuine timeout -- an early `None` from the old collapsed
-    // `.ok().flatten()` here read identically whether the page never
-    // answered in time or its query was dropped out from under it (task
-    // 029/036's finding). The decision itself lives in `arm_resolution`,
-    // not here, so a regression collapsing it back together fails that
-    // function's own test.
-    let outcome = timed_arm_outcome(
-        tokio::time::timeout(ARM_TIMEOUT, arm_focus_guard(token, &fingerprint, &origin)).await,
-    );
-    let (ack, trace) = arm_resolution(token, outcome);
-    if let Some((event, detail)) = trace {
-        crate::bridge::trace(event, detail);
-    }
-    let armed = ack
-        .as_ref()
-        .is_some_and(|ack| ack.token == token && ack.armed);
-    if let Some(ack) = ack.as_ref()
-        && !armed
-    {
-        crate::bridge::trace(
-            "source.focus.guard.rejected",
-            ack.reason.as_deref().unwrap_or("invalidAcknowledgement"),
+    spawn(async move {
+        // Task 039 §2.1, and the review's §3.1: the trace says *which* way the
+        // arm failed to resolve, since only an elapsed `ARM_TIMEOUT` is a
+        // genuine timeout -- an early `None` from the old collapsed
+        // `.ok().flatten()` here read identically whether the page never
+        // answered in time or its query was dropped out from under it (task
+        // 029/036's finding). The decision itself lives in `arm_resolution`,
+        // not here, so a regression collapsing it back together fails that
+        // function's own test.
+        let outcome = timed_arm_outcome(
+            tokio::time::timeout(ARM_TIMEOUT, arm_focus_guard(token, &fingerprint, &origin)).await,
         );
-    }
-    let resolution = if armed {
-        FocusResolution::Armed
-    } else {
-        FocusResolution::ProceedWithoutFocus
-    };
-    if sync.write().claim_focus_interaction(token, resolution) == FocusClaim::Stale {
-        // Review §2.3: a claim that went stale while queued (superseded
-        // by a newer one, or cancelled by a later direct command) must
-        // not drop its command silently -- it still runs, just without
-        // claiming focus. Chosen uniformly, for every cause of
-        // staleness: nothing here can distinguish *which* cause this
-        // was, and running without focus is always safe, so there is
-        // nothing left to report through the discard path either -- that
-        // alternative is for a cause where dropping would be correct,
-        // and this task never drops.
-        cancel_focus_guards_through(token);
+        let (ack, trace) = arm_resolution(token, outcome);
+        if let Some((event, detail)) = trace {
+            crate::bridge::trace(event, detail);
+        }
+        let armed = ack
+            .as_ref()
+            .is_some_and(|ack| ack.token == token && ack.armed);
+        if let Some(ack) = ack.as_ref()
+            && !armed
+        {
+            crate::bridge::trace(
+                "source.focus.guard.rejected",
+                ack.reason.as_deref().unwrap_or("invalidAcknowledgement"),
+            );
+        }
+        let resolution = if armed {
+            FocusResolution::Armed
+        } else {
+            FocusResolution::ProceedWithoutFocus
+        };
+        if sync.write().claim_focus_interaction(token, resolution) == FocusClaim::Stale {
+            // Re-review (2026-10-02) §2.3: a claim that went stale while
+            // the arm sequence was in flight (superseded by a newer one,
+            // or cancelled by a later direct command) must not drop its
+            // command silently -- it still runs, just without claiming
+            // focus. Chosen uniformly, for every cause of staleness:
+            // nothing here can distinguish *which* cause this was, and
+            // running without focus is always safe, so there is nothing
+            // left to report through the discard path either -- that
+            // alternative is for a cause where dropping would be
+            // correct, and this task never drops.
+            cancel_focus_guards_through(token);
+            finalize_launch_ui();
+            submit_source_command_preserving_focus(sync, state, mode, toasts, command, None);
+            return;
+        }
+        if armed {
+            crate::bridge::trace("source.focus.guard.armed", token);
+        } else {
+            cancel_focus_guards_through(token);
+        }
         finalize_launch_ui();
-        super::process_direct_submission(signals, command).await;
-        return;
-    }
-    if armed {
-        crate::bridge::trace("source.focus.guard.armed", token);
-    } else {
-        cancel_focus_guards_through(token);
-    }
-    finalize_launch_ui();
-    let outcome =
-        super::submit_source_command_preserving_focus(signals, command, Some(token)).await;
-    crate::bridge::trace("source.focus.command.queued", format!("{outcome:?}"));
-    if matches!(
-        outcome,
-        SubmitOutcome::NoOp | SubmitOutcome::QueueFull | SubmitOutcome::Unavailable
-    ) {
-        sync.write().cancel_focus_token(token);
-        cancel_focus_guards_through(token);
-    }
+        let outcome =
+            submit_source_command_preserving_focus(sync, state, mode, toasts, command, Some(token));
+        crate::bridge::trace("source.focus.command.queued", format!("{outcome:?}"));
+        if matches!(
+            outcome,
+            SubmitOutcome::NoOp | SubmitOutcome::QueueFull | SubmitOutcome::Unavailable
+        ) {
+            sync.write().cancel_focus_token(token);
+            cancel_focus_guards_through(token);
+        }
+    });
 }
 
 /// Whether `command` claims editor focus in `current_mode` -- the test that

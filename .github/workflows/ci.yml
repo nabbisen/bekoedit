@@ -527,6 +527,20 @@ jobs:
         # then Ctrl+1 with no click at all after focusing the field -- D1's
         # keyboard path for a mode switch, which `form_field_commits_before_mode_switch`
         # (a click-launched switch) cannot exercise.
+        # That push (`1d5f182`) went red for a different reason: RFC-044's own
+        # `queued_switch_claims_focus` failed -- a race task 048's command queue
+        # introduced (a still-in-flight submission left the controller's own
+        # in-flight state stale when the next command's focus decision read
+        # it), not anything in this step. Task 051 removed the queue entirely
+        # and redesigned D1: `shortcuts.js` now flushes a focused Form field
+        # with a real `change` event, synchronously, *before* relaying a
+        # shortcut, so Rust commits the pending text before the shortcut
+        # message is even sent -- no await, no queue, nothing for a later
+        # submission to race ahead of. `toolbar_probe`, `save_pending_field`,
+        # `form_field_commits_before_mode_switch` and
+        # `keyboard_mode_switch_commits_pending_field` all keep their own
+        # scenarios and assertions unchanged; only the mechanism underneath
+        # them changed.
         id: release_checks
         run: |
           failed=0

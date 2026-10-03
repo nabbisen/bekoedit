@@ -15,11 +15,9 @@ mod commands;
 mod controller;
 mod discard_report;
 mod focus;
-pub(crate) mod form_commit;
 mod handoff;
 pub mod host;
 pub mod lifecycle;
-mod queue;
 
 pub use bekoedit_ui_contract::source_editor::SourceEditorId;
 pub use controller::{
@@ -31,7 +29,6 @@ pub use focus::{
 };
 pub use handoff::submit_handoff_activation;
 pub use lifecycle::MountIntent;
-pub use queue::SourceCommandQueue;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SourceCommand {
@@ -46,22 +43,6 @@ pub enum SourceCommand {
     RestoreHistory(HistoryEntry),
     MoveSectionUp(usize),
     MoveSectionDown(usize),
-}
-
-/// The five signals every submission's processing needs, bundled so
-/// passing them from one stage to the next (review, 2026-10-02 §2.3: the
-/// single consumer now threads them through `process_direct_submission`/
-/// `run_interaction`/`submit_source_command_preserving_focus`) does not
-/// by itself trip clippy's argument-count limit. `SourceCommandQueue`
-/// captures one of these, once, from its own component context, and
-/// reuses it for every submission it will ever process.
-#[derive(Clone, Copy)]
-pub(super) struct AppSignals {
-    pub(super) sync: Signal<SourceSyncState>,
-    pub(super) state: Signal<AppState>,
-    pub(super) mode: Signal<EditorMode>,
-    pub(super) toasts: Signal<Vec<Toast>>,
-    pub(super) lang: Signal<Lang>,
 }
 
 #[derive(Debug)]
@@ -79,78 +60,50 @@ pub enum SourceSyncError {
     Transition(lifecycle::TransitionError),
 }
 
-/// Enqueues synchronously (review, 2026-10-02 §2.3): every submission
-/// reaches [`queue::enqueue`] before this function returns, so two calls
-/// in the same tick land in submission order, regardless of how long
-/// either one's own later processing (the pending-field commit's round
-/// trip) takes. [`SourceCommandQueue`] does the actual work, one
-/// submission at a time, in that same order.
 pub fn submit_source_command(
     mut sync: Signal<SourceSyncState>,
-    _state: Signal<AppState>,
-    _mode: Signal<EditorMode>,
-    _toasts: Signal<Vec<Toast>>,
+    state: Signal<AppState>,
+    mode: Signal<EditorMode>,
+    toasts: Signal<Vec<Toast>>,
     command: SourceCommand,
-) {
+) -> SubmitOutcome {
     if let Some(token) = sync.write().cancel_focus_interactions() {
         focus::cancel_focus_guards_through(token);
     }
-    queue::enqueue(queue::Submission::WithoutFocusClaim { command });
+    submit_source_command_preserving_focus(sync, state, mode, toasts, command, None)
 }
 
-/// What [`queue::SourceCommandQueue`] does for a
-/// [`queue::Submission::WithoutFocusClaim`], in the order its `enqueue`
-/// call landed. The direct path's old body, unchanged, just no longer
-/// `spawn`ed per call. Also reused by `focus::run_interaction` for a
-/// claim that went stale while queued (re-review §2.3): that path has
-/// already decided not to claim focus either, just later than this one.
-pub(super) async fn process_direct_submission(signals: AppSignals, command: SourceCommand) {
-    submit_source_command_preserving_focus(signals, command, None).await;
-}
-
-/// Task 048 §2.2: a command that arrives mid-IME-composition is refused
-/// outright, exactly as Text Mode's own `CompositionActive` handling
-/// refuses one -- never run without the field's pending text, and never
-/// queued to retry after the composition ends.
-fn refuse_while_composing(toasts: &mut Signal<Vec<Toast>>, command: &SourceCommand, lang: Lang) {
+/// Task 051: a shortcut that arrived while a Form Mode field was
+/// mid-IME-composition is refused outright, exactly as Text Mode's own
+/// `CompositionActive` handling refuses one -- never run without the
+/// field's pending text, and never queued to retry after the
+/// composition ends. `shortcuts.js` itself decides whether a
+/// composition is open (it already tracks this to flush a focused
+/// field's pending text before relaying, task 051 §2.1); this is just
+/// the one place that turns that into the existing discard-report toast.
+pub fn refuse_source_shortcut_while_composing(
+    mut toasts: Signal<Vec<Toast>>,
+    command: &SourceCommand,
+    lang: Lang,
+) {
     let discard = QueueDiscard {
         command: command.clone(),
         reason: DiscardReason::Composing,
         focus_token: None,
     };
     for message in discard_report::discard_messages(std::slice::from_ref(&discard), lang) {
-        push_toast(toasts, ToastKind::Warning, message);
+        push_toast(&mut toasts, ToastKind::Warning, message);
     }
 }
 
-/// Task 048 §2.2's decision, pulled out pure: the one `CommitOutcome` that
-/// must stop the command from running at all, never run it anyway. Tested
-/// directly, since the real decision site needs a live `eval_body` round
-/// trip to reach.
-fn should_refuse(outcome: form_commit::CommitOutcome) -> bool {
-    outcome == form_commit::CommitOutcome::Composing
-}
-
-pub(super) async fn submit_source_command_preserving_focus(
-    signals: AppSignals,
+fn submit_source_command_preserving_focus(
+    mut sync: Signal<SourceSyncState>,
+    state: Signal<AppState>,
+    _mode: Signal<EditorMode>,
+    mut toasts: Signal<Vec<Toast>>,
     command: SourceCommand,
     focus_token: Option<u64>,
 ) -> SubmitOutcome {
-    let AppSignals {
-        mut sync,
-        state,
-        mode,
-        mut toasts,
-        lang,
-    } = signals;
-    // Task 048 D1: ordered before the command runs, not timed -- the
-    // `.await` below is this function's only one, so nothing else can run
-    // between the commit landing and `submit_with_focus` being called.
-    let commit_outcome = form_commit::commit_pending_form_field(state, mode).await;
-    if should_refuse(commit_outcome) {
-        refuse_while_composing(&mut toasts, &command, *lang.read());
-        return SubmitOutcome::NoOp;
-    }
     let document_id = state
         .read()
         .session
@@ -232,6 +185,3 @@ impl From<StoreError> for SourceSyncError {
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

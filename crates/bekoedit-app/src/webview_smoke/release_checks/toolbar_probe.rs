@@ -8,11 +8,13 @@
 //! `1492cac`, confirmed the hypothesis the hard way -- the toolbar click
 //! committed neither the pending text nor the toggle; Ctrl+S wrote back
 //! exactly the seeded `abc\n`, with the field still *showing* `abc def` on
-//! screen. Task 048 D1/D2 fix this (`form_commit::commit_pending_form_field`
-//! orders a commit before every command; `resolve_toggle_inline` resolves
-//! against the field's current value, sent with the selection, as one
-//! patch), so this scenario now asserts the fixed bytes instead of merely
-//! reporting them.
+//! screen. Task 048 D2 fixes this: `resolve_toggle_inline` resolves against
+//! the field's own current value, sent with the selection, as one patch
+//! (D1, the keyboard-command path, is a separate mechanism --
+//! `shortcuts.js` flushing a focused field before relaying, task 051 --
+//! that `save_pending_field`/`keyboard_mode_switch_commits_pending_field`
+//! cover instead), so this scenario now asserts the fixed bytes instead of
+//! merely reporting them.
 //!
 //! Sets the field's value and selection from script -- which, like typing,
 //! fires no `change` event, exactly the uncommitted state a real keystroke
