@@ -70,6 +70,20 @@ fn trim_cell_range(source: &str, range: Range<usize>) -> Range<usize> {
     while end > start && bytes[end - 1].is_ascii_whitespace() {
         end -= 1;
     }
+    if start == end && range.end - range.start >= 2 {
+        // Task 045 review (2026-10-03), RFC-048 slice 3 §3: a cell whose
+        // content is only whitespace, two characters or more (every row
+        // RFC-048 slice 3 inserts is exactly this shape, `|  |`), places
+        // a typed edit after the *first* whitespace character rather
+        // than collapsing the whole run to one end -- `| ZQ7 |`, not
+        // `|ZQ7  |` or `|  ZQ7|`. A one-character whitespace cell (`| |`)
+        // or a truly empty one (`||`) are unaffected: there is no second
+        // character to land before. Still a pure insertion either way:
+        // no byte is removed or moved, only where the zero-length range
+        // sits within the unchanged whitespace run.
+        let point = range.start + 1;
+        return point..point;
+    }
     start..end
 }
 

@@ -529,6 +529,66 @@ fn a_cell_with_a_non_pipe_backslash_escape_is_editable_not_falsely_refused() {
     assert_eq!(out, "| a | b |\n|---|---|\n| Q | \\*y\\* |\n");
 }
 
+// --- RFC-048 slice 3 review (2026-10-03): whitespace-only cells ---
+
+#[test]
+fn editing_a_two_space_cell_inserts_after_the_first_space() {
+    // Every row `InsertTableRow`/`AddTableRow` creates is exactly this
+    // shape (`empty_row_text`) -- the first thing a user types into a
+    // freshly inserted row lands here. `| ZQ7 |`, not `|ZQ7  |` or
+    // `|  ZQ7|`: one original space kept on each side of the insertion,
+    // never removed or moved.
+    let doc = "| a | b |\n|---|---|\n|  | 2 |\n";
+    let out = apply_table(
+        doc,
+        FormBlockEdit::ReplaceTableCell {
+            row: 1,
+            col: 0,
+            text: "ZQ7".into(),
+        },
+    );
+    assert_eq!(out, "| a | b |\n|---|---|\n| ZQ7 | 2 |\n");
+}
+
+#[test]
+fn editing_a_three_space_cell_inserts_after_the_first_space_too() {
+    let doc = "| a | b |\n|---|---|\n|   | 2 |\n";
+    let out = apply_table(
+        doc,
+        FormBlockEdit::ReplaceTableCell {
+            row: 1,
+            col: 0,
+            text: "ZQ7".into(),
+        },
+    );
+    assert_eq!(out, "| a | b |\n|---|---|\n| ZQ7  | 2 |\n");
+}
+
+#[test]
+fn editing_a_truly_empty_or_one_space_cell_is_unchanged_by_the_review() {
+    // `||` (no byte between the pipes) and `| |` (one space) have no
+    // second whitespace character to land before, so both keep today's
+    // behaviour: directly after the pipe, or after the one space.
+    let empty = apply_table(
+        "| a | b |\n|---|---|\n|| 2 |\n",
+        FormBlockEdit::ReplaceTableCell {
+            row: 1,
+            col: 0,
+            text: "Z".into(),
+        },
+    );
+    assert_eq!(empty, "| a | b |\n|---|---|\n|Z| 2 |\n");
+    let one_space = apply_table(
+        "| a | b |\n|---|---|\n| | 2 |\n",
+        FormBlockEdit::ReplaceTableCell {
+            row: 1,
+            col: 0,
+            text: "Z".into(),
+        },
+    );
+    assert_eq!(one_space, "| a | b |\n|---|---|\n| Z| 2 |\n");
+}
+
 // --- AddTableRow: a pure insertion ---
 
 #[test]

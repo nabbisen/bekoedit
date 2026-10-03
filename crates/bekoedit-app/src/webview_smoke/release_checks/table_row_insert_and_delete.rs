@@ -36,11 +36,13 @@ const TYPED_TEXT: &str = "ZQ7";
 
 /// The exact line the typed text produces once it lands in the new
 /// (otherwise still-empty) row -- computed once, directly from the real
-/// resolver (`ReplaceTableCell` on an empty cell goes in right after the
-/// cell's own leading whitespace, task 045 §2.2), not guessed: a byte
-/// mismatch here would be a change to that rule, not a regression in
-/// this scenario.
-const INSERTED_LINE: &str = "|  ZQ7|  |\n";
+/// resolver, not guessed: a byte mismatch here would be a change to
+/// that rule, not a regression in this scenario. The RFC-048 slice 3
+/// review (2026-10-03 §3) changed this: a cell whose content is only
+/// whitespace, two characters or more (every empty row this slice
+/// creates is exactly this shape), now takes a typed edit after the
+/// *first* whitespace character, so `| ZQ7 |`, not `|  ZQ7|`.
+const INSERTED_LINE: &str = "| ZQ7 |  |\n";
 
 /// A save settling, past the write itself -- the same margin every
 /// other save-waiting scenario uses.

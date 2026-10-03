@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Tables whose cells use bold, italic, code or other inline formatting can
   now be edited in Form Mode, cell by cell; each cell shows its Markdown
   text.
+- Typing into a blank table cell now keeps a space on each side (`| text |`)
+  instead of pushing the typed text against one edge.
 
 ### Fixed
 - Close Workspace and Export as HTML showed no text in their menus, and the
