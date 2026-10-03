@@ -183,8 +183,6 @@ dependencies = [
  "dioxus",
  "dioxus-swdir-tree",
  "dirs",
- "futures-channel",
- "futures-util",
  "rfd",
  "serde",
  "serde_json",
