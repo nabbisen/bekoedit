@@ -2,5 +2,6 @@
 mod basic_tests;
 mod inline_tests;
 mod table_corpus_tests;
+mod table_row_ops_tests;
 mod table_tests;
 mod table_toolbar_tests;

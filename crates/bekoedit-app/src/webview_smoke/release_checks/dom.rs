@@ -72,6 +72,28 @@ pub(super) async fn form_paragraph_present() -> Result<bool, String> {
     returned("document.querySelector('.form-mode .paragraph-input') !== null").await
 }
 
+/// How many data rows' own actions button is currently in the DOM
+/// (RFC-048 slice 3): one per data row, never the header.
+pub(super) async fn table_row_actions_button_count() -> Result<usize, String> {
+    returned("document.querySelectorAll('.table-row-actions-btn').length").await
+}
+
+/// Whether a row-actions menu is currently open, anywhere in the table.
+pub(super) async fn table_row_menu_open() -> Result<bool, String> {
+    returned("document.querySelector('.table-row-actions-menu') !== null").await
+}
+
+/// The `index`-th `.table-cell-input` in document order (header cells
+/// first, left to right, then each data row) -- `None` if there is no
+/// such element.
+pub(super) async fn table_cell_value_at(index: usize) -> Result<Option<String>, String> {
+    returned(&format!(
+        "(() => {{ const el = document.querySelectorAll('.table-cell-input')[{index}]; \
+         return el ? el.value : null; }})()"
+    ))
+    .await
+}
+
 /// The workspace explorer is in the DOM -- `app.rs` renders `Explorer {}`
 /// only `if !collapsed`, so its absence/presence is `ExplorerCollapsed`
 /// itself (`ctrl_b_toggles_explorer`).

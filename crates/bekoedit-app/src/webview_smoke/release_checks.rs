@@ -47,6 +47,7 @@ mod paste_report;
 mod save;
 mod save_pending_field;
 mod seed;
+mod table_row_insert_and_delete;
 mod toolbar_probe;
 pub(super) use focus_trace::record_focus_trace;
 pub(super) use seed::prepare;
@@ -92,6 +93,11 @@ pub enum ReleaseScenario {
     /// workspace explorer -- the shortcut `shortcuts.js` has sent since
     /// RFC-020, but that no Rust code ever acted on until this task.
     CtrlBTogglesExplorer,
+    /// RFC-048 slice 3 §2.4: insert a table row through the real grid
+    /// UI (a trusted click on the row's actions button, then the menu),
+    /// type into it, save, then delete it through the menu and save
+    /// again -- the original bytes must come back exactly.
+    TableRowInsertAndDelete,
 }
 
 impl ReleaseScenario {
@@ -113,6 +119,7 @@ impl ReleaseScenario {
                 keyboard_mode_switch_commits_pending_field::NAME
             }
             Self::CtrlBTogglesExplorer => ctrl_b_toggles_explorer::NAME,
+            Self::TableRowInsertAndDelete => table_row_insert_and_delete::NAME,
         }
     }
 
@@ -132,6 +139,7 @@ impl ReleaseScenario {
             Self::FormFieldCommitsBeforeModeSwitch,
             Self::KeyboardModeSwitchCommitsPendingField,
             Self::CtrlBTogglesExplorer,
+            Self::TableRowInsertAndDelete,
         ]
         .into_iter()
         .find(|scenario| scenario.name() == name)
@@ -142,7 +150,8 @@ impl ReleaseScenario {
                  save_preserves_crlf_bytes, mode_switch_preserves_bytes link_clicks_reach_only_the_browser, \
                  paste_probe, paste_conversion, toolbar_probe, save_pending_field, \
                  form_field_commits_before_mode_switch, \
-                 keyboard_mode_switch_commits_pending_field or ctrl_b_toggles_explorer"
+                 keyboard_mode_switch_commits_pending_field, ctrl_b_toggles_explorer or \
+                 table_row_insert_and_delete"
             )
         })
     }
@@ -235,6 +244,9 @@ pub fn WebViewReleaseChecksDriver() -> Element {
                 }
                 ReleaseScenario::CtrlBTogglesExplorer => {
                     ctrl_b_toggles_explorer::run(&terminal, &desktop).await
+                }
+                ReleaseScenario::TableRowInsertAndDelete => {
+                    table_row_insert_and_delete::run(&terminal, &desktop).await
                 }
                 _ => launch::run(&terminal, state, toasts, lang).await,
             };

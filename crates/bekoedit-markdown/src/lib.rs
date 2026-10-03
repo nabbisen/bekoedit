@@ -34,7 +34,7 @@ pub use destination::{DestinationKind, classify_destination, normalized as norma
 pub use fingerprint::{BlockFingerprint, BlockId};
 pub use form::{
     FormBlock, FormBlockDisplay, FormBlockEdit, FormEditCommand, FormEditError, FormListItem,
-    FormProjection, InlineFormat,
+    FormProjection, InlineFormat, TableRowDirection, TableRowPosition,
 };
 pub use gfm::has_gfm_table;
 pub use index::{MarkdownDiagnostic, MarkdownIndex};

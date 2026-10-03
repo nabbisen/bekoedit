@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Insert, delete and move table rows from the grid in Form Mode.
+
 ### Changed
 - Tables whose cells use bold, italic, code or other inline formatting can
   now be edited in Form Mode, cell by cell; each cell shows its Markdown

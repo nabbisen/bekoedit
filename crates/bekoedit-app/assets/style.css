@@ -306,6 +306,19 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .table-cell-input { width: 100%; border: none; background: transparent; padding: 2px 4px; font: inherit; }
 .table-cell-input:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
 .table-add-row { margin-top: 6px; font-size: 0.85em; }
+.table-row-actions-header { min-width: 0; width: 1px; border: none; background: transparent; }
+.table-row-actions-cell { border: none; padding: 0; min-width: 0; width: 1px; }
+.table-row-actions-wrap { position: relative; }
+.table-row-actions-btn { padding: 2px 6px; font-size: .9em; line-height: 1; }
+.table-row-actions-menu {
+  position: absolute; top: calc(100% + 2px); right: 0;
+  width: min(180px, calc(100vw - 16px)); min-width: 0;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  padding: 4px; z-index: 200;
+}
+.table-row-actions-menu .dropdown-item[disabled] { opacity: .4; cursor: default; }
+.table-row-actions-menu .dropdown-item[disabled]:hover { background: transparent; }
 
 /* --- image card (RFC-028) --- */
 .image-card { display: flex; flex-direction: column; gap: 8px; }

@@ -555,10 +555,17 @@ jobs:
         # mode only (so a save scenario can now only pass through its own
         # save mechanism), wires Ctrl+B to toggle the explorer (sent since
         # RFC-020; nothing ever acted on it), and adds `ctrl_b_toggles_explorer`.
+        # That push (`c041ced`) went green at last: every shortcut-dependent
+        # scenario passed through its own real mechanism for the first time.
+        # RFC-048 slice 3 (row operations) adds `table_row_insert_and_delete`:
+        # a real click opens a table row's own actions menu, "Insert row
+        # below" inserts a new row, real keystrokes type into it, a real
+        # Ctrl+S saves it, then the menu's "Delete row" removes it and a
+        # second Ctrl+S must bring back the exact original bytes.
         id: release_checks
         run: |
           failed=0
-          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe paste_conversion toolbar_probe save_pending_field form_field_commits_before_mode_switch keyboard_mode_switch_commits_pending_field ctrl_b_toggles_explorer; do
+          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe paste_conversion toolbar_probe save_pending_field form_field_commits_before_mode_switch keyboard_mode_switch_commits_pending_field ctrl_b_toggles_explorer table_row_insert_and_delete; do
             RELEASE_CHECKS_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-release-checks.XXXXXX")"
             echo "release-checks scenario: $scenario"
             # Task 033: only this scenario gets stub openers. $BROWSER is the

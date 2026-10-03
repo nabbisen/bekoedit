@@ -76,6 +76,13 @@ pub(super) fn original_note() -> Vec<u8> {
     .to_vec()
 }
 
+/// `table_row_insert_and_delete`: a two-column, two-data-row simple
+/// table, so there is a row above and below the one the scenario
+/// inserts next to.
+pub(super) fn original_table_note() -> Vec<u8> {
+    b"| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n".to_vec()
+}
+
 fn make_workspace(root: &Path, name: &str, files: &[(&str, &[u8])]) -> Result<PathBuf, String> {
     let workspace = root.join(name);
     std::fs::create_dir(&workspace)
@@ -160,6 +167,12 @@ pub(in crate::webview_smoke) fn prepare(
             let file = workspace.join(SAVE_FILE);
             (workspace, "Save Project".to_string(), original, Some(file))
         }
+        ReleaseScenario::TableRowInsertAndDelete => {
+            let original = original_table_note();
+            let workspace = make_workspace(&root, "save-project", &[(SAVE_FILE, &original)])?;
+            let file = workspace.join(SAVE_FILE);
+            (workspace, "Save Project".to_string(), original, Some(file))
+        }
     };
     recents.record(workspace.clone(), display_name.clone(), 2);
 
@@ -176,8 +189,9 @@ pub(in crate::webview_smoke) fn prepare(
                 | ReleaseScenario::SavePendingField
                 | ReleaseScenario::FormFieldCommitsBeforeModeSwitch
                 | ReleaseScenario::KeyboardModeSwitchCommitsPendingField
+                | ReleaseScenario::TableRowInsertAndDelete
         ) {
-            // Each of these four starts with a Form Mode field.
+            // Each of these five starts with a Form Mode field.
             EditorMode::Form
         } else {
             EditorMode::Text

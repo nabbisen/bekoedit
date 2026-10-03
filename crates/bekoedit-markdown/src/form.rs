@@ -204,6 +204,21 @@ pub enum InlineFormat {
     Link,
 }
 
+/// Where [`FormBlockEdit::InsertTableRow`] places the new row, relative to
+/// `at`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TableRowPosition {
+    Above,
+    Below,
+}
+
+/// Which neighbour [`FormBlockEdit::MoveTableRow`] swaps `row` with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TableRowDirection {
+    Up,
+    Down,
+}
+
 impl InlineFormat {
     /// The Markdown marker string surrounding the selected text.
     pub fn open_marker(self) -> &'static str {
@@ -264,6 +279,26 @@ pub enum FormBlockEdit {
     },
     /// Append a new empty row to a simple table (RFC-027).
     AddTableRow,
+    /// Insert a new empty row above or below row `at` (RFC-048 slice 3).
+    /// `at` is a row index in the same sense as `ReplaceTableCell`'s
+    /// `row` -- 0 is the header. Refused with `UnsupportedEditOperation`
+    /// for `Above` the header (row 0).
+    InsertTableRow {
+        at: usize,
+        position: TableRowPosition,
+    },
+    /// Delete row `row` (RFC-048 slice 3). The header (row 0) is
+    /// refused. Deleting the table's only data row is allowed.
+    DeleteTableRow {
+        row: usize,
+    },
+    /// Swap row `row` with its neighbour in `direction` (RFC-048 slice
+    /// 3). Refused if that neighbour would be the header, or does not
+    /// exist.
+    MoveTableRow {
+        row: usize,
+        direction: TableRowDirection,
+    },
     /// Toggle inline markup around a JS-editor selection (RFC-030).
     /// Offsets are UTF-16 code units relative to `current_text`, not to
     /// whatever the document currently has stored.

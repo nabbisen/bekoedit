@@ -67,6 +67,15 @@ pub fn resolve_form_edit(
             text: cell_text,
         } => super::tables::resolve_replace_table_cell(text, block, *row, *col, cell_text)?,
         FormBlockEdit::AddTableRow => super::tables::resolve_add_table_row(text, block)?,
+        FormBlockEdit::InsertTableRow { at, position } => {
+            super::tables::resolve_insert_table_row(text, block, *at, *position)?
+        }
+        FormBlockEdit::DeleteTableRow { row } => {
+            super::tables::resolve_delete_table_row(text, block, *row)?
+        }
+        FormBlockEdit::MoveTableRow { row, direction } => {
+            super::tables::resolve_move_table_row(text, block, *row, *direction)?
+        }
         FormBlockEdit::ToggleInline {
             current_text,
             kind,

@@ -132,6 +132,56 @@ fn focus_move_expr(array: &'static str, position: FocusMove) -> String {
     }
 }
 
+/// Focuses one table cell's input on the next frame (RFC-048 slice 3
+/// handoff §2.2, after an insert). `field_id` is the table's own id
+/// (`fb-{ordinal}-{content_hash}`, built entirely from internal
+/// identifiers, never user text -- the same reasoning as
+/// [`focus_element`]'s `&'static str`, relaxed to `&str` here only
+/// because the caller-supplied part is always that already-safe id plus
+/// plain `usize`s, never arbitrary text). A missing element is a no-op.
+pub fn focus_table_cell(field_id: &str, row: usize, col: usize) {
+    document::eval(&format!(
+        r#"requestAnimationFrame(() => document.getElementById('{field_id}-{row}-{col}')?.focus())"#,
+    ));
+}
+
+/// Focuses a table's own "Add row" button on the next frame (RFC-048
+/// slice 3 handoff §2.2: a delete's fallback when there is no previous
+/// data row's actions button to land on). Same id-safety reasoning as
+/// [`focus_table_cell`].
+pub fn focus_table_add_row_button(field_id: &str) {
+    document::eval(&format!(
+        r#"requestAnimationFrame(() => document.getElementById('{field_id}-add-row')?.focus())"#,
+    ));
+}
+
+/// Focuses one row's own actions-menu trigger button on the next frame
+/// (RFC-048 slice 3 handoff §2.2, after a delete or a move). Same
+/// id-safety reasoning as [`focus_table_cell`].
+pub fn focus_table_row_actions(field_id: &str, row: usize) {
+    document::eval(&format!(
+        r#"requestAnimationFrame(() => document.getElementById('{field_id}-row-actions-{row}')?.focus())"#,
+    ));
+}
+
+/// Move focus among one row-actions menu's `[role="menuitem"]`
+/// descendants, on the next frame -- the per-row analogue of
+/// [`focus_menu_item`], needed because each table row has its own menu
+/// container id (`{field_id}-row-menu-{row}`), not one of the fixed
+/// `MENU_*` constants.
+pub fn focus_table_row_menu_item(field_id: &str, row: usize, position: FocusMove) {
+    let target = focus_move_expr("items", position);
+    document::eval(&format!(
+        r#"requestAnimationFrame(() => {{
+            const menu = document.getElementById('{field_id}-row-menu-{row}');
+            const items = menu ? [...menu.querySelectorAll('[role="menuitem"]')] : [];
+            if (items.length === 0) return;
+            const current = items.indexOf(document.activeElement);
+            {target}?.focus();
+        }});"#,
+    ));
+}
+
 /// What a keydown on an overflow-menu **trigger** means (RFC-042 §7.2,
 /// handoff §5.2). `None` means the key does nothing at the trigger — in
 /// particular, Enter/Space's native button-click activation already opens
