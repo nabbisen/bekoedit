@@ -44,7 +44,8 @@ pub fn note_start_screen_mounted() {
 /// step failed) has somewhere to point.
 pub fn record_source_trace(event: &str, details: impl std::fmt::Display) {
     trusted_click::record_source_trace(event, &details);
-    release_checks::record_focus_trace(event, details);
+    release_checks::record_focus_trace(event, &details);
+    release_checks::record_form_trace(event, &details);
 }
 
 /// Whether this process is a trusted-click run. Unlike `launch_config()`, it

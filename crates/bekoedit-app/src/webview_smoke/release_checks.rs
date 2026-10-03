@@ -35,6 +35,7 @@ mod ctrl_b_toggles_explorer;
 mod dom;
 mod focus_trace;
 mod form_field_commits_before_mode_switch;
+mod form_trace;
 mod keyboard_mode_switch_commits_pending_field;
 mod launch;
 mod link_clicks;
@@ -50,6 +51,7 @@ mod seed;
 mod table_row_insert_and_delete;
 mod toolbar_probe;
 pub(super) use focus_trace::record_focus_trace;
+pub(super) use form_trace::record_form_trace;
 pub(super) use seed::prepare;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -255,6 +257,11 @@ pub fn WebViewReleaseChecksDriver() -> Element {
             // own first failure was a plain timeout, with nothing to say
             // which step of claim/arm/consume it was.
             focus_trace::print_final_trace();
+            // Task 056 §2.2: a refused Form edit's own trace, same
+            // reasoning -- `table_row_insert_and_delete`'s own first
+            // failure was a real click with no visible effect, with
+            // nothing to say whether an edit was even attempted.
+            form_trace::print_final_trace();
             match outcome.and_then(|checks| terminal.accept().map(|()| checks)) {
                 Ok(checks) => {
                     for check in &checks {

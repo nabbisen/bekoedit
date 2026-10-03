@@ -8,6 +8,7 @@ use bekoedit_markdown::{FormBlockDisplay, FormBlockEdit, fingerprint::BlockId};
 use super::dispatch;
 use super::inline_toolbar::InlineToolbar;
 use super::table_view::TableView;
+use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
 
 // ─── Per-block view ───────────────────────────────────────────────────────────
@@ -20,6 +21,7 @@ pub fn FormBlockView(
     lang: Lang,
 ) -> Element {
     let state = use_context::<Signal<AppState>>();
+    let toasts = use_context::<Signal<Vec<Toast>>>();
     let field_id = format!(
         "fb-{}-{}",
         block_id.ordinal, block_id.fingerprint.content_hash
@@ -39,7 +41,7 @@ pub fn FormBlockView(
                         disabled: !level_editable,
                         onchange: move |evt| {
                             if let Ok(l) = evt.value().parse::<u8>() {
-                                dispatch(state, revision, block_id,
+                                dispatch(state, revision, block_id, toasts, lang,
                                          FormBlockEdit::SetHeadingLevel { level: l });
                             }
                         },
@@ -52,7 +54,7 @@ pub fn FormBlockView(
                         class: "heading-input level-{level}",
                         r#type: "text",
                         value: "{text}",
-                        onchange: move |evt| dispatch(state, revision, block_id,
+                        onchange: move |evt| dispatch(state, revision, block_id, toasts, lang,
                             FormBlockEdit::ReplacePlainText { text: evt.value() }),
                     }
                 }
@@ -68,7 +70,7 @@ pub fn FormBlockView(
                     id: "{field_id}",
                     class: "paragraph-input",
                     value: "{text}",
-                    onchange: move |evt| dispatch(state, revision, block_id,
+                    onchange: move |evt| dispatch(state, revision, block_id, toasts, lang,
                         FormBlockEdit::ReplacePlainText { text: evt.value() }),
                 }
             },
@@ -83,7 +85,7 @@ pub fn FormBlockView(
                     id: "{field_id}",
                     class: "paragraph-input blockquote-input",
                     value: "{text}",
-                    onchange: move |evt| dispatch(state, revision, block_id,
+                    onchange: move |evt| dispatch(state, revision, block_id, toasts, lang,
                         FormBlockEdit::ReplacePlainText { text: evt.value() }),
                 }
             },
@@ -102,7 +104,7 @@ pub fn FormBlockView(
                                     checked,
                                     onchange: {
                                         let ord = item.ordinal;
-                                        move |evt: Event<FormData>| dispatch(state, revision, block_id,
+                                        move |evt: Event<FormData>| dispatch(state, revision, block_id, toasts, lang,
                                             FormBlockEdit::ToggleTaskChecked {
                                                 item_ordinal: ord,
                                                 checked: evt.checked(),
@@ -115,7 +117,7 @@ pub fn FormBlockView(
                                 value: "{item.text}",
                                 onchange: {
                                     let ord = item.ordinal;
-                                    move |evt: Event<FormData>| dispatch(state, revision, block_id,
+                                    move |evt: Event<FormData>| dispatch(state, revision, block_id, toasts, lang,
                                         FormBlockEdit::ReplaceListItemText {
                                             item_ordinal: ord,
                                             text: evt.value(),
@@ -143,7 +145,7 @@ pub fn FormBlockView(
                                 value: "{lang_val}",
                                 onchange: {
                                     let code = code.clone();
-                                    move |evt: Event<FormData>| dispatch(state, revision, block_id,
+                                    move |evt: Event<FormData>| dispatch(state, revision, block_id, toasts, lang,
                                         FormBlockEdit::ReplaceCodeBlock {
                                             language: Some(evt.value()),
                                             code: code.clone(),
@@ -157,7 +159,7 @@ pub fn FormBlockView(
                             value: "{code}",
                             onchange: {
                                 let lv = lang_val.clone();
-                                move |evt: Event<FormData>| dispatch(state, revision, block_id,
+                                move |evt: Event<FormData>| dispatch(state, revision, block_id, toasts, lang,
                                     FormBlockEdit::ReplaceCodeBlock {
                                         language: Some(lv.clone()),
                                         code: evt.value(),
@@ -212,7 +214,7 @@ pub fn FormBlockView(
                             value: "{alt}",
                             onchange: {
                                 let s = src.clone();
-                                move |evt: Event<FormData>| dispatch(state, revision, block_id,
+                                move |evt: Event<FormData>| dispatch(state, revision, block_id, toasts, lang,
                                     FormBlockEdit::ReplaceImage { alt: evt.value(), src: s.clone() })
                             },
                         }
@@ -224,7 +226,7 @@ pub fn FormBlockView(
                             value: "{src}",
                             onchange: {
                                 let a = alt.clone();
-                                move |evt: Event<FormData>| dispatch(state, revision, block_id,
+                                move |evt: Event<FormData>| dispatch(state, revision, block_id, toasts, lang,
                                     FormBlockEdit::ReplaceImage { alt: a.clone(), src: evt.value() })
                             },
                         }
@@ -257,7 +259,7 @@ pub fn FormBlockView(
                             spellcheck: "false",
                             readonly: !editable,
                             value: "{text}",
-                            onchange: move |evt| dispatch(state, revision, block_id,
+                            onchange: move |evt| dispatch(state, revision, block_id, toasts, lang,
                                 FormBlockEdit::ReplaceRawIsland { text: evt.value() }),
                         }
                     }
@@ -275,7 +277,7 @@ pub fn FormBlockView(
             button {
                 class: "block-delete",
                 title: tr(lang, "block.delete"),
-                onclick: move |_| dispatch(state, revision, block_id, FormBlockEdit::DeleteBlock),
+                onclick: move |_| dispatch(state, revision, block_id, toasts, lang, FormBlockEdit::DeleteBlock),
                 "×"
             }
         }

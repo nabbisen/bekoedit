@@ -94,6 +94,25 @@ pub(super) async fn table_cell_value_at(index: usize) -> Result<Option<String>, 
     .await
 }
 
+/// The id of whichever row-actions trigger currently shows `.active`,
+/// and the open menu's own id -- `None` for either if nothing is open
+/// (task 056 §2.3: named right before an action expected to change the
+/// menu's state, so a failure around it names exactly which row and
+/// menu the scenario saw, not just that something timed out).
+pub(super) async fn open_row_actions_ids() -> Result<(Option<String>, Option<String>), String> {
+    returned(
+        "(() => { const btn = document.querySelector('.table-row-actions-btn.active'); \
+         const menu = document.querySelector('.table-row-actions-menu'); \
+         return [btn ? btn.id : null, menu ? menu.id : null]; })()",
+    )
+    .await
+}
+
+/// Whether a toast is currently shown (task 056 §2.1's "tell the user").
+pub(super) async fn toast_present() -> Result<bool, String> {
+    returned("document.querySelector('.toast') !== null").await
+}
+
 /// The workspace explorer is in the DOM -- `app.rs` renders `Explorer {}`
 /// only `if !collapsed`, so its absence/presence is `ExplorerCollapsed`
 /// itself (`ctrl_b_toggles_explorer`).

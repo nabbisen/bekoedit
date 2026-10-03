@@ -14,6 +14,7 @@ use bekoedit_markdown::{FormBlockEdit, TableRowDirection, TableRowPosition, fing
 use super::dispatch;
 use super::inline_toolbar::InlineToolbar;
 use crate::components::icons::AddIcon;
+use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
 use crate::shell_focus::{self, FocusMove};
 
@@ -28,6 +29,7 @@ pub fn TableView(
     col_count: usize,
 ) -> Element {
     let state = use_context::<Signal<AppState>>();
+    let toasts = use_context::<Signal<Vec<Toast>>>();
     // One toolbar for the whole table, acting on whichever cell last took
     // focus (RFC-048 slice 2 §2.3), not one toolbar per cell.
     let mut focused = use_signal::<Option<(usize, usize)>>(|| None);
@@ -77,6 +79,8 @@ pub fn TableView(
                                         state,
                                         revision,
                                         block_id,
+                                        toasts,
+                                        lang,
                                         FormBlockEdit::ReplaceTableCell { row: 0, col: ci, text: evt.value() },
                                     ),
                                 }
@@ -108,6 +112,8 @@ pub fn TableView(
                                                 state,
                                                 revision,
                                                 block_id,
+                                                toasts,
+                                                lang,
                                                 FormBlockEdit::ReplaceTableCell {
                                                     row: row_num,
                                                     col: ci,
@@ -123,6 +129,7 @@ pub fn TableView(
                                     field_id: field_id.clone(),
                                     block_id,
                                     revision,
+                                    toasts,
                                     lang,
                                     row: ri + 1,
                                     last_row,
@@ -137,7 +144,7 @@ pub fn TableView(
             button {
                 id: "{field_id}-add-row",
                 class: "table-add-row",
-                onclick: move |_| dispatch(state, revision, block_id, FormBlockEdit::AddTableRow),
+                onclick: move |_| dispatch(state, revision, block_id, toasts, lang, FormBlockEdit::AddTableRow),
                 AddIcon {}
                 {tr(lang, "table.add_row")}
             }
@@ -154,18 +161,27 @@ pub fn TableView(
 /// closure captured once and reused, so there is no question of which
 /// copy of `field_id` an event handler owns -- every `onclick` below
 /// clones `field_id` for its own call.
-fn insert_row(
+///
+/// Bundles `dispatch`'s own five non-edit arguments (task 056 §2.1
+/// widened it to carry `toasts`/`lang`, which pushed every caller past
+/// clippy's argument-count limit) -- every field is `Copy`, so this is
+/// itself just a `Copy` struct, not a lifetime to thread through.
+#[derive(Clone, Copy)]
+struct EditContext {
     state: Signal<AppState>,
     revision: u64,
     block_id: BlockId,
-    field_id: &str,
-    at: usize,
-    position: TableRowPosition,
-) {
+    toasts: Signal<Vec<Toast>>,
+    lang: Lang,
+}
+
+fn insert_row(ctx: EditContext, field_id: &str, at: usize, position: TableRowPosition) {
     dispatch(
-        state,
-        revision,
-        block_id,
+        ctx.state,
+        ctx.revision,
+        ctx.block_id,
+        ctx.toasts,
+        ctx.lang,
         FormBlockEdit::InsertTableRow { at, position },
     );
     // The new row's first cell: there is new, empty content the user
@@ -177,18 +193,13 @@ fn insert_row(
     shell_focus::focus_table_cell(field_id, new_row, 0);
 }
 
-fn delete_row(
-    state: Signal<AppState>,
-    revision: u64,
-    block_id: BlockId,
-    field_id: &str,
-    row: usize,
-    last_row: usize,
-) {
+fn delete_row(ctx: EditContext, field_id: &str, row: usize, last_row: usize) {
     dispatch(
-        state,
-        revision,
-        block_id,
+        ctx.state,
+        ctx.revision,
+        ctx.block_id,
+        ctx.toasts,
+        ctx.lang,
         FormBlockEdit::DeleteTableRow { row },
     );
     // The row that took the deleted row's place, or the previous one if
@@ -204,18 +215,13 @@ fn delete_row(
     }
 }
 
-fn move_row(
-    state: Signal<AppState>,
-    revision: u64,
-    block_id: BlockId,
-    field_id: &str,
-    row: usize,
-    direction: TableRowDirection,
-) {
+fn move_row(ctx: EditContext, field_id: &str, row: usize, direction: TableRowDirection) {
     dispatch(
-        state,
-        revision,
-        block_id,
+        ctx.state,
+        ctx.revision,
+        ctx.block_id,
+        ctx.toasts,
+        ctx.lang,
         FormBlockEdit::MoveTableRow { row, direction },
     );
     // The moved row's own new position.
@@ -236,6 +242,7 @@ fn RowActionsMenu(
     field_id: String,
     block_id: BlockId,
     revision: u64,
+    toasts: Signal<Vec<Toast>>,
     lang: Lang,
     row: usize,
     last_row: usize,
@@ -245,6 +252,13 @@ fn RowActionsMenu(
     let mut open = open;
     let mut entry = entry;
     let state = use_context::<Signal<AppState>>();
+    let ctx = EditContext {
+        state,
+        revision,
+        block_id,
+        toasts,
+        lang,
+    };
     let is_open = *open.read() == Some(row);
     let menu_id = format!("{field_id}-row-menu-{row}");
     let trigger_id = format!("{field_id}-row-actions-{row}");
@@ -323,7 +337,7 @@ fn RowActionsMenu(
                             let field_id = field_id.clone();
                             move |_| {
                                 open.set(None);
-                                insert_row(state, revision, block_id, &field_id, row, TableRowPosition::Above);
+                                insert_row(ctx, &field_id, row, TableRowPosition::Above);
                             }
                         },
                         {tr(lang, "table.row.insert_above")}
@@ -336,7 +350,7 @@ fn RowActionsMenu(
                             let field_id = field_id.clone();
                             move |_| {
                                 open.set(None);
-                                insert_row(state, revision, block_id, &field_id, row, TableRowPosition::Below);
+                                insert_row(ctx, &field_id, row, TableRowPosition::Below);
                             }
                         },
                         {tr(lang, "table.row.insert_below")}
@@ -350,7 +364,7 @@ fn RowActionsMenu(
                             let field_id = field_id.clone();
                             move |_| {
                                 open.set(None);
-                                delete_row(state, revision, block_id, &field_id, row, last_row);
+                                delete_row(ctx, &field_id, row, last_row);
                             }
                         },
                         {tr(lang, "table.row.delete")}
@@ -365,7 +379,7 @@ fn RowActionsMenu(
                             let field_id = field_id.clone();
                             move |_| {
                                 open.set(None);
-                                move_row(state, revision, block_id, &field_id, row, TableRowDirection::Up);
+                                move_row(ctx, &field_id, row, TableRowDirection::Up);
                             }
                         },
                         {tr(lang, "table.row.move_up")}
@@ -379,7 +393,7 @@ fn RowActionsMenu(
                             let field_id = field_id.clone();
                             move |_| {
                                 open.set(None);
-                                move_row(state, revision, block_id, &field_id, row, TableRowDirection::Down);
+                                move_row(ctx, &field_id, row, TableRowDirection::Down);
                             }
                         },
                         {tr(lang, "table.row.move_down")}

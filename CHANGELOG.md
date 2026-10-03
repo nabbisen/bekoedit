@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Keyboard shortcuts work: Ctrl+S saves, Ctrl+1 to 4 switch modes, and
   Ctrl+B toggles the file explorer. They did nothing in earlier versions;
   saving still happened through autosave. (Cmd on macOS.)
+- In Form Mode, a change that cannot be applied now says so, instead of
+  doing nothing.
 
 ## [0.17.0] - 2026-10-01
 

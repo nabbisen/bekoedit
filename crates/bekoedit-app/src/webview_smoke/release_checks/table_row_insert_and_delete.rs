@@ -135,6 +135,17 @@ pub(super) async fn run(
         dom::table_row_menu_open().await
     })
     .await?;
+
+    // Task 056 §2.3: report what the scenario saw right before the
+    // Delete click -- a real click with no visible effect gave no clue
+    // by itself whether an edit was even attempted.
+    let before_delete_count = dom::table_row_actions_button_count().await?;
+    let (active_trigger_id, open_menu_id) = dom::open_row_actions_ids().await?;
+    println!(
+        "  {NAME}: before the Delete row click: {before_delete_count} row-actions buttons, \
+         active trigger id={active_trigger_id:?}, open menu id={open_menu_id:?}"
+    );
+
     click_via_xtest(
         desktop,
         ".table-row-actions-menu .dropdown-item",
@@ -142,10 +153,22 @@ pub(super) async fn run(
         0,
     )
     .await?;
-    wait_until(NAME, "the inserted row to be gone", || async {
+    if let Err(error) = wait_until(NAME, "the inserted row to be gone", || async {
         Ok(dom::table_row_actions_button_count().await? == 2)
     })
-    .await?;
+    .await
+    {
+        // Task 056 §2.3: the assertion itself is unchanged -- this only
+        // adds what the scenario saw after the timeout, for the merge
+        // report to read against the trace above and `form_trace`'s own
+        // log.
+        let after_delete_count = dom::table_row_actions_button_count().await;
+        let toast_seen = dom::toast_present().await;
+        return Err(format!(
+            "{error}; after the timeout: row-actions buttons={after_delete_count:?}, \
+             toast present={toast_seen:?}"
+        ));
+    }
 
     run_xdotool(&["key", "--clearmodifiers", "ctrl+s"]).await?;
     let after_delete = wait_for_save(file, &after_insert).await?;

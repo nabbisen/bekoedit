@@ -10,12 +10,14 @@
 
 use dioxus::prelude::*;
 
-use bekoedit_core::AppState;
+use bekoedit_core::{AppState, SessionError, StoreError};
 use bekoedit_markdown::{
-    FormBlockDisplay, FormBlockEdit, FormEditCommand, FormProjection, fingerprint::BlockId,
+    FormBlockDisplay, FormBlockEdit, FormEditCommand, FormEditError, FormProjection,
+    fingerprint::BlockId,
 };
 
-use crate::i18n::Lang;
+use crate::components::toast::{Toast, ToastKind, push_toast};
+use crate::i18n::{Lang, tr};
 use crate::state::now_ms;
 
 #[component]
@@ -58,7 +60,14 @@ fn block_key(block_id: BlockId) -> String {
     format!("{}-{:?}", block_id.ordinal, block_id.kind)
 }
 
-fn dispatch(mut state: Signal<AppState>, revision: u64, block_id: BlockId, edit: FormBlockEdit) {
+fn dispatch(
+    mut state: Signal<AppState>,
+    revision: u64,
+    block_id: BlockId,
+    mut toasts: Signal<Vec<Toast>>,
+    lang: Lang,
+    edit: FormBlockEdit,
+) {
     // Task 051 §2.1: `shortcuts.js` dispatches a plain `change` event on
     // a focused Form field before relaying every shortcut, whether or
     // not the user actually typed anything since it was focused.
@@ -78,7 +87,90 @@ fn dispatch(mut state: Signal<AppState>, revision: u64, block_id: BlockId, edit:
         client_block_fingerprint: Some(block_id.fingerprint),
         edit,
     };
-    let _ = state.write().edit_form(&cmd, now_ms());
+    // Task 056 §2.1: a refused edit used to vanish silently (`let _ =`),
+    // against RFC-047's rule that a user command is run or reported,
+    // never dropped -- this is exactly how task 055's `table_row_insert_and_delete`
+    // read as "the Delete row click had no effect" instead of naming why.
+    let result = state.write().edit_form(&cmd, now_ms());
+    if let Some((trace_details, toast_key)) = edit_outcome(&result) {
+        crate::bridge::trace("form.edit_refused", trace_details);
+        push_toast(&mut toasts, ToastKind::Warning, tr(lang, toast_key));
+    }
+}
+
+/// What `dispatch` does with `edit_form`'s own result (task 056 §2.1,
+/// §4): the trace details to record and the toast key to show, or
+/// `None` for `Ok(())` -- an edit that actually applied has nothing to
+/// report. Pure, so every refusal kind is tested without a live
+/// `Signal` at all.
+fn edit_outcome(result: &Result<(), StoreError>) -> Option<(String, &'static str)> {
+    let error = result.as_ref().err()?;
+    Some((
+        edit_refused_trace_details(error),
+        edit_refused_toast_key(error),
+    ))
+}
+
+/// What `bridge::trace` records for a refused Form edit: the error's own
+/// kind, and for a revision mismatch, the expected and current
+/// revision -- never the `reason` text `UnsupportedEditOperation`/
+/// `InvalidEditPayload` carry, which is developer prose, not something
+/// a trace line should depend on staying stable (task 056 §2.1, §3).
+/// `edit_form`'s own signature is `Result<(), StoreError>` (`store.rs`),
+/// not `FormEditError` directly -- every Form-shaped refusal arrives as
+/// `StoreError::Session(SessionError::Form(_))`; every other
+/// `StoreError` variant is a precondition `dispatch`'s own caller could
+/// not have satisfied either (no open document, a pending conflict, …)
+/// and gets its own, equally plain kind.
+fn edit_refused_trace_details(error: &StoreError) -> String {
+    match error {
+        StoreError::Session(SessionError::Form(form_error)) => match form_error {
+            FormEditError::DocumentRevisionMismatch { base, current } => {
+                format!("kind=document_revision_mismatch base={base} current={current}")
+            }
+            FormEditError::BlockNotFound => "kind=block_not_found".to_string(),
+            FormEditError::BlockFingerprintMismatch => {
+                "kind=block_fingerprint_mismatch".to_string()
+            }
+            FormEditError::ItemNotFound { ordinal } => {
+                format!("kind=item_not_found ordinal={ordinal}")
+            }
+            FormEditError::UnsupportedEditOperation { .. } => {
+                "kind=unsupported_edit_operation".to_string()
+            }
+            FormEditError::InvalidEditPayload { .. } => "kind=invalid_edit_payload".to_string(),
+        },
+        StoreError::NoWorkspace => "kind=no_workspace".to_string(),
+        StoreError::NoDocument => "kind=no_document".to_string(),
+        StoreError::ConflictPending => "kind=conflict_pending".to_string(),
+        StoreError::DocumentDirty => "kind=document_dirty".to_string(),
+        StoreError::Untitled => "kind=untitled".to_string(),
+        StoreError::Workspace(_) => "kind=workspace_error".to_string(),
+        StoreError::Session(_) => "kind=session_error".to_string(),
+        StoreError::FileOp(_) => "kind=file_op_error".to_string(),
+        StoreError::SaveFailed(_) => "kind=save_failed".to_string(),
+    }
+}
+
+/// The toast key for a refused Form edit, grouped by what the user can
+/// do about it (task 056 §2.1): the document or the block moved under
+/// them (try again); the thing they targeted is gone; or the change
+/// itself is not one Form Mode supports here. Every non-Form
+/// `StoreError` falls into the last bucket too: Form Mode has no
+/// specific recovery story for "no document is open" beyond "this
+/// didn't apply".
+fn edit_refused_toast_key(error: &StoreError) -> &'static str {
+    match error {
+        StoreError::Session(SessionError::Form(form_error)) => match form_error {
+            FormEditError::DocumentRevisionMismatch { .. }
+            | FormEditError::BlockFingerprintMismatch
+            | FormEditError::BlockNotFound => "form.edit_refused.stale",
+            FormEditError::ItemNotFound { .. } => "form.edit_refused.item_gone",
+            FormEditError::UnsupportedEditOperation { .. }
+            | FormEditError::InvalidEditPayload { .. } => "form.edit_refused.unsupported",
+        },
+        _ => "form.edit_refused.unsupported",
+    }
 }
 
 /// Whether `edit` would replace a `ReplacePlainText`/`ReplaceTableCell`
@@ -213,5 +305,132 @@ mod tests {
         let block_id = projection.blocks[0].block_id;
         let edit = FormBlockEdit::SetHeadingLevel { level: 2 };
         assert!(!is_unchanged_text_edit(&projection, block_id, &edit));
+    }
+
+    // --- Task 056: a refused Form edit produces a trace and a toast ---
+
+    /// Every `FormEditError` kind produces a trace and a toast key --
+    /// pure, no live `Signal` needed (task 056 §4's first required
+    /// test). Mutation: go back to discarding `edit_form`'s own result
+    /// outright in `dispatch`, and this whole path is unreachable; the
+    /// far more direct mutation is removing the `if let Some(...)`
+    /// around the trace/toast call, covered below.
+    #[test]
+    fn every_form_edit_error_kind_produces_a_trace_and_a_toast() {
+        let cases: Vec<(StoreError, &str)> = vec![
+            (
+                StoreError::Session(SessionError::Form(
+                    FormEditError::DocumentRevisionMismatch {
+                        base: 1,
+                        current: 2,
+                    },
+                )),
+                "form.edit_refused.stale",
+            ),
+            (
+                StoreError::Session(SessionError::Form(FormEditError::BlockNotFound)),
+                "form.edit_refused.stale",
+            ),
+            (
+                StoreError::Session(SessionError::Form(FormEditError::BlockFingerprintMismatch)),
+                "form.edit_refused.stale",
+            ),
+            (
+                StoreError::Session(SessionError::Form(FormEditError::ItemNotFound {
+                    ordinal: 3,
+                })),
+                "form.edit_refused.item_gone",
+            ),
+            (
+                StoreError::Session(SessionError::Form(
+                    FormEditError::UnsupportedEditOperation { reason: "x".into() },
+                )),
+                "form.edit_refused.unsupported",
+            ),
+            (
+                StoreError::Session(SessionError::Form(FormEditError::InvalidEditPayload {
+                    reason: "x".into(),
+                })),
+                "form.edit_refused.unsupported",
+            ),
+            (StoreError::NoDocument, "form.edit_refused.unsupported"),
+            (StoreError::ConflictPending, "form.edit_refused.unsupported"),
+        ];
+        for (error, expected_key) in cases {
+            let (details, key) =
+                edit_outcome(&Err(error)).expect("an Err must always produce an outcome");
+            assert!(!details.is_empty(), "the trace details must name a kind");
+            assert_eq!(key, expected_key);
+            // Both languages resolve the key (the i18n coverage test
+            // also checks this from every `tr(lang, "...")` call site,
+            // but these keys are built, not written literally).
+            assert!(!tr(crate::i18n::Lang::En, key).is_empty());
+            assert!(!tr(crate::i18n::Lang::Ja, key).is_empty());
+        }
+    }
+
+    /// The revision mismatch's own expected/current values reach the
+    /// trace, not just its kind (task 056 §2.1's "for a mismatch, the
+    /// expected and actual revision").
+    #[test]
+    fn a_revision_mismatch_traces_its_own_base_and_current() {
+        let error = StoreError::Session(SessionError::Form(
+            FormEditError::DocumentRevisionMismatch {
+                base: 5,
+                current: 9,
+            },
+        ));
+        let details = edit_refused_trace_details(&error);
+        assert!(details.contains("base=5"), "{details}");
+        assert!(details.contains("current=9"), "{details}");
+    }
+
+    /// No `reason` text from `UnsupportedEditOperation`/
+    /// `InvalidEditPayload` ever reaches the trace (task 056 §3: "never
+    /// document text" -- these `reason` strings are the closest thing
+    /// to document-adjacent free text this error type carries).
+    #[test]
+    fn the_reason_text_never_reaches_the_trace() {
+        let error = StoreError::Session(SessionError::Form(
+            FormEditError::UnsupportedEditOperation {
+                reason: "FORBIDDEN-SECRET-REASON".into(),
+            },
+        ));
+        let details = edit_refused_trace_details(&error);
+        assert!(!details.contains("FORBIDDEN-SECRET-REASON"), "{details}");
+    }
+
+    /// An accepted edit (`Ok(())`) produces neither a trace nor a toast
+    /// (task 056 §4's second required test).
+    #[test]
+    fn an_accepted_edit_produces_neither_trace_nor_toast() {
+        assert!(edit_outcome(&Ok(())).is_none());
+    }
+
+    /// The identical-text guard returns before `edit_form` is ever
+    /// called, so neither a trace nor a toast can fire for it (task 056
+    /// §4's third required test; §2.1's two exceptions). Structural,
+    /// since the guard itself needs a live `AppState` with a session to
+    /// exercise end to end -- what matters here is that the early
+    /// `return` in `dispatch`'s own source precedes the `edit_form`
+    /// call it would otherwise reach. Mutation: move the guard's
+    /// `return;` after the `edit_form` call, and this fails.
+    #[test]
+    fn the_unchanged_text_guard_returns_before_edit_form_is_ever_called() {
+        let source = include_str!("form_mode.rs");
+        let guard_at = source
+            .find("is_unchanged_text_edit(&projection, block_id, &edit)")
+            .expect("the guard condition");
+        let return_at = source[guard_at..]
+            .find("return;")
+            .map(|i| guard_at + i)
+            .expect("the guard's own early return");
+        let edit_form_at = source
+            .find("state.write().edit_form(&cmd, now_ms())")
+            .expect("the edit_form call");
+        assert!(
+            return_at < edit_form_at,
+            "the identical-text guard must return before edit_form is ever called"
+        );
     }
 }

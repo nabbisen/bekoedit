@@ -6,6 +6,7 @@ use bekoedit_core::AppState;
 use bekoedit_markdown::{FormBlockEdit, InlineFormat, fingerprint::BlockId};
 
 use super::dispatch;
+use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
 
 // ─── Inline formatting toolbar (RFC-030) ─────────────────────────────────────
@@ -49,6 +50,7 @@ pub fn InlineToolbar(
     #[props(default = true)] enabled: bool,
 ) -> Element {
     let state = use_context::<Signal<AppState>>();
+    let toasts = use_context::<Signal<Vec<Toast>>>();
 
     let make_btn = |label: &'static str, aria: &'static str, kind: InlineFormat| {
         let fid = field_id.clone();
@@ -78,6 +80,7 @@ pub fn InlineToolbar(
                     let rev = revision;
                     let k = kind;
                     let st = state;
+                    let ts = toasts;
                     spawn(async move {
                         #[derive(serde::Deserialize)]
                         struct Sel {
@@ -108,7 +111,7 @@ pub fn InlineToolbar(
                                     link_url: None,
                                 },
                             };
-                            dispatch(st, rev, bid, edit);
+                            dispatch(st, rev, bid, ts, lang, edit);
                         }
                     });
                 },

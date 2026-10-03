@@ -112,6 +112,13 @@ fn tr_en(key: &str) -> &'static str {
         "table.row.delete" => "Delete row",
         "table.row.move_up" => "Move up",
         "table.row.move_down" => "Move down",
+        "form.edit_refused.stale" => {
+            "This change was not applied: the document changed. Try again."
+        }
+        "form.edit_refused.item_gone" => {
+            "This change was not applied: that item is no longer there."
+        }
+        "form.edit_refused.unsupported" => "This change was not applied: it isn't supported here.",
         "error.generic" => "Something went wrong",
         "lang.switch" => "日本語",
         "mode.split" => "Split",
@@ -327,6 +334,15 @@ fn tr_ja(key: &str) -> &'static str {
         "table.row.delete" => "行を削除",
         "table.row.move_up" => "上に移動",
         "table.row.move_down" => "下に移動",
+        "form.edit_refused.stale" => {
+            "この変更は適用されませんでした: ドキュメントが変更されました。もう一度お試しください。"
+        }
+        "form.edit_refused.item_gone" => {
+            "この変更は適用されませんでした: その項目はすでにありません。"
+        }
+        "form.edit_refused.unsupported" => {
+            "この変更は適用されませんでした: ここではサポートされていません。"
+        }
         "error.generic" => "問題が発生しました",
         "lang.switch" => "English",
         "mode.split" => "分割",
