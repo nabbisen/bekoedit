@@ -541,10 +541,24 @@ jobs:
         # `keyboard_mode_switch_commits_pending_field` all keep their own
         # scenarios and assertions unchanged; only the mechanism underneath
         # them changed.
+        # That push stayed red, differently again: `keyboard_mode_switch_commits_pending_field`
+        # still timed out. Task 053 diagnosed it live: Ctrl+1 reached the page
+        # correctly (key "1", ctrlKey true), but the relay's own call count
+        # stayed at 0. Task 054 found why by reading, not guessing:
+        # `shortcuts.js` relayed only `if (window.dioxus)`, which nothing --
+        # not this Dioxus version, not bekoedit -- has ever defined. No
+        # keyboard shortcut had reached Rust since that gate was added
+        # (`909f84d`, 2026-06-07). Autosave (1.5 s) hid it: `save_pending_field`
+        # and `toolbar_probe` passed through autosave inside their own wait
+        # windows, not through Ctrl+S. Task 054 removes the gate, pushes
+        # autosave's own debounce past any scenario's deadline in this run
+        # mode only (so a save scenario can now only pass through its own
+        # save mechanism), wires Ctrl+B to toggle the explorer (sent since
+        # RFC-020; nothing ever acted on it), and adds `ctrl_b_toggles_explorer`.
         id: release_checks
         run: |
           failed=0
-          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe paste_conversion toolbar_probe save_pending_field form_field_commits_before_mode_switch keyboard_mode_switch_commits_pending_field; do
+          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe paste_conversion toolbar_probe save_pending_field form_field_commits_before_mode_switch keyboard_mode_switch_commits_pending_field ctrl_b_toggles_explorer; do
             RELEASE_CHECKS_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-release-checks.XXXXXX")"
             echo "release-checks scenario: $scenario"
             # Task 033: only this scenario gets stub openers. $BROWSER is the

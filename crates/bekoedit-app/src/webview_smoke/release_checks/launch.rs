@@ -181,12 +181,14 @@ pub(super) fn judge(
         | ReleaseScenario::ToolbarProbe
         | ReleaseScenario::SavePendingField
         | ReleaseScenario::FormFieldCommitsBeforeModeSwitch
-        | ReleaseScenario::KeyboardModeSwitchCommitsPendingField => {
+        | ReleaseScenario::KeyboardModeSwitchCommitsPendingField
+        | ReleaseScenario::CtrlBTogglesExplorer => {
             unreachable!(
                 "save.rs, mode_switch.rs, link_clicks.rs, paste_probe.rs, \
                  paste_conversion.rs, toolbar_probe.rs, save_pending_field.rs, \
-                 form_field_commits_before_mode_switch.rs and \
-                 keyboard_mode_switch_commits_pending_field.rs run these scenarios"
+                 form_field_commits_before_mode_switch.rs, \
+                 keyboard_mode_switch_commits_pending_field.rs and \
+                 ctrl_b_toggles_explorer.rs run these scenarios"
             )
         }
     }

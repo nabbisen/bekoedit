@@ -20,6 +20,27 @@ fn recents(entries: Vec<RecentWorkspaceEntry>) -> RecentWorkspaces {
     RecentWorkspaces { entries }
 }
 
+// ─── Task 054 §2.2: autosave cannot mask a save scenario's own mechanism ───
+
+// The longest save-waiting scenario's own deadline (save.rs's
+// STEP_DEADLINE, 15 s) -- the release-checks debounce must dwarf it, not
+// merely exceed it, so no scenario's own wait window could ever reach it
+// by coincidence. A `const` assertion, checked once at compile time.
+const _: () = assert!(RELEASE_CHECKS_AUTOSAVE_DEBOUNCE_MS > 15_000 * 100);
+
+#[test]
+fn a_release_checks_run_gets_the_release_checks_debounce() {
+    assert_eq!(
+        autosave_debounce_ms(true),
+        RELEASE_CHECKS_AUTOSAVE_DEBOUNCE_MS
+    );
+}
+
+#[test]
+fn every_other_run_keeps_the_normal_debounce() {
+    assert_eq!(autosave_debounce_ms(false), AUTOSAVE_DEBOUNCE_MS);
+}
+
 // ─── Pure decision — RFC-043 §10 required cases ────────────────────────────
 
 #[test]

@@ -31,6 +31,7 @@ use crate::components::toast::Toast;
 use crate::i18n::Lang;
 
 mod bytes;
+mod ctrl_b_toggles_explorer;
 mod dom;
 mod focus_trace;
 mod form_field_commits_before_mode_switch;
@@ -87,6 +88,10 @@ pub enum ReleaseScenario {
     /// -- `save_pending_field`'s own keyboard path, for a mode switch
     /// instead of Ctrl+S, the gap the task 049 review named.
     KeyboardModeSwitchCommitsPendingField,
+    /// Task 054 §2.3/§2.4: Ctrl+B, with focus in the editor, toggles the
+    /// workspace explorer -- the shortcut `shortcuts.js` has sent since
+    /// RFC-020, but that no Rust code ever acted on until this task.
+    CtrlBTogglesExplorer,
 }
 
 impl ReleaseScenario {
@@ -107,6 +112,7 @@ impl ReleaseScenario {
             Self::KeyboardModeSwitchCommitsPendingField => {
                 keyboard_mode_switch_commits_pending_field::NAME
             }
+            Self::CtrlBTogglesExplorer => ctrl_b_toggles_explorer::NAME,
         }
     }
 
@@ -125,6 +131,7 @@ impl ReleaseScenario {
             Self::SavePendingField,
             Self::FormFieldCommitsBeforeModeSwitch,
             Self::KeyboardModeSwitchCommitsPendingField,
+            Self::CtrlBTogglesExplorer,
         ]
         .into_iter()
         .find(|scenario| scenario.name() == name)
@@ -134,8 +141,8 @@ impl ReleaseScenario {
                  reopen_missing, reopen_disabled, save_preserves_bytes, \
                  save_preserves_crlf_bytes, mode_switch_preserves_bytes link_clicks_reach_only_the_browser, \
                  paste_probe, paste_conversion, toolbar_probe, save_pending_field, \
-                 form_field_commits_before_mode_switch or \
-                 keyboard_mode_switch_commits_pending_field"
+                 form_field_commits_before_mode_switch, \
+                 keyboard_mode_switch_commits_pending_field or ctrl_b_toggles_explorer"
             )
         })
     }
@@ -225,6 +232,9 @@ pub fn WebViewReleaseChecksDriver() -> Element {
                 }
                 ReleaseScenario::KeyboardModeSwitchCommitsPendingField => {
                     keyboard_mode_switch_commits_pending_field::run(&terminal, &desktop).await
+                }
+                ReleaseScenario::CtrlBTogglesExplorer => {
+                    ctrl_b_toggles_explorer::run(&terminal, &desktop).await
                 }
                 _ => launch::run(&terminal, state, toasts, lang).await,
             };

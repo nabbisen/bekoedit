@@ -2,6 +2,8 @@
 mod rfc_042;
 #[cfg(test)]
 mod task_051_shortcut_flush;
+#[cfg(test)]
+mod task_054_shortcuts_reach_the_app;
 
 #[cfg(test)]
 mod app_tests {

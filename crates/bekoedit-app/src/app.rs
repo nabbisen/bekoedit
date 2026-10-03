@@ -222,6 +222,7 @@ pub fn App() -> Element {
     let source_sync_for_shortcuts = source_sync;
     let toasts_for_shortcuts = use_context::<Signal<Vec<Toast>>>();
     let lang_for_shortcuts = use_context::<Signal<Lang>>();
+    let mut explorer_collapsed_for_shortcuts = use_context::<ExplorerCollapsed>().0;
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
         // Auto-restarting shortcut relay (RFC-002 hardening).
         let mut consecutive_failures = 0_u32;
@@ -233,36 +234,46 @@ pub fn App() -> Element {
             while let Ok(raw) = relay.recv().await {
                 consecutive_failures = 0;
                 if let Ok(AppMsg::Shortcut { key, composing }) = serde_json::from_value(raw) {
-                    match shortcut_command(&key) {
-                        // Task 051 §2.1: refused outright, exactly as
-                        // Text Mode's own `CompositionActive` handling
-                        // refuses one -- `shortcuts.js` already decided
-                        // not to flush the field, so there is nothing to
-                        // retry here either.
-                        Some(command) if composing => {
-                            refuse_source_shortcut_while_composing(
-                                toasts_for_shortcuts,
-                                &command,
-                                *lang_for_shortcuts.read(),
-                            );
-                        }
-                        Some(SourceCommand::SaveNow) => {
-                            submit_source_command(
+                    // Task 054 §2.3: not a source command -- toggling the
+                    // explorer saves or leaves nothing, so it bypasses
+                    // the composing refusal and the focus machinery
+                    // entirely, the same signal the explorer's own
+                    // toggle button sets.
+                    if key == "toggle_explorer" {
+                        let collapsed = *explorer_collapsed_for_shortcuts.read();
+                        explorer_collapsed_for_shortcuts.set(!collapsed);
+                    } else {
+                        match shortcut_command(&key) {
+                            // Task 051 §2.1: refused outright, exactly as
+                            // Text Mode's own `CompositionActive` handling
+                            // refuses one -- `shortcuts.js` already decided
+                            // not to flush the field, so there is nothing to
+                            // retry here either.
+                            Some(command) if composing => {
+                                refuse_source_shortcut_while_composing(
+                                    toasts_for_shortcuts,
+                                    &command,
+                                    *lang_for_shortcuts.read(),
+                                );
+                            }
+                            Some(SourceCommand::SaveNow) => {
+                                submit_source_command(
+                                    source_sync_for_shortcuts,
+                                    app_st,
+                                    mode_sig,
+                                    toasts_for_shortcuts,
+                                    SourceCommand::SaveNow,
+                                );
+                            }
+                            Some(command) => submit_source_shortcut_interaction(
                                 source_sync_for_shortcuts,
                                 app_st,
                                 mode_sig,
                                 toasts_for_shortcuts,
-                                SourceCommand::SaveNow,
-                            );
+                                command,
+                            ),
+                            None => {}
                         }
-                        Some(command) => submit_source_shortcut_interaction(
-                            source_sync_for_shortcuts,
-                            app_st,
-                            mode_sig,
-                            toasts_for_shortcuts,
-                            command,
-                        ),
-                        None => {}
                     }
                 }
             }

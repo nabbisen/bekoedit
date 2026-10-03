@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - In Form Mode, text typed into a field is now saved when you press Ctrl+S
   or switch mode without leaving the field first. Applying bold or italic
   right after typing no longer loses what you typed.
+- Keyboard shortcuts work: Ctrl+S saves, Ctrl+1 to 4 switch modes, and
+  Ctrl+B toggles the file explorer. They did nothing in earlier versions;
+  saving still happened through autosave. (Cmd on macOS.)
 
 ## [0.17.0] - 2026-10-01
 

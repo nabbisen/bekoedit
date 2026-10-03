@@ -72,6 +72,13 @@ pub(super) async fn form_paragraph_present() -> Result<bool, String> {
     returned("document.querySelector('.form-mode .paragraph-input') !== null").await
 }
 
+/// The workspace explorer is in the DOM -- `app.rs` renders `Explorer {}`
+/// only `if !collapsed`, so its absence/presence is `ExplorerCollapsed`
+/// itself (`ctrl_b_toggles_explorer`).
+pub(super) async fn explorer_present() -> Result<bool, String> {
+    returned("document.querySelector('.explorer') !== null").await
+}
+
 /// Whether the seeded paragraph field's own live value is exactly
 /// `expected` -- used to wait for real keystrokes (task 049 §2.1) to have
 /// landed before the scenario's own act under test.

@@ -57,8 +57,10 @@ fn in_trusted_click_run() -> bool {
 }
 
 /// Whether this process is a release-checks run. Same shape as
-/// `in_trusted_click_run` and for the same reason (task 052).
-fn in_release_checks_run() -> bool {
+/// `in_trusted_click_run` and for the same reason (task 052); `pub(crate)`
+/// since task 054 also reads it from `state.rs`, outside this module, to
+/// keep autosave from masking a scenario's own save mechanism.
+pub(crate) fn in_release_checks_run() -> bool {
     LAUNCH_CONFIG
         .get()
         .is_some_and(|config| config.release_checks.is_some())

@@ -34,17 +34,28 @@
       // XHR (`dioxus-interpreter-js`'s `handleVirtualdomEventSync`), so
       // by the time `dispatchEvent` returns here, Rust has already
       // committed the text -- well before the relay below even runs.
+      //
+      // Task 054 §2.3: `toggle_explorer` is not a source command -- it
+      // saves or leaves nothing, so it must never flush a Form field or
+      // be refused for composing.
       let composing = false;
-      const el = document.activeElement;
-      if (el && typeof el.value === "string" && el.closest && el.closest(".form-mode")) {
-        composing = e.isComposing || window.__bk_form_composing === true;
-        if (!composing) {
-          el.dispatchEvent(new Event("change", { bubbles: true }));
+      if (key !== "toggle_explorer") {
+        const el = document.activeElement;
+        if (el && typeof el.value === "string" && el.closest && el.closest(".form-mode")) {
+          composing = e.isComposing || window.__bk_form_composing === true;
+          if (!composing) {
+            el.dispatchEvent(new Event("change", { bubbles: true }));
+          }
         }
       }
-      if (window.dioxus) {
-        window.__bk_shortcut_relay?.(JSON.stringify({ type: "shortcut", key, composing }));
-      }
+      // Task 054 §2.1: this used to be gated on a global this framework
+      // has never defined -- not in this version, not in bekoedit's own
+      // code. The relay itself binds to the eval's own *local* channel
+      // (`bridge::relay_js`), never that global. No keyboard shortcut
+      // reached Rust since that gate was added (`909f84d`, before
+      // 0.10.0); the optional call below already does nothing when the
+      // relay has not (yet) installed itself.
+      window.__bk_shortcut_relay?.(JSON.stringify({ type: "shortcut", key, composing }));
     }
   });
 

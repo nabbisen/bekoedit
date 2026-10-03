@@ -53,6 +53,29 @@ pub struct MenuEntryIntent(pub Signal<Option<crate::shell_focus::FocusMove>>);
 /// Autosave debounce (external design §25.4 default).
 pub const AUTOSAVE_DEBOUNCE_MS: u64 = 1500;
 
+/// Task 054 §2.2: in a release-checks run, autosave is pushed out far
+/// past any scenario's own deadline -- in effect off, the same shape as
+/// `shell_behaviour.rs`'s own `CONFLICT_AUTOSAVE_DEBOUNCE_MS`. Autosave
+/// at the normal 1.5 s debounce falls well inside every save scenario's
+/// own wait window, so a scenario asserting "Ctrl+S saved X" could pass
+/// through autosave instead -- exactly what hid, for days, that no
+/// keyboard shortcut reached Rust at all (task 053).
+const RELEASE_CHECKS_AUTOSAVE_DEBOUNCE_MS: u64 = 86_400_000;
+
+/// The pure decision `create_app_state` makes about which debounce to
+/// use, pulled out so it is tested directly -- a real release-checks
+/// run can only be simulated by installing `webview_smoke`'s own
+/// process-global launch config, which a test process can set at most
+/// once, so the decision itself, not the live check, is what gets a
+/// unit test (task 054 §2.2).
+const fn autosave_debounce_ms(in_release_checks_run: bool) -> u64 {
+    if in_release_checks_run {
+        RELEASE_CHECKS_AUTOSAVE_DEBOUNCE_MS
+    } else {
+        AUTOSAVE_DEBOUNCE_MS
+    }
+}
+
 /// Outcome of RFC-043's launch-time reopen decision.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LaunchWorkspaceDecision {
@@ -121,7 +144,8 @@ pub fn create_app_state(
     persistence: &AppPersistence,
     settings: &AppSettings,
 ) -> (AppState, Option<ReopenFailureNotice>) {
-    let mut state = persistence.create_app_state(AUTOSAVE_DEBOUNCE_MS);
+    let debounce_ms = autosave_debounce_ms(crate::webview_smoke::in_release_checks_run());
+    let mut state = persistence.create_app_state(debounce_ms);
     let mut recents = RecentWorkspaces::load(&persistence.recents_file());
     let now = now_secs();
     let decision = decide_launch_workspace(settings.reopen_last_workspace, &recents, |path| {
