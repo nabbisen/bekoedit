@@ -32,6 +32,7 @@ use crate::i18n::Lang;
 
 mod bytes;
 mod dom;
+mod focus_trace;
 mod form_field_commits_before_mode_switch;
 mod keyboard_mode_switch_commits_pending_field;
 mod launch;
@@ -46,6 +47,7 @@ mod save;
 mod save_pending_field;
 mod seed;
 mod toolbar_probe;
+pub(super) use focus_trace::record_focus_trace;
 pub(super) use seed::prepare;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -226,6 +228,11 @@ pub fn WebViewReleaseChecksDriver() -> Element {
                 }
                 _ => launch::run(&terminal, state, toasts, lang).await,
             };
+            // Task 052 §2.3: the focus-claim path's own trace, on every
+            // run, before the verdict line -- `keyboard_mode_switch_commits_pending_field`'s
+            // own first failure was a plain timeout, with nothing to say
+            // which step of claim/arm/consume it was.
+            focus_trace::print_final_trace();
             match outcome.and_then(|checks| terminal.accept().map(|()| checks)) {
                 Ok(checks) => {
                     for check in &checks {

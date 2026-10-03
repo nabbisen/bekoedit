@@ -34,7 +34,7 @@ pub fn FormMode() -> Element {
         div { class: "form-mode", "data-source-focus-launch-region": "form",
             for block in projection.blocks {
                 FormBlockView {
-                    key: "{block.block_id.ordinal}-{block.block_id.fingerprint.content_hash}",
+                    key: "{block_key(block.block_id)}",
                     block_id: block.block_id,
                     display: block.display.clone(),
                     revision,
@@ -43,6 +43,19 @@ pub fn FormMode() -> Element {
             }
         }
     }
+}
+
+/// `FormBlockView`'s own identity for Dioxus's keyed diffing -- the
+/// ordinal plus the block's kind, never its `content_hash` (task 052
+/// §2.1). A changed key makes Dioxus unmount the old component and
+/// mount a new one: correct for a genuinely different block at that
+/// position, but wrong for a text commit to the *same* block, which
+/// changes `content_hash` on every keystroke it is eventually blurred
+/// or flushed on -- that would destroy the focused `<textarea>` (or
+/// table cell `<input>`) and lose focus right as the commit lands, the
+/// regression task 051's own keyboard flush exposed.
+fn block_key(block_id: BlockId) -> String {
+    format!("{}-{:?}", block_id.ordinal, block_id.kind)
 }
 
 fn dispatch(mut state: Signal<AppState>, revision: u64, block_id: BlockId, edit: FormBlockEdit) {
@@ -123,6 +136,21 @@ mod tests {
     fn projection_for(doc: &str) -> FormProjection {
         let index = MarkdownIndex::build(doc, 1);
         FormProjection::build(doc, &index)
+    }
+
+    /// Task 052 §2.1/§4: a text edit to a block must not change its own
+    /// `FormBlockView` key -- otherwise Dioxus unmounts and remounts the
+    /// field on every commit, losing focus. Mutation: put
+    /// `block_id.fingerprint.content_hash` back into `block_key`, and
+    /// this fails, since the two documents' paragraphs hash differently.
+    #[test]
+    fn a_text_edit_to_a_block_keeps_the_same_key() {
+        let before = projection_for("A paragraph.\n");
+        let after = projection_for("A paragraph, changed.\n");
+        assert_eq!(
+            block_key(before.blocks[0].block_id),
+            block_key(after.blocks[0].block_id)
+        );
     }
 
     #[test]

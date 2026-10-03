@@ -35,6 +35,14 @@
 //! relaying the shortcut; Dioxus delivers it to Rust through a
 //! synchronous XHR, so the commit lands before Ctrl+S's own relay
 //! message is even sent. This scenario is exactly what proves that path.
+//!
+//! Task 052: that commit changes the field's own `content_hash`, which
+//! (until task 052's stable keys) was also `FormBlockView`'s own key --
+//! Dioxus read the changed key as a different component and remounted
+//! the field, destroying the focused `<textarea>` right as Ctrl+S ran.
+//! This scenario's own focus-thief report (task 050 §2.4) could not see
+//! it, since it only ever read focus *before* Ctrl+S. It now also
+//! asserts, after the save, that focus is still on the paragraph field.
 
 use std::time::Duration;
 
@@ -132,6 +140,18 @@ pub(super) async fn run(
              click into the field was {}; right before Ctrl+S it was {}",
             focus_after_click.trace_line(),
             focus_before_save.trace_line()
+        ));
+    }
+
+    // Task 052 §2.2: the commit must not have remounted the field --
+    // never its exact `id`, which changes with the field's own content
+    // (that is exactly what just happened), only that it is still the
+    // paragraph field, in Form Mode.
+    let focus_after_save: ActiveElementDescription = dom::active_element().await?;
+    if !focus_after_save.is_paragraph_field() {
+        return Err(format!(
+            "{NAME}: expected focus to stay on the paragraph field after Ctrl+S, but it was {}",
+            focus_after_save.trace_line()
         ));
     }
 

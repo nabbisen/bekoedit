@@ -104,6 +104,16 @@ impl ActiveElementDescription {
             self.tag, self.id, self.classes, self.in_form_mode
         )
     }
+
+    /// Whether this describes the Form Mode paragraph field itself --
+    /// never its exact `id`, which changes with the field's own
+    /// content (task 052 §2.2's own reason for asking "is it the
+    /// field", not "is it this specific id").
+    pub(super) fn is_paragraph_field(&self) -> bool {
+        self.tag == "textarea"
+            && self.in_form_mode
+            && self.classes.iter().any(|class| class == "paragraph-input")
+    }
 }
 
 /// Builds [`ActiveElementDescription`] from `document.activeElement` --

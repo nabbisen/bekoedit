@@ -53,3 +53,31 @@ fn active_element_js_never_reads_value_or_text() {
         );
     }
 }
+
+fn describe(tag: &str, classes: &[&str], in_form_mode: bool) -> ActiveElementDescription {
+    ActiveElementDescription {
+        tag: tag.to_string(),
+        id: "fb-0-1".to_string(),
+        classes: classes.iter().map(|c| c.to_string()).collect(),
+        in_form_mode,
+    }
+}
+
+/// Task 052 §2.2: the paragraph field is recognised by tag/class/region,
+/// never by its own `id` -- which changes with the field's content, so
+/// a check pinned to one exact id would fail the moment the field is
+/// committed to, the thing this very assertion runs right after.
+#[test]
+fn is_paragraph_field_ignores_the_id() {
+    assert!(describe("textarea", &["paragraph-input"], true).is_paragraph_field());
+    assert!(
+        describe("textarea", &["paragraph-input", "blockquote-input"], true).is_paragraph_field()
+    );
+}
+
+#[test]
+fn is_paragraph_field_rejects_the_wrong_tag_class_or_region() {
+    assert!(!describe("input", &["paragraph-input"], true).is_paragraph_field());
+    assert!(!describe("textarea", &["code-input"], true).is_paragraph_field());
+    assert!(!describe("textarea", &["paragraph-input"], false).is_paragraph_field());
+}
