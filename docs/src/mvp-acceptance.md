@@ -74,7 +74,11 @@ sign-off.
 ## Accessibility (RFC-021)
 
 - ✅ All primary workflows completable with keyboard only.
-  *Evidence: Ctrl+S/1/2/3/4/B/F shortcuts in `shortcuts.js`*
+  *Evidence: Ctrl+S, Ctrl+1/2/3/4 and Ctrl+B (`shortcuts.js`, relayed to `app.rs`),
+  and Ctrl+F (CodeMirror's own search, in Text Mode). Corrected 2026-10-03: before
+  tasks 054 and 055 the shortcuts in `shortcuts.js` never reached the app, so this
+  item was not actually met until then. The release checks now exercise Ctrl+S,
+  Ctrl+1 and Ctrl+B in the real app, with autosave unable to stand in for Ctrl+S.*
 - ✅ File tree exposes `role="tree"` / `role="treeitem"` with `aria-selected`,
   roving tabindex, and arrow-key navigation per the WAI-ARIA Tree View
   pattern.
