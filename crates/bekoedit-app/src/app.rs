@@ -231,49 +231,63 @@ pub fn App() -> Element {
             generation = generation.saturating_add(1);
             let relay_js = bridge::relay_js("__bk_shortcut_relay", generation);
             let mut relay = document::eval(&relay_js);
-            while let Ok(raw) = relay.recv().await {
+            while let Ok(raw) = relay.recv::<serde_json::Value>().await {
                 consecutive_failures = 0;
-                if let Ok(AppMsg::Shortcut { key, composing }) = serde_json::from_value(raw) {
-                    // Task 054 §2.3: not a source command -- toggling the
-                    // explorer saves or leaves nothing, so it bypasses
-                    // the composing refusal and the focus machinery
-                    // entirely, the same signal the explorer's own
-                    // toggle button sets.
-                    if key == "toggle_explorer" {
-                        let collapsed = *explorer_collapsed_for_shortcuts.read();
-                        explorer_collapsed_for_shortcuts.set(!collapsed);
-                    } else {
-                        match shortcut_command(&key) {
-                            // Task 051 §2.1: refused outright, exactly as
-                            // Text Mode's own `CompositionActive` handling
-                            // refuses one -- `shortcuts.js` already decided
-                            // not to flush the field, so there is nothing to
-                            // retry here either.
-                            Some(command) if composing => {
-                                refuse_source_shortcut_while_composing(
-                                    toasts_for_shortcuts,
-                                    &command,
-                                    *lang_for_shortcuts.read(),
-                                );
-                            }
-                            Some(SourceCommand::SaveNow) => {
-                                submit_source_command(
+                // Task 055: the page always sends `JSON.stringify(...)`, so
+                // `raw` is a `Value::String`, never an object --
+                // `decode_relay_message` (not `serde_json::from_value`
+                // directly) is required for an internally tagged enum like
+                // `AppMsg` to decode at all.
+                let payload_len = raw.as_str().map_or_else(|| raw.to_string().len(), str::len);
+                match bridge::decode_relay_message::<AppMsg>(raw) {
+                    Ok(AppMsg::Shortcut { key, composing }) => {
+                        // Task 054 §2.3: not a source command -- toggling the
+                        // explorer saves or leaves nothing, so it bypasses
+                        // the composing refusal and the focus machinery
+                        // entirely, the same signal the explorer's own
+                        // toggle button sets.
+                        if key == "toggle_explorer" {
+                            let collapsed = *explorer_collapsed_for_shortcuts.read();
+                            explorer_collapsed_for_shortcuts.set(!collapsed);
+                        } else {
+                            match shortcut_command(&key) {
+                                // Task 051 §2.1: refused outright, exactly as
+                                // Text Mode's own `CompositionActive` handling
+                                // refuses one -- `shortcuts.js` already decided
+                                // not to flush the field, so there is nothing to
+                                // retry here either.
+                                Some(command) if composing => {
+                                    refuse_source_shortcut_while_composing(
+                                        toasts_for_shortcuts,
+                                        &command,
+                                        *lang_for_shortcuts.read(),
+                                    );
+                                }
+                                Some(SourceCommand::SaveNow) => {
+                                    submit_source_command(
+                                        source_sync_for_shortcuts,
+                                        app_st,
+                                        mode_sig,
+                                        toasts_for_shortcuts,
+                                        SourceCommand::SaveNow,
+                                    );
+                                }
+                                Some(command) => submit_source_shortcut_interaction(
                                     source_sync_for_shortcuts,
                                     app_st,
                                     mode_sig,
                                     toasts_for_shortcuts,
-                                    SourceCommand::SaveNow,
-                                );
+                                    command,
+                                ),
+                                None => {}
                             }
-                            Some(command) => submit_source_shortcut_interaction(
-                                source_sync_for_shortcuts,
-                                app_st,
-                                mode_sig,
-                                toasts_for_shortcuts,
-                                command,
-                            ),
-                            None => {}
                         }
+                    }
+                    Err(error) => {
+                        bridge::trace(
+                            "shortcut.decode_failed",
+                            format!("error={error} payload_len={payload_len}"),
+                        );
                     }
                 }
             }
@@ -412,3 +426,6 @@ fn MainShell() -> Element {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

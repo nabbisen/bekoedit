@@ -57,7 +57,7 @@ pub fn SourceEditorControllerHost() -> Element {
             let mut relay = document::eval(&relay_js);
             while let Ok(raw) = relay.recv::<serde_json::Value>().await {
                 consecutive_failures = 0;
-                if let Ok(event) = decode::<SourceEditorEvent>(raw.clone()) {
+                if let Ok(event) = bridge::decode_relay_message::<SourceEditorEvent>(raw.clone()) {
                     if let SourceEditorEvent::Trace {
                         instance_id,
                         event,
@@ -103,7 +103,7 @@ pub fn SourceEditorControllerHost() -> Element {
                             announce_error(toasts, error);
                         }
                     }
-                } else if let Ok(auxiliary) = decode::<AuxiliaryEvent>(raw) {
+                } else if let Ok(auxiliary) = bridge::decode_relay_message::<AuxiliaryEvent>(raw) {
                     match auxiliary {
                         AuxiliaryEvent::Scroll { fraction } => mirror_split_scroll(fraction),
                         AuxiliaryEvent::RelayGenerationReady {
@@ -446,14 +446,6 @@ fn mirror_split_scroll(fraction: f64) {
         "#
     );
     document::eval(&js);
-}
-
-fn decode<T: serde::de::DeserializeOwned>(raw: serde_json::Value) -> serde_json::Result<T> {
-    if let Some(json) = raw.as_str() {
-        serde_json::from_str(json)
-    } else {
-        serde_json::from_value(raw)
-    }
 }
 
 fn container_id(editor_id: SourceEditorId) -> &'static str {

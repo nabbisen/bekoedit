@@ -80,6 +80,24 @@ pub fn clear_relay_js(relay_name: &str, generation: u64) -> String {
     )
 }
 
+/// Decodes one message a persistent relay (`relay_js`) received from the
+/// page. Every relay's own JS sends `dioxus.send(JSON.stringify(msg))`, so
+/// the message always arrives as `Value::String(json)`, never as an object
+/// -- `serde_json::from_value` alone fails on a string against an internally
+/// tagged enum like `AppMsg` (task 055: that silent failure, through `if let
+/// Ok`, discarded every keyboard shortcut even after the `window.dioxus`
+/// guard that task 054 removed). The shared place both relays go through, so
+/// there is one copy of the string-or-object shape to re-audit.
+pub(crate) fn decode_relay_message<T: serde::de::DeserializeOwned>(
+    raw: serde_json::Value,
+) -> serde_json::Result<T> {
+    if let Some(json) = raw.as_str() {
+        serde_json::from_str(json)
+    } else {
+        serde_json::from_value(raw)
+    }
+}
+
 const EVAL_TIMEOUT: Duration = Duration::from_secs(3);
 /// Longer than `EVAL_TIMEOUT`, so the ordinary path always resolves via the
 /// release, not this bound -- it exists only so a dropped `EVAL_TIMEOUT`

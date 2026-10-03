@@ -20,7 +20,7 @@ fn editor_bundle_is_cargo_native_and_contains_the_live_facade() {
 
 #[test]
 fn trace_diagnostics_decode_and_format_only_fixed_safe_fields() {
-    let event = decode::<SourceEditorEvent>(serde_json::json!({
+    let event = crate::bridge::decode_relay_message::<SourceEditorEvent>(serde_json::json!({
         "type": "trace",
         "protocolVersion": BRIDGE_SCHEMA_VERSION,
         "instanceId": 4,
@@ -62,7 +62,7 @@ fn trace_diagnostics_decode_and_format_only_fixed_safe_fields() {
 
 #[test]
 fn legacy_non_focus_trace_remains_decodable_and_unchanged() {
-    let event = decode::<SourceEditorEvent>(serde_json::json!({
+    let event = crate::bridge::decode_relay_message::<SourceEditorEvent>(serde_json::json!({
         "type": "trace",
         "protocolVersion": BRIDGE_SCHEMA_VERSION,
         "instanceId": null,
