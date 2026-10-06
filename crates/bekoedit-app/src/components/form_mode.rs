@@ -217,6 +217,8 @@ fn current_text(display: &FormBlockDisplay, cell: Option<(usize, usize)>) -> Opt
 mod block_view;
 mod inline_toolbar;
 mod placement;
+mod table_column_menu;
+mod table_row_menu;
 mod table_view;
 
 use block_view::FormBlockView;
