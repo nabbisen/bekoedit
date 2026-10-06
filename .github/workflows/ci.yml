@@ -338,74 +338,27 @@ jobs:
             echo "::warning title=RFC-044 shell-behaviour run did not pass::outcome=${OUTCOME}; see that step's log"
           fi
       - name: Task 023 trusted-click coverage (manual-walkthrough §B/§C)
-        # NON-BLOCKING (task 023 §4, RFC-044 §10 as amended 2026-09-22): a
-        # new run, not a new phase on an already-blocking step, so §4's
-        # continue-on-error requirement applies to this step alone and
-        # never touches the shell-behaviour step above.
+        # BLOCKING since 2026-10-06, on the owner's approval. The soak criterion
+        # -- ten consecutive green runs on `main`, read from this step's outcome
+        # line -- was met after task 039 fixed the focus guard's evaluator
+        # lifetime (the cause of the tree_row_focus flake, task 029's line of
+        # work). The ten, counted from task 039's merge: 36840400649 (e8f58cf),
+        # 36845583357 (d9ddb96), 36847929792 (a0054ff), 36852497607 (2a6e416),
+        # 36856435709 (22ed31c), 36861547637 (812f4c7), 36864239296 (41a6934),
+        # 36871163368 (caf1f4d), 36873095334 (6f5f095) and 36943911915 (45b0e02).
+        # It stayed `success` on every `main` run after that, through
+        # 37465769065 (7a3a29d), including the runs that were red on other
+        # steps.
         #
-        # This is the first run in the project to send real X-level
-        # (XTEST) input via `xdotool` rather than app-intercepted
-        # synthetic events -- proven necessary in the review request
-        # (§5.1: a synthetic click gets no default browser focus action,
-        # so it cannot exercise §B/§C at all). That means real-desktop
-        # concerns this project has not had to soak for before: whether
-        # Xvfb's default pointer-focus behaviour (no window manager is
-        # running) reliably delivers a click's default focus action to
-        # WebKitGTK on every runner, and whether `xdotool`'s own timing
-        # (`--sync`) is enough under CI's variable load.
-        #
-        # §C's own phase (mode_tab_focus) spent sixteen real CI runs never
-        # completing before its cause was found (2026-09-23 no-op-terminal
-        # review): TrustedClickPhase::as_str()'s terminal arm was sending
-        # a result-stage name, not a phase name, so the driver rejected
-        # every request for it before its own try/catch, silently. Fixed
-        # structurally in phase.rs, with a bijection test
-        # (every_as_str_is_a_phase_the_driver_knows) against the driver's
-        # own source so this cannot come back quietly.
-        #
-        # Soak: 10 consecutive green runs of this step on `main`, read
-        # from its own outcome line below (never from this step's masked
-        # conclusion) -- the same N RFC-044 §10 itself used to promote its
-        # shell-behaviour step to blocking, per the 2026-09-23 review §3.
-        # That precedent is the justification for reusing it here rather
-        # than picking a new number: ten runs is what this project has
-        # already treated as enough evidence that a WebView-driven CI
-        # mechanism, once green, stays green. Promotion to blocking is a
-        # separate, later review decision -- this comment only starts the
-        # clock.
-        #
-        # Known flake, not yet explained, seen four times with one
-        # signature: an XTEST click on child.md's tree row, about 95 `ok=true`
-        # pending exchanges, then `timed out at
-        # tree_row_trusted_click_focused_editor` at the driver's own 10 s
-        # deadline (tree_row_focus is never the terminal phase, so this is
-        # not the as_str() bug above). The sightings, by run id:
-        #   35810114012  the original (a rerun of the same commit passed);
-        #   36008866139  a throwaway run (a mutation that cannot touch it);
-        #   36077020607  `main`, task 028's merge push;
-        #   36133119925  `main`, task 035's merge push, the first with task 029's
-        #                diagnosis: it narrowed to "the focus claim was not made
-        #                or not reported" (case d), and could not say which.
-        # Everything up to the click was identical in the failing and the
-        # passing runs (window focus, target rect, screen point, xdotool
-        # status, timing), so "the click missed" has no support. Task 029
-        # makes the timeout say what the page and the app looked like, and
-        # the next sighting names the case. Task 036 adds the Rust side's own
-        # focus traces to that log and prints it on EVERY run, pass or fail,
-        # under `trusted-click focus trace (N entries):`. The soak was RESET on 2026-09-25
-        # and stays at 0 of 10 until task 029 concludes; the records below
-        # are history, from before the reset.
-        # Soak record (append here, do not replace):
-        # 1/10 green -- 35847306100 (2026-09-23), the merge push itself
-        # (task 023, 56b2f46).
-        # 2/10 green -- 35848237812 (2026-09-23), triggered by the commit
-        # that recorded run 1 (b9f9fd6). Recording every push's own run
-        # here would keep triggering a further push to record -- this
-        # entry breaks that cycle deliberately. The remaining runs toward
-        # N = 10 accumulate from ordinary, unrelated pushes to `main`; not
-        # every one needs its own recording commit.
+        # A real XTEST click (xdotool) under Xvfb, so real-desktop timing is
+        # in play. Task 058's guard makes every click prove it landed on its
+        # target (elementFromPoint) before xdotool runs, and task 036's focus
+        # trace is printed on every run, so a failure names its own cause. If
+        # this step proves unstable on `main`, fix or remove the failing phase;
+        # do not make the whole step non-blocking again. The pre-promotion
+        # history (the as_str() terminal bug, the four flake sightings, the
+        # soak resets) is in this file's git log.
         id: trusted_click
-        continue-on-error: true
         run: |
           TRUSTED_CLICK_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-trusted-click.XXXXXX")"
           trap 'rm -rf "$TRUSTED_CLICK_PARENT"' EXIT
