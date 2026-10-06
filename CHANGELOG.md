@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   doing nothing.
 - The row actions menu in a Form Mode table is no longer cut off at the
   bottom of the table.
+- Pasting text with two or more line breaks in a row, including inside a
+  quote, now keeps them. Line breaks in pasted text are written as a
+  backslash at the end of the line (`\`) instead of two trailing spaces.
+  Note: MkDocs (Python-Markdown) does not support the backslash form.
 
 ## [0.17.0] - 2026-10-01
 

@@ -150,10 +150,7 @@ fn the_corpus_is_there_and_every_html_file_has_its_markdown_and_no_markdown_is_o
 /// `.md` holds what the HTML means, never this output. A gap leaves this list
 /// only when its expectation is met (task 057 §2.3). Task 038 used the same
 /// shape for its own known gaps.
-const KNOWN_GAPS: &[(&str, &str)] = &[
-    ("synthetic-40-br-run-in-paragraph", "a  \n  \nb\n"),
-    ("synthetic-41-br-run-in-blockquote", "> one  \n  \n> two\n"),
-];
+const KNOWN_GAPS: &[(&str, &str)] = &[];
 
 #[test]
 fn every_fixture_converts_to_its_expected_markdown_for_both_line_endings() {
@@ -297,10 +294,10 @@ fn claim_the_2_4_1_wrapper_in_a_cell_bug_is_fixed() {
 }
 
 #[test]
-fn claim_br_outside_a_table_is_two_trailing_spaces() {
+fn claim_br_outside_a_table_is_a_trailing_backslash() {
     let markdown = converted(&read("synthetic-09-hard-break", "html"), LineEnding::Lf);
     assert!(
-        markdown.contains("line one  \nline two  \nline three"),
+        markdown.contains("line one\\\nline two\\\nline three"),
         "{markdown:?}"
     );
     assert!(!markdown.contains("<br"), "{markdown:?}");

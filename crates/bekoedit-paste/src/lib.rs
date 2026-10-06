@@ -159,7 +159,8 @@ fn mdka_configured(html: String) -> String {
     let options = mdka::ConversionOptions::for_mode(mdka::ConversionMode::Balanced)
         .drop_interactive_shell(true)
         .preserve_ids(false)
-        .emphasis_from_style(EMPHASIS_FROM_STYLE);
+        .emphasis_from_style(EMPHASIS_FROM_STYLE)
+        .backslash_hard_breaks(BACKSLASH_HARD_BREAKS);
     mdka::html_to_markdown_with(&html, &options)
 }
 
@@ -168,6 +169,15 @@ fn mdka_configured(html: String) -> String {
 /// above, so turning it off is a one-line, reviewable diff: see
 /// `crates/bekoedit-paste/tests/fixtures/README.md`.
 const EMPHASIS_FROM_STYLE: bool = true;
+
+/// On (task 057, the owner's decision of 2026-10-06): a pasted line break is
+/// written as a trailing backslash, not two trailing spaces. Two spaces are
+/// stripped by editors and are broken in CommonMark when a break is repeated
+/// (`<br><br>` becomes a paragraph break), and in a quote the blank line
+/// ends the quote. The trade-off is real: Python-Markdown (MkDocs) does not
+/// implement the backslash form and shows a literal `\`. Turning this off is a
+/// one-line diff, but it moves every pasted hard break back to two spaces.
+const BACKSLASH_HARD_BREAKS: bool = true;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Limits {
