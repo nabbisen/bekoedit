@@ -92,6 +92,7 @@ to `done/` when the work ships.
 | RFC | Title | Notes |
 |-----|-------|-------|
 | RFC-045 | [Release artifact portability and completeness](accepted/RFC-045-release-artifact-portability-and-completeness.md) | Accepted 2026-08-17. Slices 1–2 shipped to `main`: the platform scripts now ship in every archive, and a cross-distribution `ldd` check gates both pull requests and the publish job. Slice 3 (Linux portability) is open — see its §10 Q1. Handoffs: [`handoffs/045-release-artifact-portability-and-completeness/`](handoffs/045-release-artifact-portability-and-completeness/) |
+| RFC-049 | [Form Mode undo](accepted/RFC-049-form-mode-undo.md) | Accepted 2026-10-07, as written. Undo and Redo for committed Form Mode edits, each one inverse source patch, applied only when the document's revision is exactly the one the edit left; the history lives in the open document's session and is cleared on leaving Form Mode. Ctrl+Z inside a field stays the browser's own. After 0.18.0, in two slices. Handoffs: [`handoffs/049-form-mode-undo/`](handoffs/049-form-mode-undo/) |
 
 ## Implemented — merged to `main`, not yet released (`done/`)
 
@@ -134,7 +135,6 @@ superseded).
 | RFC-032 | [Performance optimization and incremental parsing](proposed/RFC-032-performance-optimization-and-incremental-parsing.md) | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | [Plugin system evaluation](proposed/RFC-039-plugin-system-evaluation.md) | Future evaluation only |
 | RFC-040 | [Sync and collaboration evaluation](proposed/RFC-040-sync-and-collaboration-evaluation.md) | Future evaluation only |
-| RFC-049 | [Form Mode undo](proposed/RFC-049-form-mode-undo.md) | Drafted 2026-10-06. Undo and Redo for committed Form Mode edits, each one inverse source patch, applied only when the document is still at the revision the edit left it, so a stale undo is refused with a notice and can never damage a file. Text Mode and the source-sync controller are not touched. Four questions for the owner in §9; implementation after 0.18.0 |
 
 ## Implemented — v0.3.0 (`done/`)
 

@@ -1,9 +1,11 @@
 # RFC-049: Form Mode undo
 
 **Project:** bekoedit
-**Status:** Proposed — drafted 2026-10-06, after the owner chose the contained
-option ("B") over a single history shared with Text Mode. Awaiting the owner's
-acceptance, and the answers in §9. Implementation is after 0.18.0.
+**Status:** Accepted — approved by the owner on 2026-10-07, as written, so each
+§9 question takes its proposed answer. Drafted 2026-10-06, after the owner
+chose the contained option ("B") over a single history shared with Text Mode.
+Implementation is after 0.18.0.
+**Handoffs:** [`handoffs/049-form-mode-undo/`](../handoffs/049-form-mode-undo/)
 **Track:** Editing
 **Priority:** Medium — today a committed Form Mode edit cannot be stepped back
 **Date:** 2026-10-06
@@ -93,6 +95,16 @@ new Form edit clears Redo.
 - **They hold at most 100 records** (§9 Q2). The oldest is dropped. Memory is
   only the replaced bytes.
 
+**Where the stacks live** *(clarified on acceptance, 2026-10-07)*. They are
+fields of `DocumentSession` itself. Opening a document, a conflict's "reload
+from disk", and a restore that opens a file all **replace** the session with a
+new one, whose `revision` starts again at 1. So §5.2's argument, that any other
+mutation increments `revision`, holds only within one session object. Stacks
+stored outside it, in the store or the app, could meet a reloaded document
+whose revision has climbed back to a recorded `revision_after`, and apply a
+stale patch. Inside the session, a replaced session takes its stacks with it,
+by construction.
+
 ### 5.4 Controls
 
 - **Undo and Redo buttons** in the Form Mode header, disabled when empty, and
@@ -141,6 +153,9 @@ An undo that cannot apply raises one notice, in both languages, for example:
    and the docs.
 
 ## 9. Questions for the owner
+
+*Answered 2026-10-07: the owner accepted the RFC as written, so every proposed
+answer below stands.*
 
 1. **Ctrl+Z inside a Form field:** keep the browser's own undo of uncommitted
    typing there, with Form undo only outside a field? *Proposed:* yes.
