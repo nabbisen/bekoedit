@@ -134,6 +134,7 @@ superseded).
 | RFC-032 | [Performance optimization and incremental parsing](proposed/RFC-032-performance-optimization-and-incremental-parsing.md) | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | [Plugin system evaluation](proposed/RFC-039-plugin-system-evaluation.md) | Future evaluation only |
 | RFC-040 | [Sync and collaboration evaluation](proposed/RFC-040-sync-and-collaboration-evaluation.md) | Future evaluation only |
+| RFC-049 | [Form Mode undo](proposed/RFC-049-form-mode-undo.md) | Drafted 2026-10-06. Undo and Redo for committed Form Mode edits, each one inverse source patch, applied only when the document is still at the revision the edit left it, so a stale undo is refused with a notice and can never damage a file. Text Mode and the source-sync controller are not touched. Four questions for the owner in §9; implementation after 0.18.0 |
 
 ## Implemented — v0.3.0 (`done/`)
 
