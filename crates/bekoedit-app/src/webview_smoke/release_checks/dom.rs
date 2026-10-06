@@ -108,6 +108,16 @@ pub(super) async fn open_row_actions_ids() -> Result<(Option<String>, Option<Str
     .await
 }
 
+/// How many column header actions buttons are in the DOM (RFC-048 slice 4).
+pub(super) async fn table_column_actions_button_count() -> Result<usize, String> {
+    returned("document.querySelectorAll('.table-col-actions-btn').length").await
+}
+
+/// Whether a column menu is currently open.
+pub(super) async fn table_col_menu_open() -> Result<bool, String> {
+    returned("document.querySelector('.table-col-menu') !== null").await
+}
+
 /// Whether a toast is currently shown (task 056 §2.1's "tell the user").
 pub(super) async fn toast_present() -> Result<bool, String> {
     returned("document.querySelector('.toast') !== null").await

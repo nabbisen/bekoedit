@@ -167,7 +167,7 @@ pub(in crate::webview_smoke) fn prepare(
             let file = workspace.join(SAVE_FILE);
             (workspace, "Save Project".to_string(), original, Some(file))
         }
-        ReleaseScenario::TableRowInsertAndDelete => {
+        ReleaseScenario::TableRowInsertAndDelete | ReleaseScenario::TableColumnOperations => {
             let original = original_table_note();
             let workspace = make_workspace(&root, "save-project", &[(SAVE_FILE, &original)])?;
             let file = workspace.join(SAVE_FILE);
@@ -190,6 +190,7 @@ pub(in crate::webview_smoke) fn prepare(
                 | ReleaseScenario::FormFieldCommitsBeforeModeSwitch
                 | ReleaseScenario::KeyboardModeSwitchCommitsPendingField
                 | ReleaseScenario::TableRowInsertAndDelete
+                | ReleaseScenario::TableColumnOperations
         ) {
             // Each of these five starts with a Form Mode field.
             EditorMode::Form

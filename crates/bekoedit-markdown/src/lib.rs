@@ -34,9 +34,10 @@ pub use destination::{DestinationKind, classify_destination, normalized as norma
 pub use fingerprint::{BlockFingerprint, BlockId};
 pub use form::{
     FormBlock, FormBlockDisplay, FormBlockEdit, FormEditCommand, FormEditError, FormListItem,
-    FormProjection, InlineFormat, TableRowDirection, TableRowPosition,
+    FormProjection, InlineFormat, TableAlignment, TableColumnDirection, TableColumnPosition,
+    TableRowDirection, TableRowPosition,
 };
-pub use gfm::has_gfm_table;
+pub use gfm::{has_gfm_table, plain_text as cell_plain_text, table_alignments};
 pub use index::{MarkdownDiagnostic, MarkdownIndex};
 pub use island::{RawIsland, RawIslandEditPolicy, RawIslandType};
 pub use patch::{PatchError, PatchOrigin, PatchResult, SourcePatch};

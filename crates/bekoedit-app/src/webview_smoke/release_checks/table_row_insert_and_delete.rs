@@ -55,7 +55,10 @@ const SWAPPED_LAST_TWO_ROWS: &str = "| a | b |\n|---|---|\n| 3 | 4 |\n| 1 | 2 |\
 /// other save-waiting scenario uses.
 const SAVE_DEADLINE: Duration = Duration::from_secs(10);
 
-async fn wait_for_save(file: &std::path::Path, before: &[u8]) -> Result<Vec<u8>, String> {
+pub(super) async fn wait_for_save(
+    file: &std::path::Path,
+    before: &[u8],
+) -> Result<Vec<u8>, String> {
     let started = tokio::time::Instant::now();
     loop {
         let saved = std::fs::read(file)

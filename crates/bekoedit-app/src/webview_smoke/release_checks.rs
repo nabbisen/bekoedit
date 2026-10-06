@@ -48,6 +48,7 @@ mod paste_report;
 mod save;
 mod save_pending_field;
 mod seed;
+mod table_column_operations;
 mod table_row_insert_and_delete;
 mod toolbar_probe;
 pub(super) use focus_trace::record_focus_trace;
@@ -100,6 +101,8 @@ pub enum ReleaseScenario {
     /// type into it, save, then delete it through the menu and save
     /// again -- the original bytes must come back exactly.
     TableRowInsertAndDelete,
+    /// RFC-048 slice 4 §2.3: the column grid's own menu, end to end.
+    TableColumnOperations,
 }
 
 impl ReleaseScenario {
@@ -122,6 +125,7 @@ impl ReleaseScenario {
             }
             Self::CtrlBTogglesExplorer => ctrl_b_toggles_explorer::NAME,
             Self::TableRowInsertAndDelete => table_row_insert_and_delete::NAME,
+            Self::TableColumnOperations => table_column_operations::NAME,
         }
     }
 
@@ -142,6 +146,7 @@ impl ReleaseScenario {
             Self::KeyboardModeSwitchCommitsPendingField,
             Self::CtrlBTogglesExplorer,
             Self::TableRowInsertAndDelete,
+            Self::TableColumnOperations,
         ]
         .into_iter()
         .find(|scenario| scenario.name() == name)
@@ -153,7 +158,7 @@ impl ReleaseScenario {
                  paste_probe, paste_conversion, toolbar_probe, save_pending_field, \
                  form_field_commits_before_mode_switch, \
                  keyboard_mode_switch_commits_pending_field, ctrl_b_toggles_explorer or \
-                 table_row_insert_and_delete"
+                 table_row_insert_and_delete or table_column_operations"
             )
         })
     }
@@ -249,6 +254,9 @@ pub fn WebViewReleaseChecksDriver() -> Element {
                 }
                 ReleaseScenario::TableRowInsertAndDelete => {
                     table_row_insert_and_delete::run(&terminal, &desktop).await
+                }
+                ReleaseScenario::TableColumnOperations => {
+                    table_column_operations::run(&terminal, &desktop).await
                 }
                 _ => launch::run(&terminal, state, toasts, lang).await,
             };

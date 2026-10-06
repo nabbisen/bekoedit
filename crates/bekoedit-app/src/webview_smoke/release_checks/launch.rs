@@ -183,14 +183,15 @@ pub(super) fn judge(
         | ReleaseScenario::FormFieldCommitsBeforeModeSwitch
         | ReleaseScenario::KeyboardModeSwitchCommitsPendingField
         | ReleaseScenario::CtrlBTogglesExplorer
-        | ReleaseScenario::TableRowInsertAndDelete => {
+        | ReleaseScenario::TableRowInsertAndDelete
+        | ReleaseScenario::TableColumnOperations => {
             unreachable!(
                 "save.rs, mode_switch.rs, link_clicks.rs, paste_probe.rs, \
                  paste_conversion.rs, toolbar_probe.rs, save_pending_field.rs, \
                  form_field_commits_before_mode_switch.rs, \
                  keyboard_mode_switch_commits_pending_field.rs, \
-                 ctrl_b_toggles_explorer.rs and table_row_insert_and_delete.rs \
-                 run these scenarios"
+                 ctrl_b_toggles_explorer.rs, table_row_insert_and_delete.rs and \
+                 table_column_operations.rs run these scenarios"
             )
         }
     }

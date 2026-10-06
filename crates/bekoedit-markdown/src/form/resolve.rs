@@ -67,6 +67,37 @@ pub fn resolve_form_edit(
             text: cell_text,
         } => super::tables::resolve_replace_table_cell(text, block, *row, *col, cell_text)?,
         FormBlockEdit::AddTableRow => super::tables::resolve_add_table_row(text, block)?,
+        FormBlockEdit::InsertTableColumn { col, position } => super::columns::resolve_column_op(
+            text,
+            block,
+            super::columns::ColumnOp::Insert {
+                col: *col,
+                position: *position,
+            },
+        )?,
+        FormBlockEdit::DeleteTableColumn { col } => super::columns::resolve_column_op(
+            text,
+            block,
+            super::columns::ColumnOp::Delete { col: *col },
+        )?,
+        FormBlockEdit::MoveTableColumn { col, direction } => super::columns::resolve_column_op(
+            text,
+            block,
+            super::columns::ColumnOp::Move {
+                col: *col,
+                direction: *direction,
+            },
+        )?,
+        FormBlockEdit::SetTableColumnAlignment { col, alignment } => {
+            super::columns::resolve_column_op(
+                text,
+                block,
+                super::columns::ColumnOp::SetAlignment {
+                    col: *col,
+                    alignment: *alignment,
+                },
+            )?
+        }
         FormBlockEdit::InsertTableRow { at, position } => {
             super::tables::resolve_insert_table_row(text, block, *at, *position)?
         }

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Insert, delete and move table rows from the grid in Form Mode.
+- Insert, delete and move table columns, and set a column's alignment, from
+  the grid in Form Mode.
 
 ### Changed
 - Tables whose cells use bold, italic, code or other inline formatting can

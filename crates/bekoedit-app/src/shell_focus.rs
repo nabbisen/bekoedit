@@ -195,6 +195,29 @@ pub fn trigger_key_intent(key: &Key) -> Option<FocusMove> {
     }
 }
 
+/// Focuses one column's own actions-menu trigger on the next frame (RFC-048
+/// slice 4 §2.2). Same id-safety reasoning as [`focus_table_row_actions`].
+pub fn focus_table_column_actions(field_id: &str, col: usize) {
+    document::eval(&format!(
+        r#"requestAnimationFrame(() => document.getElementById('{field_id}-col-actions-{col}')?.focus())"#,
+    ));
+}
+
+/// Move focus among one column menu's `[role="menuitem"]` descendants, on the
+/// next frame -- the column analogue of [`focus_table_row_menu_item`].
+pub fn focus_table_column_menu_item(field_id: &str, col: usize, position: FocusMove) {
+    let target = focus_move_expr("items", position);
+    document::eval(&format!(
+        r#"requestAnimationFrame(() => {{
+            const menu = document.getElementById('{field_id}-col-menu-{col}');
+            const items = menu ? [...menu.querySelectorAll('[role="menuitem"]')] : [];
+            if (items.length === 0) return;
+            const current = items.indexOf(document.activeElement);
+            {target}?.focus();
+        }});"#,
+    ));
+}
+
 /// What a keydown on a focused **menu item** means, once the menu is open
 /// (handoff §5.2). Enter/Space are deliberately absent — native
 /// button-click activation already handles them via each item's own

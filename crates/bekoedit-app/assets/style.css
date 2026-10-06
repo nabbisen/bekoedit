@@ -320,6 +320,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
   padding: 4px; z-index: 200;
 }
+.table-col-actions-btn { padding: 0 4px; font-size: .9em; line-height: 1; }
+.table-block th .table-row-actions-wrap { display: inline-block; margin-left: 2px; vertical-align: middle; }
+.table-col-menu { text-align: left; font-weight: normal; }
+.table-col-menu .dropdown-item.active { font-weight: 600; }
 .table-row-actions-menu .dropdown-item[disabled] { opacity: .4; cursor: default; }
 .table-row-actions-menu .dropdown-item[disabled]:hover { background: transparent; }
 

@@ -6,6 +6,7 @@
 //! style-preserving `SourcePatch` values; it never rewrites unrelated
 //! regions and never trusts client-supplied byte ranges.
 
+mod columns;
 mod images;
 mod inline_fmt;
 mod resolve;
@@ -65,6 +66,8 @@ pub enum FormBlockDisplay {
         rows: Vec<Vec<String>>,
         /// Number of data columns (mirrors `headers.len()`).
         col_count: usize,
+        /// Each column's alignment, from the delimiter row (RFC-048 slice 4).
+        alignments: Vec<TableAlignment>,
     },
     RawIsland {
         island_type: RawIslandType,
@@ -170,10 +173,16 @@ fn display_for(text: &str, index: &MarkdownIndex, block: &BlockNode) -> FormBloc
             // Parse the table into a display-friendly structure.
             let (headers, rows) = parse_simple_table(&source);
             let col_count = headers.len();
+            let alignments = crate::gfm::table_alignments(&source)
+                .unwrap_or_default()
+                .into_iter()
+                .map(TableAlignment::from_parser)
+                .collect();
             FormBlockDisplay::Table {
                 headers,
                 rows,
                 col_count,
+                alignments,
             }
         }
         BlockKind::HtmlBlock => FormBlockDisplay::RawIsland {
@@ -202,6 +211,41 @@ pub enum InlineFormat {
     Italic,
     Code,
     Link,
+}
+
+/// A column's alignment, as the delimiter row writes it (RFC-048 slice 4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TableAlignment {
+    None,
+    Left,
+    Centre,
+    Right,
+}
+
+impl TableAlignment {
+    fn from_parser(alignment: pulldown_cmark::Alignment) -> Self {
+        match alignment {
+            pulldown_cmark::Alignment::None => Self::None,
+            pulldown_cmark::Alignment::Left => Self::Left,
+            pulldown_cmark::Alignment::Center => Self::Centre,
+            pulldown_cmark::Alignment::Right => Self::Right,
+        }
+    }
+}
+
+/// Which side of column `col` [`FormBlockEdit::InsertTableColumn`] adds a
+/// column on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TableColumnPosition {
+    Left,
+    Right,
+}
+
+/// Which neighbour [`FormBlockEdit::MoveTableColumn`] swaps with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TableColumnDirection {
+    Left,
+    Right,
 }
 
 /// Where [`FormBlockEdit::InsertTableRow`] places the new row, relative to
@@ -279,6 +323,29 @@ pub enum FormBlockEdit {
     },
     /// Append a new empty row to a simple table (RFC-027).
     AddTableRow,
+    /// Insert a new empty column, left or right of column `col` (RFC-048
+    /// slice 4). Refused for a column index the table does not have.
+    InsertTableColumn {
+        col: usize,
+        position: TableColumnPosition,
+    },
+    /// Delete column `col`, with one adjacent pipe. The last remaining
+    /// column cannot be deleted (RFC-048 slice 4).
+    DeleteTableColumn {
+        col: usize,
+    },
+    /// Swap column `col` with its neighbour in `direction` (RFC-048 slice 4).
+    /// Alignment moves with its column.
+    MoveTableColumn {
+        col: usize,
+        direction: TableColumnDirection,
+    },
+    /// Set column `col`'s alignment by rewriting only its delimiter cell
+    /// (RFC-048 slice 4).
+    SetTableColumnAlignment {
+        col: usize,
+        alignment: TableAlignment,
+    },
     /// Insert a new empty row above or below row `at` (RFC-048 slice 3).
     /// `at` is a row index in the same sense as `ReplaceTableCell`'s
     /// `row` -- 0 is the header. Refused with `UnsupportedEditOperation`

@@ -112,6 +112,16 @@ fn tr_en(key: &str) -> &'static str {
         "table.row.delete" => "Delete row",
         "table.row.move_up" => "Move up",
         "table.row.move_down" => "Move down",
+        "table.column_actions" => "Actions for column {}",
+        "table.col.insert_left" => "Insert column left",
+        "table.col.insert_right" => "Insert column right",
+        "table.col.delete" => "Delete column",
+        "table.col.move_left" => "Move left",
+        "table.col.move_right" => "Move right",
+        "table.align.none" => "None",
+        "table.align.left" => "Left",
+        "table.align.centre" => "Centre",
+        "table.align.right" => "Right",
         "form.edit_refused.stale" => {
             "This change was not applied: the document changed. Try again."
         }
@@ -334,6 +344,16 @@ fn tr_ja(key: &str) -> &'static str {
         "table.row.delete" => "行を削除",
         "table.row.move_up" => "上に移動",
         "table.row.move_down" => "下に移動",
+        "table.column_actions" => "列 {} の操作",
+        "table.col.insert_left" => "左に列を挿入",
+        "table.col.insert_right" => "右に列を挿入",
+        "table.col.delete" => "列を削除",
+        "table.col.move_left" => "左に移動",
+        "table.col.move_right" => "右に移動",
+        "table.align.none" => "なし",
+        "table.align.left" => "左揃え",
+        "table.align.centre" => "中央揃え",
+        "table.align.right" => "右揃え",
         "form.edit_refused.stale" => {
             "この変更は適用されませんでした: ドキュメントが変更されました。もう一度お試しください。"
         }

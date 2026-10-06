@@ -9,7 +9,10 @@
 use dioxus::prelude::*;
 
 use bekoedit_core::AppState;
-use bekoedit_markdown::{FormBlockEdit, TableRowDirection, TableRowPosition, fingerprint::BlockId};
+use bekoedit_markdown::{
+    FormBlockEdit, TableAlignment, TableColumnDirection, TableColumnPosition, TableRowDirection,
+    TableRowPosition, fingerprint::BlockId,
+};
 
 use super::dispatch;
 use super::inline_toolbar::InlineToolbar;
@@ -17,6 +20,7 @@ use crate::components::icons::AddIcon;
 use crate::components::toast::Toast;
 use crate::i18n::{Lang, tr};
 use crate::shell_focus::{self, FocusMove};
+use bekoedit_markdown::cell_plain_text;
 
 #[component]
 pub fn TableView(
@@ -27,6 +31,7 @@ pub fn TableView(
     headers: Vec<String>,
     rows: Vec<Vec<String>>,
     col_count: usize,
+    alignments: Vec<TableAlignment>,
 ) -> Element {
     let state = use_context::<Signal<AppState>>();
     let toasts = use_context::<Signal<Vec<Toast>>>();
@@ -42,7 +47,11 @@ pub fn TableView(
     // `onmounted` -- not a frame count or a poll -- moves focus once it
     // actually exists.
     let row_menu_entry = use_signal::<Option<FocusMove>>(|| None);
+    // RFC-048 slice 4 §2.2: the same for one column header's menu.
+    let open_col_menu = use_signal::<Option<usize>>(|| None);
+    let col_menu_entry = use_signal::<Option<FocusMove>>(|| None);
     let last_row = rows.len();
+    let col_count_now = headers.len();
 
     // Rendered unconditionally (review, 2026-10-02 §3.2): if the toolbar
     // only appeared once a cell took focus, the table would shift down by
@@ -74,6 +83,7 @@ pub fn TableView(
                                     class: "table-cell-input",
                                     value: "{header}",
                                     aria_label: "{header}",
+                                    style: "text-align: {text_align_at(&alignments, ci)};",
                                     onfocus: move |_| focused.set(Some((0, ci))),
                                     onchange: move |evt: Event<FormData>| dispatch(
                                         state,
@@ -83,6 +93,19 @@ pub fn TableView(
                                         lang,
                                         FormBlockEdit::ReplaceTableCell { row: 0, col: ci, text: evt.value() },
                                     ),
+                                }
+                                ColumnActionsMenu {
+                                    field_id: field_id.clone(),
+                                    block_id,
+                                    revision,
+                                    toasts,
+                                    lang,
+                                    col: ci,
+                                    count: col_count_now,
+                                    alignment: alignment_at(&alignments, ci),
+                                    label: cell_plain_text(header),
+                                    open: open_col_menu,
+                                    entry: col_menu_entry,
                                 }
                             }
                         }
@@ -99,6 +122,7 @@ pub fn TableView(
                                         r#type: "text",
                                         class: "table-cell-input",
                                         value: "{cell}",
+                                        style: "text-align: {text_align_at(&alignments, ci)};",
                                         // Column header plus row number
                                         // (RFC-048 §5.4), e.g. "Name, row 2".
                                         aria_label: {
@@ -153,80 +177,6 @@ pub fn TableView(
                 p { class: "muted", {tr(lang, "table.empty")} }
             }
         }
-    }
-}
-
-/// Places a row's menu (task 058 §2.2) against its own trigger: below it,
-/// or above when there is no room below, right-aligned to it and kept
-/// inside the viewport. Re-run on every scroll, so the menu stays
-/// attached to its row. Fixed positioning is what keeps the menu out of
-/// `.table-block`'s overflow clip. The listener removes itself once the
-/// menu is gone.
-fn place_row_menu_script(menu_id: &str, trigger_id: &str) -> String {
-    let menu_id = crate::bridge::js_string_literal(menu_id);
-    let trigger_id = crate::bridge::js_string_literal(trigger_id);
-    format!(
-        r#"(() => {{
-            const menuId = {menu_id};
-            const triggerId = {trigger_id};
-            const place = () => {{
-                const menu = document.getElementById(menuId);
-                const trigger = document.getElementById(triggerId);
-                if (!menu || !trigger) return false;
-                const t = trigger.getBoundingClientRect();
-                const m = menu.getBoundingClientRect();
-                const below = t.bottom + 2;
-                const top = below + m.height <= window.innerHeight
-                    ? below
-                    : Math.max(0, t.top - m.height - 2);
-                const left = Math.max(0, Math.min(t.right - m.width, window.innerWidth - m.width));
-                menu.style.top = top + "px";
-                menu.style.left = left + "px";
-                return true;
-            }};
-            const onScroll = () => {{
-                if (!place()) document.removeEventListener("scroll", onScroll, true);
-            }};
-            place();
-            document.addEventListener("scroll", onScroll, true);
-        }})();"#
-    )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn is_balanced(script: &str) -> bool {
-        let mut parens = 0i32;
-        let mut braces = 0i32;
-        for c in script.chars() {
-            match c {
-                '(' => parens += 1,
-                ')' => parens -= 1,
-                '{' => braces += 1,
-                '}' => braces -= 1,
-                _ => {}
-            }
-            if parens < 0 || braces < 0 {
-                return false;
-            }
-        }
-        parens == 0 && braces == 0
-    }
-
-    /// Task 058 §2.2: the placement script must stay syntactically whole
-    /// (an unbalanced brace is a silent WebView SyntaxError), and must
-    /// name both the flip-upward fallback and the scroll re-placement.
-    #[test]
-    fn the_placement_script_is_balanced_and_handles_flip_and_scroll() {
-        let script = place_row_menu_script("fb-1-2-row-menu-2", "fb-1-2-row-actions-2");
-        assert!(is_balanced(&script), "{script}");
-        assert!(script.contains("t.top - m.height"), "flip-upward fallback");
-        assert!(
-            script.contains("addEventListener(\"scroll\""),
-            "re-placed on scroll"
-        );
     }
 }
 
@@ -398,7 +348,7 @@ fn RowActionsMenu(
                     onmounted: {
                         let field_id = field_id.clone();
                         move |_| {
-                            document::eval(&place_row_menu_script(&menu_id_for_place, &trigger_id_for_place));
+                            document::eval(&super::placement::place_menu_script(&menu_id_for_place, &trigger_id_for_place));
                             let pending = *entry.peek();
                             if let Some(target) = pending {
                                 entry.set(None);
@@ -478,5 +428,352 @@ fn RowActionsMenu(
                 }
             }
         }
+    }
+}
+
+/// CSS `text-align` for a column's cells (RFC-048 slice 4 §2.2).
+fn text_align(alignment: TableAlignment) -> &'static str {
+    match alignment {
+        TableAlignment::None => "start",
+        TableAlignment::Left => "left",
+        TableAlignment::Centre => "center",
+        TableAlignment::Right => "right",
+    }
+}
+
+fn alignment_at(alignments: &[TableAlignment], col: usize) -> TableAlignment {
+    alignments.get(col).copied().unwrap_or(TableAlignment::None)
+}
+
+fn text_align_at(alignments: &[TableAlignment], col: usize) -> &'static str {
+    text_align(alignment_at(alignments, col))
+}
+
+/// Where focus goes after a column is deleted, given the column count left
+/// (RFC-048 slice 4 §2.2): the column that took its place, or the previous one
+/// if the deleted column was last. `None` when no column is left.
+fn column_after_delete(col: usize, count_after: usize) -> Option<usize> {
+    match count_after {
+        0 => None,
+        _ if col < count_after => Some(col),
+        _ => Some(col - 1),
+    }
+}
+
+fn insert_column(ctx: EditContext, field_id: &str, col: usize, position: TableColumnPosition) {
+    dispatch(
+        ctx.state,
+        ctx.revision,
+        ctx.block_id,
+        ctx.toasts,
+        ctx.lang,
+        FormBlockEdit::InsertTableColumn { col, position },
+    );
+    // The new column's header cell: the user will likely name it right away.
+    let new_col = match position {
+        TableColumnPosition::Left => col,
+        TableColumnPosition::Right => col + 1,
+    };
+    shell_focus::focus_table_cell(field_id, 0, new_col);
+}
+
+fn delete_column(ctx: EditContext, field_id: &str, col: usize, count: usize) {
+    dispatch(
+        ctx.state,
+        ctx.revision,
+        ctx.block_id,
+        ctx.toasts,
+        ctx.lang,
+        FormBlockEdit::DeleteTableColumn { col },
+    );
+    if let Some(target) = column_after_delete(col, count - 1) {
+        shell_focus::focus_table_column_actions(field_id, target);
+    }
+}
+
+fn move_column(ctx: EditContext, field_id: &str, col: usize, direction: TableColumnDirection) {
+    dispatch(
+        ctx.state,
+        ctx.revision,
+        ctx.block_id,
+        ctx.toasts,
+        ctx.lang,
+        FormBlockEdit::MoveTableColumn { col, direction },
+    );
+    let new_col = match direction {
+        TableColumnDirection::Left => col - 1,
+        TableColumnDirection::Right => col + 1,
+    };
+    shell_focus::focus_table_column_actions(field_id, new_col);
+}
+
+fn set_column_alignment(ctx: EditContext, field_id: &str, col: usize, alignment: TableAlignment) {
+    dispatch(
+        ctx.state,
+        ctx.revision,
+        ctx.block_id,
+        ctx.toasts,
+        ctx.lang,
+        FormBlockEdit::SetTableColumnAlignment { col, alignment },
+    );
+    shell_focus::focus_table_column_actions(field_id, col);
+}
+
+/// One column header's actions button and its menu (RFC-048 slice 4 §2.2):
+/// insert left and right, delete, move, and alignment. The menu is fixed and
+/// placed by the same script as a row's menu (task 058), with the same keyboard
+/// rules, and one column's menu is open at a time.
+#[component]
+fn ColumnActionsMenu(
+    field_id: String,
+    block_id: BlockId,
+    revision: u64,
+    toasts: Signal<Vec<Toast>>,
+    lang: Lang,
+    col: usize,
+    count: usize,
+    alignment: TableAlignment,
+    label: String,
+    open: Signal<Option<usize>>,
+    entry: Signal<Option<FocusMove>>,
+) -> Element {
+    let mut open = open;
+    let mut entry = entry;
+    let state = use_context::<Signal<AppState>>();
+    let ctx = EditContext {
+        state,
+        revision,
+        block_id,
+        toasts,
+        lang,
+    };
+    let is_open = *open.read() == Some(col);
+    let menu_id = format!("{field_id}-col-menu-{col}");
+    let trigger_id = format!("{field_id}-col-actions-{col}");
+    let menu_id_for_place = menu_id.clone();
+    let trigger_id_for_place = trigger_id.clone();
+    let current = |item: TableAlignment| item == alignment;
+
+    rsx! {
+        div {
+            class: "table-row-actions-wrap",
+            onclick: move |event| event.stop_propagation(),
+            onkeydown: {
+                let field_id = field_id.clone();
+                move |event: KeyboardEvent| {
+                    if event.key() == Key::Escape {
+                        open.set(None);
+                        shell_focus::focus_table_column_actions(&field_id, col);
+                        return;
+                    }
+                    if let Some(target) = shell_focus::menu_item_key_intent(&event.key()) {
+                        event.prevent_default();
+                        shell_focus::focus_table_column_menu_item(&field_id, col, target);
+                    }
+                }
+            },
+            button {
+                id: "{trigger_id}",
+                class: if is_open { "icon-btn table-col-actions-btn active" } else { "icon-btn table-col-actions-btn" },
+                aria_label: tr(lang, "table.column_actions").replacen("{}", &label, 1),
+                aria_haspopup: "menu",
+                aria_expanded: "{is_open}",
+                aria_controls: "{menu_id}",
+                onclick: move |_| {
+                    if is_open {
+                        open.set(None);
+                    } else {
+                        open.set(Some(col));
+                    }
+                },
+                onkeydown: {
+                    let field_id = field_id.clone();
+                    move |event: KeyboardEvent| {
+                        let Some(target) = shell_focus::trigger_key_intent(&event.key()) else {
+                            return;
+                        };
+                        event.prevent_default();
+                        event.stop_propagation();
+                        if is_open {
+                            shell_focus::focus_table_column_menu_item(&field_id, col, target);
+                        } else {
+                            entry.set(Some(target));
+                            open.set(Some(col));
+                        }
+                    }
+                },
+                "⋮"
+            }
+            if is_open {
+                div {
+                    id: "{menu_id}",
+                    role: "menu",
+                    tabindex: "-1",
+                    class: "table-row-actions-menu table-col-menu",
+                    onmounted: {
+                        let field_id = field_id.clone();
+                        move |_| {
+                            document::eval(&super::placement::place_menu_script(&menu_id_for_place, &trigger_id_for_place));
+                            let pending = *entry.peek();
+                            if let Some(target) = pending {
+                                entry.set(None);
+                                shell_focus::focus_table_column_menu_item(&field_id, col, target);
+                            }
+                        }
+                    },
+                    button {
+                        class: "dropdown-item",
+                        role: "menuitem",
+                        tabindex: "-1",
+                        onclick: {
+                            let field_id = field_id.clone();
+                            move |_| {
+                                open.set(None);
+                                insert_column(ctx, &field_id, col, TableColumnPosition::Left);
+                            }
+                        },
+                        {tr(lang, "table.col.insert_left")}
+                    }
+                    button {
+                        class: "dropdown-item",
+                        role: "menuitem",
+                        tabindex: "-1",
+                        onclick: {
+                            let field_id = field_id.clone();
+                            move |_| {
+                                open.set(None);
+                                insert_column(ctx, &field_id, col, TableColumnPosition::Right);
+                            }
+                        },
+                        {tr(lang, "table.col.insert_right")}
+                    }
+                    hr { class: "dropdown-sep" }
+                    button {
+                        class: "dropdown-item",
+                        role: "menuitem",
+                        tabindex: "-1",
+                        disabled: count <= 1,
+                        onclick: {
+                            let field_id = field_id.clone();
+                            move |_| {
+                                open.set(None);
+                                delete_column(ctx, &field_id, col, count);
+                            }
+                        },
+                        {tr(lang, "table.col.delete")}
+                    }
+                    hr { class: "dropdown-sep" }
+                    button {
+                        class: "dropdown-item",
+                        role: "menuitem",
+                        tabindex: "-1",
+                        disabled: col == 0,
+                        onclick: {
+                            let field_id = field_id.clone();
+                            move |_| {
+                                open.set(None);
+                                move_column(ctx, &field_id, col, TableColumnDirection::Left);
+                            }
+                        },
+                        {tr(lang, "table.col.move_left")}
+                    }
+                    button {
+                        class: "dropdown-item",
+                        role: "menuitem",
+                        tabindex: "-1",
+                        disabled: col + 1 >= count,
+                        onclick: {
+                            let field_id = field_id.clone();
+                            move |_| {
+                                open.set(None);
+                                move_column(ctx, &field_id, col, TableColumnDirection::Right);
+                            }
+                        },
+                        {tr(lang, "table.col.move_right")}
+                    }
+                    hr { class: "dropdown-sep" }
+                    button {
+                        class: "dropdown-item",
+                        role: "menuitem",
+                        tabindex: "-1",
+                        aria_current: "{current(TableAlignment::None)}",
+                        class: if current(TableAlignment::None) { "dropdown-item active" } else { "dropdown-item" },
+                        onclick: {
+                            let field_id = field_id.clone();
+                            move |_| {
+                                open.set(None);
+                                set_column_alignment(ctx, &field_id, col, TableAlignment::None);
+                            }
+                        },
+                        {tr(lang, "table.align.none")}
+                    }
+                    button {
+                        class: if current(TableAlignment::Left) { "dropdown-item active" } else { "dropdown-item" },
+                        role: "menuitem",
+                        tabindex: "-1",
+                        aria_current: "{current(TableAlignment::Left)}",
+                        onclick: {
+                            let field_id = field_id.clone();
+                            move |_| {
+                                open.set(None);
+                                set_column_alignment(ctx, &field_id, col, TableAlignment::Left);
+                            }
+                        },
+                        {tr(lang, "table.align.left")}
+                    }
+                    button {
+                        class: if current(TableAlignment::Centre) { "dropdown-item active" } else { "dropdown-item" },
+                        role: "menuitem",
+                        tabindex: "-1",
+                        aria_current: "{current(TableAlignment::Centre)}",
+                        onclick: {
+                            let field_id = field_id.clone();
+                            move |_| {
+                                open.set(None);
+                                set_column_alignment(ctx, &field_id, col, TableAlignment::Centre);
+                            }
+                        },
+                        {tr(lang, "table.align.centre")}
+                    }
+                    button {
+                        class: if current(TableAlignment::Right) { "dropdown-item active" } else { "dropdown-item" },
+                        role: "menuitem",
+                        tabindex: "-1",
+                        aria_current: "{current(TableAlignment::Right)}",
+                        onclick: {
+                            let field_id = field_id.clone();
+                            move |_| {
+                                open.set(None);
+                                set_column_alignment(ctx, &field_id, col, TableAlignment::Right);
+                            }
+                        },
+                        {tr(lang, "table.align.right")}
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod column_tests {
+    use super::*;
+
+    /// Task 058-style pure decision (RFC-048 slice 4 §2.2): after a delete,
+    /// focus lands on the column that took the deleted one's place, or the
+    /// previous one when it was last; nothing when no column is left.
+    #[test]
+    fn focus_after_delete_is_the_column_that_took_its_place_or_the_previous() {
+        assert_eq!(column_after_delete(1, 3), Some(1));
+        assert_eq!(column_after_delete(2, 2), Some(1));
+        assert_eq!(column_after_delete(0, 0), None);
+    }
+
+    #[test]
+    fn each_alignment_maps_to_its_css_text_align() {
+        assert_eq!(text_align(TableAlignment::Centre), "center");
+        assert_eq!(text_align(TableAlignment::Left), "left");
+        assert_eq!(text_align(TableAlignment::Right), "right");
+        assert_eq!(text_align(TableAlignment::None), "start");
     }
 }

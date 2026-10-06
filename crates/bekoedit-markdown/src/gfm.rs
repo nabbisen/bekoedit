@@ -102,3 +102,29 @@ pub fn unescape_pipe(cell_source: &str) -> String {
     }
     out
 }
+
+/// The column alignments the parser reads from a table's delimiter row,
+/// one per column, or `None` if `source` does not parse as a table. The
+/// delimiter row is not one of [`table_cell_ranges`]' rows, so this is how
+/// a column operation learns the table's own column count (RFC-048 slice 4).
+pub fn table_alignments(source: &str) -> Option<Vec<pulldown_cmark::Alignment>> {
+    Parser::new_ext(source, parse_options()).find_map(|event| match event {
+        Event::Start(Tag::Table(alignments)) => Some(alignments),
+        _ => None,
+    })
+}
+
+/// A cell's plain text: its own words and code, with every other Markdown
+/// marker dropped, so a label reads "Name" for `**Name**` (RFC-048 slice 4
+/// §2.2). Soft and hard breaks become single spaces.
+pub fn plain_text(cell_source: &str) -> String {
+    let mut out = String::new();
+    for event in Parser::new_ext(cell_source, parse_options()) {
+        match event {
+            Event::Text(text) | Event::Code(text) => out.push_str(&text),
+            Event::SoftBreak | Event::HardBreak => out.push(' '),
+            _ => {}
+        }
+    }
+    out.trim().to_string()
+}
