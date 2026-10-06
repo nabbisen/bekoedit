@@ -80,19 +80,7 @@ jobs:
       - run: git diff --exit-code -- Cargo.lock
       - name: ELOC compliance check
         shell: bash
-        run: |
-          OVER=""
-          while IFS= read -r f; do
-            n=$(grep -vc "^[[:space:]]*$\|^[[:space:]]*//" "$f" 2>/dev/null || echo 0)
-            if [ "$n" -gt "$ELOC_LIMIT" ]; then
-              OVER="${OVER}${n} ${f}"$'\n'
-            fi
-          done < <(find crates -name "*.rs" -type f)
-          if [ -n "$OVER" ]; then
-            echo "Files over ${ELOC_LIMIT} ELOC:"
-            printf "%s" "$OVER"
-            exit 1
-          fi
+        run: bash scripts/check-eloc.sh
 
   fs-msrv:
     name: Filesystem crate (Rust 1.85)
