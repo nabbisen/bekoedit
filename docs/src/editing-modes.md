@@ -45,6 +45,10 @@ These notices exist in Japanese too.
 Your file is never changed beyond the pasted text, and keeps its own line
 endings — see [Source Preservation Model](source-preservation.md).
 
+**Line breaks** inside a pasted paragraph are written as a backslash at the
+end of the line (`\`), which CommonMark and GitHub read as a line break.
+MkDocs (Python-Markdown) does not support that form, and shows the `\`.
+
 **Known limit:** bold declared on a block that wraps a heading also makes
 the heading bold. This is a deliberate choice in the converter upstream,
 not a bekoedit decision.

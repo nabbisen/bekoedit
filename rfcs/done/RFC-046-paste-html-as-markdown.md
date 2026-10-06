@@ -10,7 +10,7 @@
 **Date:** 2026-09-16
 **Related RFCs:** [RFC-011](../done/RFC-011-text-mode-with-codemirror-6.md), [RFC-015](../done/RFC-015-sourcepatch-engine-and-source-preserving-mutation.md), [RFC-016](../done/RFC-016-form-mode-mvp-surface-and-safe-editable-blocks.md), [RFC-017](../done/RFC-017-raw-markdown-islands.md), [RFC-038](../done/RFC-038-advanced-markdown-extension-policy.md), [RFC-041](../done/RFC-041-source-editor-lifecycle-and-synchronization-controller.md), [RFC-044](../done/RFC-044-shell-behaviour-regression-coverage.md)
 **Upstream:** [`mdka`](https://github.com/nabbisen/mdka-rs), maintained by the project owner
-**Upstream pin:** `mdka = "=3.2.0"`, since 2026-10-01 (§6.4); `=3.0.0` from 2026-09-26 (§6.3); `=2.5.1` from 2026-09-24 (§6.2)
+**Upstream pin:** `mdka = "=3.3.0"`, since 2026-10-06 (§6.5); `=3.2.0` from 2026-10-01 (§6.4); `=3.0.0` from 2026-09-26 (§6.3); `=2.5.1` from 2026-09-24 (§6.2)
 
 ---
 
@@ -520,6 +520,36 @@ whole corpus before the next:
 identical to the previous engine's output, and saved it byte-exact.
 
 **Cost:** unchanged dependencies, and 1 MiB converts in about 25 ms.
+
+### 6.5 `mdka` 3.3.0, 2026-10-06 · **the pin is `=3.3.0`, and line breaks are a backslash**
+
+Upstream shipped item 9, `backslash_hard_breaks`
+(`.git-exclude/upstream/mdka/receive/2026-10-06-your-last-item-shipped.md`).
+It also reported a defect in the **default** two-space form, which we confirmed
+on our own converter before deciding:
+
+- `<p>a<br><br>b</p>` lost both breaks, and became two paragraphs;
+- the same inside a blockquote split it into two quotes.
+
+**The owner decided on 2026-10-06** to write pasted line breaks as a trailing
+backslash. The trade-off is accepted: MkDocs (Python-Markdown) does not
+implement the backslash form.
+
+Task 057 (`1ddf049`, `b896050`):
+
+1. **`=3.3.0` with options unchanged** was byte-identical to `=3.2.0` over all
+   41 fixtures, diffed through the real `convert`.
+2. **Fixtures 40 to 44** pin the break cases:
+   - a run of breaks, in a paragraph and in a quote;
+   - a list item;
+   - a break at the end of a block;
+   - a table cell.
+3. **The option is on.** Fixtures 40 and 41 now match their hand-typed
+   expectations. Fixtures 09 and 42 changed form only, by the owner's
+   decision.
+
+**Live:** run `37458935893`, all fifteen scenarios passing, with
+`paste_conversion` unchanged.
 
 ## 7. Testing
 
