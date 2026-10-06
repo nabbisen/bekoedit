@@ -144,9 +144,23 @@ fn the_corpus_is_there_and_every_html_file_has_its_markdown_and_no_markdown_is_o
     }
 }
 
+/// Known gaps (task 057 §2.2): fixtures whose hand-typed expectation the
+/// converter does not meet yet, with the damaging output it does produce,
+/// recorded here so the damage is visible rather than silently skipped. Each
+/// `.md` holds what the HTML means, never this output. A gap leaves this list
+/// only when its expectation is met (task 057 §2.3). Task 038 used the same
+/// shape for its own known gaps.
+const KNOWN_GAPS: &[(&str, &str)] = &[
+    ("synthetic-40-br-run-in-paragraph", "a  \n  \nb\n"),
+    ("synthetic-41-br-run-in-blockquote", "> one  \n  \n> two\n"),
+];
+
 #[test]
 fn every_fixture_converts_to_its_expected_markdown_for_both_line_endings() {
     for name in fixture_names() {
+        if KNOWN_GAPS.iter().any(|(gap, _)| *gap == name) {
+            continue;
+        }
         let html = read(&name, "html");
         let expected = read(&name, "md");
         assert_eq!(converted(&html, LineEnding::Lf), expected, "{name} (LF)");
@@ -215,6 +229,24 @@ fn only_the_target_line_ending_appears() {
             crlf.matches('\r').count(),
             crlf.matches("\r\n").count(),
             "{name}: a lone CR"
+        );
+    }
+}
+
+/// Each known gap still produces exactly its recorded damage, and that damage
+/// is still not the hand-typed expectation. When a fix lands, this test fails
+/// by name, which is the signal to move the fixture back into the normal
+/// corpus.
+#[test]
+fn known_gaps_still_produce_their_recorded_damage() {
+    for (name, damage) in KNOWN_GAPS {
+        let html = read(name, "html");
+        let expected = read(name, "md");
+        let actual = converted(&html, LineEnding::Lf);
+        assert_eq!(actual, *damage, "{name}: the recorded gap moved");
+        assert_ne!(
+            actual, expected,
+            "{name}: the gap is closed; move it out of KNOWN_GAPS"
         );
     }
 }

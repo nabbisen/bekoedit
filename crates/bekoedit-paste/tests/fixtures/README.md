@@ -39,6 +39,10 @@ ending. `synthetic-19` holds real `\r\n` bytes on purpose.
 | 30 | ordinals: `1<sup>st</sup>` becomes `1st` as of 3.2.0 (was `1ˢᵗ` under 3.0.0 and 3.1.1). **Flattened upstream in 3.2.0, at our suggestion** (`.git-exclude/upstream/mdka/send/2026-10-01-re-3.0.0-and-3.1.0.md`); confirmed against the published 3.2.0 binary in their reply, `.git-exclude/upstream/mdka/receive/2026-10-01c-shipped-you-can-turn-it-on.md` |
 | 31–33 | more ordinal suffixes flattened in 3.2.0, each pinned from upstream's own worked examples: `1st 2nd 3rd 4th` (31); the Spanish ordinal marks `1º 2ª` (32); a suffix wrapped in a styled `<span>`, the shape a real editor's clipboard HTML uses (33) |
 | 34, 35 | ordinal shapes 3.2.0 deliberately leaves alone, pinned as the boundary: French `1<sup>er</sup>` stays `1ᵉʳ` (a real exponent reads as an exponent, not a typographic ordinal); an italicised suffix, `1<sup><i>st</i></sup>`, still gives `1ˢᵗ` (a narrower, documented limit, a different code path than 33) |
+| 40, 41 | **known gaps** (task 057 §2.2): a `<br><br>` run in a paragraph (40) and in a blockquote (41). The `.md` holds what the HTML means, two hard breaks written as a trailing `\`. Today the default two-space form writes a whitespace-only line, which CommonMark reads as a paragraph break, so every break in the run is lost, and in the quote the quote splits in two. Their damaging output is recorded in `tests/corpus.rs`'s `KNOWN_GAPS`, not typed in here |
+| 42 | one `<br>` inside a list item, pinned as today's two-space form: a single break already works |
+| 43 | `<br>` at the end of a paragraph: no break, since a break at the end of a block means nothing. Pinned as `text` |
+| 44 | `<br>` inside a table cell: pinned as `x<br>y`, because the backslash option has no effect in a cell |
 | 36–39 | `emphasis_from_style`'s own boundary, pinned from upstream's worked examples (task 038 step 4): a heading restating its own default `font-weight:700` is **not** emphasised (36); a `<cite>` restating its own default `font-style:italic` is **not** emphasised (37); a `<span style="font-weight:700">` authored *inside* a heading **is** emphasised -- an authored bold is real, only the heading's own restated default is ignored (38); and the one boundary upstream names and keeps deliberately, an **inherited** bold from a wrapping `<div>` still opens emphasis inside the `<h2>` beneath it (39) -- pinned as a known, accepted boundary, not a gap |
 
 ## `webkitgtk-paste-conversion`: the first real capture
@@ -137,3 +141,15 @@ sample:
 
 Since every move was (a) and no fixture showed (b), the option stays on. The CHANGELOG's paste entry no
 longer lists style-only bold as a limit.
+
+
+## `mdka` 3.3.0, and `backslash_hard_breaks` (task 057)
+
+The pin moved `=3.2.0` → `=3.3.0`, mode and options unchanged. `Cargo.lock` changed `mdka` alone.
+
+- **Byte-identical to 3.2.0.** Every existing fixture (01 to 39, `webkitgtk-paste-conversion`) was converted by a copy of this crate pinned to `=3.2.0` and by this one at `=3.3.0`, and the complete outputs diffed: 41 fixtures, no difference. Upstream's own comparison (0 of 108) is not evidence for this corpus on its own, since the `.md` expectations were hand-written, not produced by 3.2.0.
+- **`backslash_hard_breaks` stays off.** Turning it on (`.backslash_hard_breaks(true)` in `mdka_configured`) was measured against every fixture. Four outputs move:
+  - **40** and **41** moved to exactly their hand-typed expectations: a break kept that was lost. Both are wanted.
+  - **09** (`line one  \nline two  \nline three`) becomes `line one\` / `line two\` / `line three`, and **42** (`- first  \n  second`) becomes `- first\` / `  second`. A break was kept both times, only its form changed, so neither is a break saved. Those two are otherwise, which stops the switch.
+  - **43** and **44** do not move.
+- **The option was not enabled.** The two form-only changes are a visible change to every hard break already pasted, which the task classifies as "otherwise". Gaps 40 and 41 stay recorded in `KNOWN_GAPS` until the owner decides.

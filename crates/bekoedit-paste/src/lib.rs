@@ -153,8 +153,8 @@ pub fn convert_with_marker(
 /// all (`Minimal` unwraps `<span>`/`<div>` before their `style` can be read;
 /// upstream measured this combination byte-identical to `Minimal` with the
 /// option off, over their 54-document corpus, and this crate's own fixture
-/// corpus confirms it independently). The option itself is a separate,
-/// deliberate opt-in (`EMPHASIS_FROM_STYLE`), off here.
+/// corpus confirms it independently). The option itself, `emphasis_from_style`,
+/// is on (`EMPHASIS_FROM_STYLE`; task 038 step 4).
 fn mdka_configured(html: String) -> String {
     let options = mdka::ConversionOptions::for_mode(mdka::ConversionMode::Balanced)
         .drop_interactive_shell(true)
@@ -163,9 +163,9 @@ fn mdka_configured(html: String) -> String {
     mdka::html_to_markdown_with(&html, &options)
 }
 
-/// Off (task 038 step 4; RFC-046 §6.2 item 4 is still an accepted limitation,
-/// not yet enabled). A `const` rather than deleting the call above, so
-/// turning it on is a one-line, reviewable diff when it is: see
+/// On since task 038 step 4: emphasis that a clipboard's own `style` spans
+/// carry is read as bold or italic. A `const` rather than deleting the call
+/// above, so turning it off is a one-line, reviewable diff: see
 /// `crates/bekoedit-paste/tests/fixtures/README.md`.
 const EMPHASIS_FROM_STYLE: bool = true;
 

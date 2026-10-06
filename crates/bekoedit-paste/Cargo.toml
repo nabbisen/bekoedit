@@ -18,7 +18,7 @@ repository.workspace    = true
 # byte-identical to 3.0.0 except ordinals (fixture 30; upstream flattened
 # `1<sup>st</sup>` to `1st` at our suggestion), with the mode and options
 # unchanged -- `emphasis_from_style` (3.1.0) is a separate, deliberate opt-in.
-mdka                        = { version = "=3.2.0", default-features = false }
+mdka                        = { version = "=3.3.0", default-features = false }
 thiserror                   = { workspace = true }
 
 [dev-dependencies]
