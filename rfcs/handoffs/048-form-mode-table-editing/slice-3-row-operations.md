@@ -1,6 +1,6 @@
 # RFC-048 handoff — slice 3: row operations
 
-**Governing RFC:** [RFC-048](../../accepted/RFC-048-form-mode-table-editing.md) §5.2, §5.3, §5.4, §6
+**Governing RFC:** [RFC-048](../../done/RFC-048-form-mode-table-editing.md) §5.2, §5.3, §5.4, §6
 **Slice:** 3 of 5. Slices 1 and 2 are done: task 045, and `c1aba2c` plus
 `8ddd1d4`.
 **Baseline:** `main` at `d723da2` or later, which is green (run `37110705407`).

@@ -1,6 +1,6 @@
 # RFC-048 handoff — slice 5: Tidy, keyboard, accessibility, and surfacing
 
-**Governing RFC:** [RFC-048](../../accepted/RFC-048-form-mode-table-editing.md) §5.2 (Tidy), §5.3, §5.4, §6, §9
+**Governing RFC:** [RFC-048](../../done/RFC-048-form-mode-table-editing.md) §5.2 (Tidy), §5.3, §5.4, §6, §9
 **Slice:** 5 of 5, the last. Slices 1 to 4 are done.
 **Baseline:** `main` at `7a3a29d` or later (task 059 merged; run `37465769065` green).
 **Status:** inherited from RFC-048 (Accepted 2026-10-02)

@@ -1,6 +1,6 @@
 # RFC-048 handoff — slice 2: formatted cells are editable
 
-**Governing RFC:** [RFC-048](../../accepted/RFC-048-form-mode-table-editing.md) §5.1, §5.6, §6, §10 Q1
+**Governing RFC:** [RFC-048](../../done/RFC-048-form-mode-table-editing.md) §5.1, §5.6, §6, §10 Q1
 **Slice:** 2 of 5. Slice 1 is task 045.
 **Baseline:** `main` with **task 045 merged**. Do not start before it is.
 **Status:** inherited from RFC-048 (Accepted 2026-10-02)

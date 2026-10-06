@@ -1,6 +1,6 @@
 # RFC-048 handoff — slice 4: columns and alignment
 
-**Governing RFC:** [RFC-048](../../accepted/RFC-048-form-mode-table-editing.md) §5.2, §5.3, §5.4, §6
+**Governing RFC:** [RFC-048](../../done/RFC-048-form-mode-table-editing.md) §5.2, §5.3, §5.4, §6
 **Slice:** 4 of 5. Slices 1 to 3 are done (tasks 045, 056 and 058, and the
 slice 2 and slice 3 commits).
 **Baseline:** `main` at `8fffd85` or later, which is green.

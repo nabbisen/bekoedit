@@ -1,9 +1,21 @@
 # RFC-048: Form Mode table editing
 
 **Project:** bekoedit
-**Status:** Accepted — approved by the owner on 2026-10-02, the day it was
-drafted, after the owner named easy table editing as a key requirement. All of
-§10 is answered.
+**Status:** Implemented — on `main`, not yet released. Approved by the owner on
+2026-10-02, the day it was drafted, after the owner named easy table editing as
+a key requirement. All of §10 is answered. Merged in five slices, the last
+green on `main` at `590d06a` (run `37479946441`, 2026-10-06):
+
+- **Slice 1** (`3985e19`, task 045): a cell edit changes only that cell's own
+  bytes, which ended the data loss;
+- **Slice 2** (`c1aba2c`): formatted cells are editable;
+- **Slice 3** (`0724feb`, `efa15e1`): row insert, delete and move;
+- **Slice 4** (`1c54f88`, then `7a3a29d` for the ELOC split): column insert,
+  delete and move, and alignment;
+- **Slice 5** (`590d06a`): Tidy on request, the cell keyboard, accessibility,
+  and the docs.
+
+Form Mode undo for these edits is not part of this RFC: see RFC-049.
 **Handoffs:** [`handoffs/048-form-mode-table-editing/`](../handoffs/048-form-mode-table-editing/)
 **Track:** Editing
 **Priority:** High — the owner's key requirement, and the current behaviour

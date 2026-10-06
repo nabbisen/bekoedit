@@ -92,7 +92,6 @@ to `done/` when the work ships.
 | RFC | Title | Notes |
 |-----|-------|-------|
 | RFC-045 | [Release artifact portability and completeness](accepted/RFC-045-release-artifact-portability-and-completeness.md) | Accepted 2026-08-17. Slices 1–2 shipped to `main`: the platform scripts now ship in every archive, and a cross-distribution `ldd` check gates both pull requests and the publish job. Slice 3 (Linux portability) is open — see its §10 Q1. Handoffs: [`handoffs/045-release-artifact-portability-and-completeness/`](handoffs/045-release-artifact-portability-and-completeness/) |
-| RFC-048 | [Form Mode table editing](accepted/RFC-048-form-mode-table-editing.md) | Accepted 2026-10-02, the day it was drafted. Every GFM table becomes a Form Mode grid: cells edited as Markdown text (formatted cells included), row and column insert, delete and move, alignment, and an explicit Tidy; every operation is a minimal patch. Slice 1 is task 045 (a data-loss fix); slices 1–5 target 0.18.0 |
 
 ## Implemented — merged to `main`, not yet released (`done/`)
 
@@ -101,6 +100,7 @@ above when that release goes out.
 
 | RFC | Title | Notes |
 |-----|-------|-------|
+| RFC-048 | [Form Mode table editing](done/RFC-048-form-mode-table-editing.md) | Accepted 2026-10-02; merged in five slices, 2026-10-02 to 2026-10-06, the last green at `590d06a` (run `37479946441`). Every GFM table outside a list or quote is a Form Mode grid: cells edited as Markdown text (formatted cells included), row and column insert, delete and move, alignment, and an explicit Tidy aligned by display width. Every operation is a minimal patch, re-parsed and verified or refused. Slice 1 was task 045, a data-loss fix. Handoffs: [`handoffs/048-form-mode-table-editing/`](handoffs/048-form-mode-table-editing/) |
 
 ## Implemented — v0.17.0 (`done/`)
 

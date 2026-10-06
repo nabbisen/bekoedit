@@ -7,7 +7,7 @@ acceptance, and the answers in §9. Implementation is after 0.18.0.
 **Track:** Editing
 **Priority:** Medium — today a committed Form Mode edit cannot be stepped back
 **Date:** 2026-10-06
-**Related RFCs:** [RFC-015](../done/RFC-015-sourcepatch-engine-and-source-preserving-mutation.md), [RFC-016](../done/RFC-016-form-mode-mvp-surface-and-safe-editable-blocks.md), [RFC-047](../done/RFC-047-user-commands-during-editor-transitions.md), [RFC-048](../accepted/RFC-048-form-mode-table-editing.md)
+**Related RFCs:** [RFC-015](../done/RFC-015-sourcepatch-engine-and-source-preserving-mutation.md), [RFC-016](../done/RFC-016-form-mode-mvp-surface-and-safe-editable-blocks.md), [RFC-047](../done/RFC-047-user-commands-during-editor-transitions.md), [RFC-048](../done/RFC-048-form-mode-table-editing.md)
 
 ---
 
