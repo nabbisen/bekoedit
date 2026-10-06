@@ -52,11 +52,11 @@ const NEW_DELIMITER_CELL: &str = " --- ";
 
 /// One line's own pipe structure: its outer pipes, its inner separators, and
 /// the raw span of every cell it holds, in order.
-struct Split {
-    leading: Option<usize>,
-    trailing: Option<usize>,
+pub(super) struct Split {
+    pub(super) leading: Option<usize>,
+    pub(super) trailing: Option<usize>,
     seps: Vec<usize>,
-    cells: Vec<Range<usize>>,
+    pub(super) cells: Vec<Range<usize>>,
 }
 
 /// Unescaped `|` positions in one line. A backslash skips the byte it
@@ -79,7 +79,7 @@ fn pipes(line: &str) -> Vec<usize> {
 }
 
 /// `None` for a line with no content, which is not a table row.
-fn split(line: &str) -> Option<Split> {
+pub(super) fn split(line: &str) -> Option<Split> {
     let first = line.find(|c: char| !c.is_whitespace())?;
     let last = line.rfind(|c: char| !c.is_whitespace())?;
     let all = pipes(line);
@@ -117,7 +117,7 @@ fn split(line: &str) -> Option<Split> {
 
 /// The cell text the projection shows: trimmed, with only `\|` unescaped
 /// (task 045 §2.2), so the model below compares what a user reads.
-fn cell_text(line: &str, span: &Range<usize>) -> String {
+pub(super) fn cell_text(line: &str, span: &Range<usize>) -> String {
     unescape_pipe(line[span.clone()].trim())
 }
 
@@ -202,7 +202,7 @@ fn set_alignment(line: &str, m: &Split, c: usize, alignment: TableAlignment) -> 
 
 /// Every line of `source` as `(content, line ending)`, so that joining
 /// `content + line ending` for all lines gives `source` back exactly.
-fn split_lines(source: &str) -> Vec<(&str, &str)> {
+pub(super) fn split_lines(source: &str) -> Vec<(&str, &str)> {
     let mut out = Vec::new();
     let mut start = 0;
     for (i, _) in source.match_indices('\n') {
@@ -220,7 +220,7 @@ fn split_lines(source: &str) -> Vec<(&str, &str)> {
     out
 }
 
-fn refuse(reason: &str) -> FormEditError {
+pub(super) fn refuse(reason: &str) -> FormEditError {
     FormEditError::UnsupportedEditOperation {
         reason: reason.to_string(),
     }
@@ -435,7 +435,7 @@ fn delimiter_line(content: &str, m: &Split, op: ColumnOp) -> Result<String, Form
 /// Re-parses the rebuilt table and refuses it unless it is exactly the model
 /// the operation named: the same rows, each with the expected cells, and the
 /// expected alignments.
-fn verify(
+pub(super) fn verify(
     rebuilt: &str,
     expected_rows: &[Vec<String>],
     expected_alignments: &[Alignment],

@@ -118,6 +118,21 @@ pub(super) async fn table_col_menu_open() -> Result<bool, String> {
     returned("document.querySelector('.table-col-menu') !== null").await
 }
 
+/// The index, among every `.table-cell-input` in document order, of the one
+/// that has focus; `None` if focus is elsewhere (RFC-048 slice 5).
+pub(super) async fn active_table_cell_index() -> Result<Option<usize>, String> {
+    returned(
+        "(() => { const i = [...document.querySelectorAll('.table-cell-input')] \
+         .indexOf(document.activeElement); return i < 0 ? null : i; })()",
+    )
+    .await
+}
+
+/// Whether the document shows its unsaved-changes dot.
+pub(super) async fn document_dirty() -> Result<bool, String> {
+    returned("document.querySelector('.dirty-dot') !== null").await
+}
+
 /// Whether a toast is currently shown (task 056 §2.1's "tell the user").
 pub(super) async fn toast_present() -> Result<bool, String> {
     returned("document.querySelector('.toast') !== null").await

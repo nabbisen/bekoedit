@@ -506,7 +506,7 @@ jobs:
         id: release_checks
         run: |
           failed=0
-          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe paste_conversion toolbar_probe save_pending_field form_field_commits_before_mode_switch keyboard_mode_switch_commits_pending_field ctrl_b_toggles_explorer table_row_insert_and_delete table_column_operations; do
+          for scenario in reopen_usable reopen_missing reopen_disabled save_preserves_bytes save_preserves_crlf_bytes mode_switch_preserves_bytes link_clicks_reach_only_the_browser paste_probe paste_conversion toolbar_probe save_pending_field form_field_commits_before_mode_switch keyboard_mode_switch_commits_pending_field ctrl_b_toggles_explorer table_row_insert_and_delete table_column_operations table_keyboard_and_tidy; do
             RELEASE_CHECKS_PARENT="$(mktemp -d "$RUNNER_TEMP/bekoedit-release-checks.XXXXXX")"
             echo "release-checks scenario: $scenario"
             # Task 033: only this scenario gets stub openers. $BROWSER is the

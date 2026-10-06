@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Insert, delete and move table rows from the grid in Form Mode.
 - Insert, delete and move table columns, and set a column's alignment, from
   the grid in Form Mode.
+- Tidy a Form Mode table's columns on request, with Japanese text aligned by
+  display width; move between cells with Tab, Shift+Tab and Enter.
 
 ### Changed
 - Tables whose cells use bold, italic, code or other inline formatting can

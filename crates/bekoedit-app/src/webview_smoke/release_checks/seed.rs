@@ -79,6 +79,14 @@ pub(super) fn original_note() -> Vec<u8> {
 /// `table_row_insert_and_delete`: a two-column, two-data-row simple
 /// table, so there is a row above and below the one the scenario
 /// inserts next to.
+/// `table_keyboard_and_tidy`: a deliberately ragged table with Japanese text
+/// (the delimiter is short and the cells are not padded to each other).
+pub(super) fn original_tidy_note() -> Vec<u8> {
+    "| 名前 | 年齢 |\n|---|---|\n| 太郎 | 20 |\n| Al | 3 |\n"
+        .as_bytes()
+        .to_vec()
+}
+
 pub(super) fn original_table_note() -> Vec<u8> {
     b"| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n".to_vec()
 }
@@ -167,6 +175,12 @@ pub(in crate::webview_smoke) fn prepare(
             let file = workspace.join(SAVE_FILE);
             (workspace, "Save Project".to_string(), original, Some(file))
         }
+        ReleaseScenario::TableKeyboardAndTidy => {
+            let original = original_tidy_note();
+            let workspace = make_workspace(&root, "save-project", &[(SAVE_FILE, &original)])?;
+            let file = workspace.join(SAVE_FILE);
+            (workspace, "Save Project".to_string(), original, Some(file))
+        }
         ReleaseScenario::TableRowInsertAndDelete | ReleaseScenario::TableColumnOperations => {
             let original = original_table_note();
             let workspace = make_workspace(&root, "save-project", &[(SAVE_FILE, &original)])?;
@@ -191,6 +205,7 @@ pub(in crate::webview_smoke) fn prepare(
                 | ReleaseScenario::KeyboardModeSwitchCommitsPendingField
                 | ReleaseScenario::TableRowInsertAndDelete
                 | ReleaseScenario::TableColumnOperations
+                | ReleaseScenario::TableKeyboardAndTidy
         ) {
             // Each of these five starts with a Form Mode field.
             EditorMode::Form

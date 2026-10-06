@@ -222,6 +222,7 @@ dependencies = [
  "pulldown-cmark",
  "serde",
  "thiserror 2.0.18",
+ "unicode-width",
 ]
 
 [[package]]

@@ -183,6 +183,7 @@ pub fn FormBlockView(
             rows,
             col_count,
             alignments,
+            ..
         } => (
             tr(lang, "block.kind.table").to_string(),
             rsx! {

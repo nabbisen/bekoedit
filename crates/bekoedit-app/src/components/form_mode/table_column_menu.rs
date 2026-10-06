@@ -172,6 +172,19 @@ pub(super) fn ColumnActionsMenu(
                 onkeydown: {
                     let field_id = field_id.clone();
                     move |event: KeyboardEvent| {
+                        match event.key() {
+                            Key::ArrowRight => {
+                                event.prevent_default();
+                                shell_focus::focus_table_trigger_step(1);
+                                return;
+                            }
+                            Key::ArrowLeft => {
+                                event.prevent_default();
+                                shell_focus::focus_table_trigger_step(-1);
+                                return;
+                            }
+                            _ => {}
+                        }
                         let Some(target) = shell_focus::trigger_key_intent(&event.key()) else {
                             return;
                         };

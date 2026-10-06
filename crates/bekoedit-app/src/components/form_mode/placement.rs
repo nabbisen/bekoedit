@@ -27,13 +27,23 @@ pub(super) fn place_menu_script(menu_id: &str, trigger_id: &str) -> String {
                 const left = Math.max(0, Math.min(t.right - m.width, window.innerWidth - m.width));
                 menu.style.top = top + "px";
                 menu.style.left = left + "px";
+                menu.style.visibility = "visible";
                 return true;
             }};
             const onScroll = () => {{
                 if (!place()) document.removeEventListener("scroll", onScroll, true);
             }};
+            // An open menu closes when the window is resized (slice 5 §2.3):
+            // its trigger's own click toggles it shut.
+            const onResize = () => {{
+                window.removeEventListener("resize", onResize);
+                document.removeEventListener("scroll", onScroll, true);
+                const trigger = document.getElementById(triggerId);
+                if (document.getElementById(menuId) && trigger) trigger.click();
+            }};
             place();
             document.addEventListener("scroll", onScroll, true);
+            window.addEventListener("resize", onResize);
         }})();"#
     )
 }
@@ -72,5 +82,25 @@ mod tests {
             script.contains("addEventListener(\"scroll\""),
             "re-placed on scroll"
         );
+    }
+
+    /// RFC-048 slice 5 §2.3: the menu is hidden by CSS until it is placed, so
+    /// it never shows at its static position for a frame, and it closes when
+    /// the window is resized. Mutation: drop the `visibility` line, and the
+    /// menu stays hidden for good; drop the resize listener, and it stays
+    /// where the window used to put it.
+    #[test]
+    fn the_menu_is_shown_only_once_placed_and_closes_on_resize() {
+        let script = place_menu_script("m", "t");
+        let placed = script.find("menu.style.left").expect("the placement");
+        let shown = script
+            .find("menu.style.visibility = \"visible\"")
+            .expect("made visible");
+        assert!(placed < shown, "visible only after it is positioned");
+        assert!(
+            script.contains("addEventListener(\"resize\""),
+            "closes on resize"
+        );
+        assert!(is_balanced(&script), "{script}");
     }
 }

@@ -67,6 +67,7 @@ pub fn resolve_form_edit(
             text: cell_text,
         } => super::tables::resolve_replace_table_cell(text, block, *row, *col, cell_text)?,
         FormBlockEdit::AddTableRow => super::tables::resolve_add_table_row(text, block)?,
+        FormBlockEdit::TidyTable => super::tidy::resolve_tidy_table(text, block)?,
         FormBlockEdit::InsertTableColumn { col, position } => super::columns::resolve_column_op(
             text,
             block,

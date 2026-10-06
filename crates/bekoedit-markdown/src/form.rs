@@ -11,6 +11,7 @@ mod images;
 mod inline_fmt;
 mod resolve;
 mod tables;
+mod tidy;
 
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +22,7 @@ use crate::island::RawIslandType;
 
 pub use inline_fmt::resolve_toggle_inline;
 pub use resolve::resolve_form_edit;
+pub use tidy::table_is_tidy;
 
 /// One visual block in the Form Mode projection (RFC-016 §7).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -68,6 +70,8 @@ pub enum FormBlockDisplay {
         col_count: usize,
         /// Each column's alignment, from the delimiter row (RFC-048 slice 4).
         alignments: Vec<TableAlignment>,
+        /// Whether Tidy would change nothing (RFC-048 slice 5 §2.1).
+        is_tidy: bool,
     },
     RawIsland {
         island_type: RawIslandType,
@@ -178,11 +182,13 @@ fn display_for(text: &str, index: &MarkdownIndex, block: &BlockNode) -> FormBloc
                 .into_iter()
                 .map(TableAlignment::from_parser)
                 .collect();
+            let is_tidy = tidy::table_is_tidy(&source);
             FormBlockDisplay::Table {
                 headers,
                 rows,
                 col_count,
                 alignments,
+                is_tidy,
             }
         }
         BlockKind::HtmlBlock => FormBlockDisplay::RawIsland {
@@ -323,6 +329,8 @@ pub enum FormBlockEdit {
     },
     /// Append a new empty row to a simple table (RFC-027).
     AddTableRow,
+    /// Re-pad the whole table, on request only (RFC-048 slice 5 §2.1).
+    TidyTable,
     /// Insert a new empty column, left or right of column `col` (RFC-048
     /// slice 4). Refused for a column index the table does not have.
     InsertTableColumn {

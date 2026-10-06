@@ -314,7 +314,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
    overflow, which clips vertically too once overflow-x is not visible.
    Its top/left are set from the trigger's rectangle (table_view.rs). */
 .table-row-actions-menu {
-  position: fixed;
+  position: fixed; visibility: hidden;
   width: min(180px, calc(100vw - 16px)); min-width: 0;
   background: var(--surface); border: 1px solid var(--line);
   border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12);

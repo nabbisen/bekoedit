@@ -218,6 +218,23 @@ pub fn focus_table_column_menu_item(field_id: &str, col: usize, position: FocusM
     ));
 }
 
+/// Moves focus one step along a table's actions buttons (every column's, then
+/// every row's, in document order), from whichever one has focus (RFC-048
+/// slice 5 §2.2). It is how the row buttons stay reachable by keyboard now
+/// that Tab moves between cells. `delta` is 1 or -1; the ends do not wrap.
+pub fn focus_table_trigger_step(delta: i32) {
+    document::eval(&format!(
+        r#"(() => {{
+            const here = document.activeElement;
+            const block = here && here.closest ? here.closest('.table-block') : null;
+            if (!block) return;
+            const all = [...block.querySelectorAll('.table-col-actions-btn, .table-row-actions-btn')];
+            const next = all[all.indexOf(here) + ({delta})];
+            if (next) next.focus();
+        }})();"#,
+    ));
+}
+
 /// What a keydown on a focused **menu item** means, once the menu is open
 /// (handoff §5.2). Enter/Space are deliberately absent — native
 /// button-click activation already handles them via each item's own

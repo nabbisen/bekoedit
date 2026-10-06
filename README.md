@@ -93,6 +93,8 @@ normalized.
 **Form Mode** — paragraphs, headings, bullet/ordered/task lists, blockquotes,
 fenced code blocks, images, inline links, simple GFM tables. Bold / Italic /
 Code / Link toolbar. Unsupported structures shown as editable raw islands.
+Tables are a grid: insert, delete and move rows and columns, set alignment,
+and tidy the column widths on request, all as minimal patches.
 
 **Text Mode** — CodeMirror 6 with syntax highlighting, CJK/IME
 composition-safe (sends to Rust only after `compositionend`), find-in-file,

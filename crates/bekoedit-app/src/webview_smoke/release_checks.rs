@@ -49,6 +49,7 @@ mod save;
 mod save_pending_field;
 mod seed;
 mod table_column_operations;
+mod table_keyboard_and_tidy;
 mod table_row_insert_and_delete;
 mod toolbar_probe;
 pub(super) use focus_trace::record_focus_trace;
@@ -103,6 +104,8 @@ pub enum ReleaseScenario {
     TableRowInsertAndDelete,
     /// RFC-048 slice 4 §2.3: the column grid's own menu, end to end.
     TableColumnOperations,
+    /// RFC-048 slice 5 §2.5: the grid's keyboard and Tidy, end to end.
+    TableKeyboardAndTidy,
 }
 
 impl ReleaseScenario {
@@ -126,6 +129,7 @@ impl ReleaseScenario {
             Self::CtrlBTogglesExplorer => ctrl_b_toggles_explorer::NAME,
             Self::TableRowInsertAndDelete => table_row_insert_and_delete::NAME,
             Self::TableColumnOperations => table_column_operations::NAME,
+            Self::TableKeyboardAndTidy => table_keyboard_and_tidy::NAME,
         }
     }
 
@@ -147,6 +151,7 @@ impl ReleaseScenario {
             Self::CtrlBTogglesExplorer,
             Self::TableRowInsertAndDelete,
             Self::TableColumnOperations,
+            Self::TableKeyboardAndTidy,
         ]
         .into_iter()
         .find(|scenario| scenario.name() == name)
@@ -158,7 +163,8 @@ impl ReleaseScenario {
                  paste_probe, paste_conversion, toolbar_probe, save_pending_field, \
                  form_field_commits_before_mode_switch, \
                  keyboard_mode_switch_commits_pending_field, ctrl_b_toggles_explorer or \
-                 table_row_insert_and_delete or table_column_operations"
+                 table_row_insert_and_delete, table_column_operations or \
+                 table_keyboard_and_tidy"
             )
         })
     }
@@ -257,6 +263,9 @@ pub fn WebViewReleaseChecksDriver() -> Element {
                 }
                 ReleaseScenario::TableColumnOperations => {
                     table_column_operations::run(&terminal, &desktop).await
+                }
+                ReleaseScenario::TableKeyboardAndTidy => {
+                    table_keyboard_and_tidy::run(&terminal, &desktop).await
                 }
                 _ => launch::run(&terminal, state, toasts, lang).await,
             };

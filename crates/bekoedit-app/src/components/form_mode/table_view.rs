@@ -14,6 +14,7 @@ use bekoedit_markdown::{FormBlockEdit, TableAlignment, fingerprint::BlockId};
 use super::dispatch;
 use super::inline_toolbar::InlineToolbar;
 use super::table_column_menu::{ColumnActionsMenu, alignment_at, text_align_at};
+use super::table_keys::cell_keydown;
 use super::table_row_menu::RowActionsMenu;
 use crate::components::icons::AddIcon;
 use crate::components::toast::Toast;
@@ -51,6 +52,7 @@ pub fn TableView(
     let col_menu_entry = use_signal::<Option<FocusMove>>(|| None);
     let last_row = rows.len();
     let col_count_now = headers.len();
+    let last_col = col_count_now.saturating_sub(1);
 
     // Rendered unconditionally (review, 2026-10-02 §3.2): if the toolbar
     // only appeared once a cell took focus, the table would shift down by
@@ -81,9 +83,15 @@ pub fn TableView(
                                     r#type: "text",
                                     class: "table-cell-input",
                                     value: "{header}",
-                                    aria_label: "{header}",
+                                    aria_label: column_name(header, ci, lang),
                                     style: "text-align: {text_align_at(&alignments, ci)};",
                                     onfocus: move |_| focused.set(Some((0, ci))),
+                                    onkeydown: {
+                                        let field_id = field_id.clone();
+                                        move |event: KeyboardEvent| {
+                                            cell_keydown(&event, &field_id, (0, ci), (last_row, last_col))
+                                        }
+                                    },
                                     onchange: move |evt: Event<FormData>| dispatch(
                                         state,
                                         revision,
@@ -102,7 +110,7 @@ pub fn TableView(
                                     col: ci,
                                     count: col_count_now,
                                     alignment: alignment_at(&alignments, ci),
-                                    label: cell_plain_text(header),
+                                    label: column_name(header, ci, lang),
                                     open: open_col_menu,
                                     entry: col_menu_entry,
                                 }
@@ -122,13 +130,22 @@ pub fn TableView(
                                         class: "table-cell-input",
                                         value: "{cell}",
                                         style: "text-align: {text_align_at(&alignments, ci)};",
-                                        // Column header plus row number
-                                        // (RFC-048 §5.4), e.g. "Name, row 2".
+                                        // Column header's plain text plus row
+                                        // number (RFC-048 §5.4, slice 5 §2.3),
+                                        // e.g. "Name, row 2".
                                         aria_label: {
                                             let header = headers.get(ci).map(String::as_str).unwrap_or("");
-                                            format!("{header}, row {}", ri + 1)
+                                            tr(lang, "table.cell_label")
+                                                .replacen("{}", &column_name(header, ci, lang), 1)
+                                                .replacen("{}", &(ri + 1).to_string(), 1)
                                         },
                                         onfocus: move |_| focused.set(Some((ri + 1, ci))),
+                                        onkeydown: {
+                                            let field_id = field_id.clone();
+                                            move |event: KeyboardEvent| {
+                                                cell_keydown(&event, &field_id, (ri + 1, ci), (last_row, last_col))
+                                            }
+                                        },
                                         onchange: {
                                             let row_num = ri + 1;
                                             move |evt: Event<FormData>| dispatch(
@@ -171,11 +188,31 @@ pub fn TableView(
                 AddIcon {}
                 {tr(lang, "table.add_row")}
             }
+            // RFC-048 slice 5 §2.1: only ever on request. On a table that is
+            // already tidy it does nothing at all: `dispatch` drops it before
+            // it becomes an edit.
+            button {
+                id: "{field_id}-tidy",
+                class: "table-add-row table-tidy",
+                onclick: move |_| dispatch(state, revision, block_id, toasts, lang, FormBlockEdit::TidyTable),
+                {tr(lang, "table.tidy")}
+            }
             // Warn if col_count == 0 (degenerate table).
             if col_count == 0 {
                 p { class: "muted", {tr(lang, "table.empty")} }
             }
         }
+    }
+}
+
+/// A column's name for labels (RFC-048 slice 5 §2.3): its header's plain text,
+/// so `**Name**` reads "Name", or "Column 3" when the header is empty.
+fn column_name(header: &str, col: usize, lang: Lang) -> String {
+    let plain = cell_plain_text(header);
+    if plain.is_empty() {
+        tr(lang, "table.column_fallback").replacen("{}", &(col + 1).to_string(), 1)
+    } else {
+        plain
     }
 }
 
@@ -196,4 +233,34 @@ pub(super) struct EditContext {
     pub(super) block_id: BlockId,
     pub(super) toasts: Signal<Vec<Toast>>,
     pub(super) lang: Lang,
+}
+
+#[cfg(test)]
+mod label_tests {
+    use super::*;
+
+    #[test]
+    fn a_header_is_named_by_its_plain_text() {
+        assert_eq!(column_name("**Name**", 0, Lang::En), "Name");
+        assert_eq!(column_name("`id` _key_", 1, Lang::En), "id key");
+    }
+
+    #[test]
+    fn an_empty_header_is_named_by_its_position() {
+        assert_eq!(column_name("", 2, Lang::En), "Column 3");
+        assert_eq!(column_name("  ", 0, Lang::En), "Column 1");
+        assert_eq!(column_name("", 2, Lang::Ja), "列 3");
+    }
+
+    #[test]
+    fn a_data_cell_label_names_its_column_and_row() {
+        let label = tr(Lang::En, "table.cell_label")
+            .replacen("{}", &column_name("**Name**", 0, Lang::En), 1)
+            .replacen("{}", "2", 1);
+        assert_eq!(label, "Name, row 2");
+        let empty = tr(Lang::En, "table.cell_label")
+            .replacen("{}", &column_name("", 2, Lang::En), 1)
+            .replacen("{}", "2", 1);
+        assert_eq!(empty, "Column 3, row 2");
+    }
 }

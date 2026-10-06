@@ -183,6 +183,14 @@ fn is_unchanged_text_edit(
     block_id: BlockId,
     edit: &FormBlockEdit,
 ) -> bool {
+    // RFC-048 slice 5 §2.1: Tidy on a table that is already tidy changes
+    // nothing, so it must not become an edit (a revision and a dirty document).
+    if matches!(edit, FormBlockEdit::TidyTable) {
+        return projection.blocks.iter().any(|b| {
+            b.block_id == block_id
+                && matches!(b.display, FormBlockDisplay::Table { is_tidy: true, .. })
+        });
+    }
     let (cell, new_text) = match edit {
         FormBlockEdit::ReplacePlainText { text } => (None, text.as_str()),
         FormBlockEdit::ReplaceTableCell { row, col, text } => (Some((*row, *col)), text.as_str()),
@@ -218,6 +226,7 @@ mod block_view;
 mod inline_toolbar;
 mod placement;
 mod table_column_menu;
+mod table_keys;
 mod table_row_menu;
 mod table_view;
 
@@ -300,6 +309,29 @@ mod tests {
             text: "99".to_string(),
         };
         assert!(!is_unchanged_text_edit(&projection, block_id, &edit));
+    }
+
+    /// Tidy on an already tidy table is "unchanged", and on an untidy one it is
+    /// a real edit (RFC-048 slice 5 §2.1).
+    #[test]
+    fn tidy_is_unchanged_only_for_a_table_that_is_already_tidy() {
+        for (doc, expect) in [
+            ("| a   | b   |\n| --- | --- |\n| 1   | 2   |\n", true),
+            ("| a | b |\n|---|---|\n| 1 | 2 |\n", false),
+        ] {
+            let projection = projection_for(doc);
+            let block_id = projection
+                .blocks
+                .iter()
+                .find(|b| matches!(b.display, FormBlockDisplay::Table { .. }))
+                .unwrap()
+                .block_id;
+            assert_eq!(
+                is_unchanged_text_edit(&projection, block_id, &FormBlockEdit::TidyTable),
+                expect,
+                "{doc:?}"
+            );
+        }
     }
 
     #[test]

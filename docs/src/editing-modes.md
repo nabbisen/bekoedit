@@ -66,9 +66,11 @@ Each block renders as a typed control:
 | Fenced code | language field + code area — fence character and length preserved |
 | Simple blockquote | multi-line field |
 | Horizontal rule | shown as a rule; deletable |
+| Table | a grid of editable cells, see [Tables](#tables) |
 
-Edits commit when a field loses focus (or on Enter), producing one
-minimal patch. Each block has a delete button; deletion also removes the
+Edits commit when a field loses focus (or on Enter), and also when you press
+Ctrl+S, switch mode, or use the formatting toolbar, so typed text is never
+lost. Each commit produces one minimal patch. Each block has a delete button; deletion also removes the
 trailing blank lines so no gaps accumulate.
 
 Pasting into a field always inserts plain text; formatted content from the
@@ -76,10 +78,41 @@ clipboard is not converted here, unlike in Text Mode above.
 
 ### Raw Markdown Islands
 
-Front matter, HTML blocks, tables, math, nested or multi-paragraph lists,
-complex blockquotes, and malformed regions appear as highlighted raw-text
+Front matter, HTML blocks, math, nested or multi-paragraph lists,
+complex blockquotes, tables the grid cannot edit (see [Tables](#tables)), and
+malformed regions appear as highlighted raw-text
 regions with a label explaining why. You edit them verbatim — bekoedit
 never reinterprets or normalizes them.
+
+### Tables
+
+A simple table appears as a grid. Each cell is edited as Markdown text, so
+`**bold**` or a link shows exactly as it is written, and an edit changes only
+that cell's bytes: the other cells, the column alignment and the line endings
+are left alone.
+
+- **Rows.** Each data row has a ⋮ button with Insert row above, Insert row
+  below, Delete row, Move up and Move down. There is also an **Add row**
+  button.
+- **Columns.** Each header has a ⋮ button with Insert column left and right,
+  Delete column, Move left and Move right. The last column cannot be deleted.
+  A column moves with its alignment.
+- **Alignment.** Set a column to Left, Centre, Right or None from its menu. The
+  grid shows it, and only that column's delimiter cell changes.
+- **Tidy table.** Re-pads every cell so the pipes line up, counting wide
+  characters such as Japanese as two columns. It only runs when you press it,
+  and changes spacing and delimiter dashes, never a cell's text. On a table
+  that is already tidy it does nothing.
+- **Keyboard.** Tab and Shift+Tab move between cells across rows. Tab in the
+  last cell goes to Add row, and does not add one. Enter commits a cell and
+  moves down. Escape moves to the first column's ⋮ button, and the left and
+  right arrow keys move along the ⋮ buttons. What you typed is committed
+  before focus moves.
+
+Some tables stay raw Markdown islands, edited as text: a table inside a list
+item or a blockquote, and one that the Markdown parser and the grid would read
+differently. Nothing is changed in them, and a notice explains why an edit that
+cannot be applied did not apply.
 
 ## Preview Mode
 

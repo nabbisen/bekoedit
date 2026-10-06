@@ -14,6 +14,7 @@ pulldown-cmark              = { workspace = true }
 
 serde                       = { workspace = true }
 thiserror                   = { workspace = true }
+unicode-width               = "0.2"
 
 [[bench]]
 name = "reparse"
