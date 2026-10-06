@@ -8,7 +8,9 @@
 //!
 //! The seeded table (`seed::original_table_note`) has two data rows, so
 //! there is a row above and below the one this scenario inserts next to
-//! -- the inserted row is never the table's first or last.
+//! -- the inserted row is never the table's first or last. Task 058 §2.3
+//! extends it to the table's last row, through its own menu, at the
+//! bottom edge the menu used to be clipped at.
 
 use std::time::Duration;
 
@@ -43,6 +45,11 @@ const TYPED_TEXT: &str = "ZQ7";
 /// creates is exactly this shape), now takes a typed edit after the
 /// *first* whitespace character, so `| ZQ7 |`, not `|  ZQ7|`.
 const INSERTED_LINE: &str = "| ZQ7 |  |\n";
+
+/// The seeded table after the scenario's own delete, with its two data rows
+/// swapped by "Move up" on the last row: each line's own bytes move, and
+/// the line endings stay where they were.
+const SWAPPED_LAST_TWO_ROWS: &str = "| a | b |\n|---|---|\n| 3 | 4 |\n| 1 | 2 |\n";
 
 /// A save settling, past the write itself -- the same margin every
 /// other save-waiting scenario uses.
@@ -175,8 +182,35 @@ pub(super) async fn run(
     check_bytes_unchanged(NAME, original, &after_delete)
         .map_err(|error| format!("{NAME}: after deleting and saving: {error}"))?;
 
+    // Task 058 §2.3: the table's last row, whose menu used to fall below
+    // `.table-block`'s clip edge. Two data rows remain, so the last row is
+    // the second actions button. A real click on "Move up" swaps it with
+    // the row above; the guard in `click_via_xtest` refuses the click if
+    // anything covers the item.
+    click_via_xtest(desktop, ".table-row-actions-btn", None, 1).await?;
+    wait_until(NAME, "the last row's menu to open", || async {
+        dom::table_row_menu_open().await
+    })
+    .await?;
+    click_via_xtest(
+        desktop,
+        ".table-row-actions-menu .dropdown-item",
+        Some("Move up"),
+        0,
+    )
+    .await?;
+    run_xdotool(&["key", "--clearmodifiers", "ctrl+s"]).await?;
+    let after_move = wait_for_save(file, &after_delete).await?;
+    if after_move != SWAPPED_LAST_TWO_ROWS.as_bytes() {
+        return Err(format!(
+            "{NAME}: after moving the last row up and saving: expected {SWAPPED_LAST_TWO_ROWS:?}, got {:?}",
+            String::from_utf8_lossy(&after_move)
+        ));
+    }
+
     Ok(vec![
         format!("the inserted line landed at byte {insert_at}, with every other byte unchanged"),
         "deleting it and saving again restored the exact original bytes".to_string(),
+        "moving the last row up through its menu swapped the two data rows exactly".to_string(),
     ])
 }

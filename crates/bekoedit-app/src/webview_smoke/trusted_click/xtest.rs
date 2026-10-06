@@ -47,6 +47,41 @@ struct LocateRequest<'a> {
     timeout_ms: u64,
 }
 
+/// What `document.elementFromPoint` found at a target's own centre (task
+/// 058 §2.1): the target itself, something inside it, something else
+/// covering or clipping it, or nothing at all (off the viewport).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(super) enum HitRelation {
+    Target,
+    Inside,
+    Other,
+    #[default]
+    Nothing,
+}
+
+/// Whether a trusted click may be sent at its target's centre (task 058
+/// §2.1). A target's own rectangle is reported even when a parent's
+/// `overflow` clips it, so only the element actually on top at that point
+/// can say whether the click would reach the target. Returns the refusal
+/// message, or `None` to click. `topmost` is the element's tag, id and
+/// first two classes, never its text.
+pub(super) fn click_refusal(
+    selector: &str,
+    relation: HitRelation,
+    topmost: &str,
+    point: (f64, f64),
+) -> Option<String> {
+    match relation {
+        HitRelation::Target | HitRelation::Inside => None,
+        HitRelation::Other | HitRelation::Nothing => Some(format!(
+            "trusted-click target {selector} is covered or clipped at ({}, {}): topmost is {topmost}",
+            point.0.round() as i64,
+            point.1.round() as i64,
+        )),
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LocateResponse {
@@ -55,6 +90,10 @@ struct LocateResponse {
     y: f64,
     width: f64,
     height: f64,
+    #[serde(default)]
+    hit: HitRelation,
+    #[serde(default)]
+    topmost: String,
 }
 
 /// The assembled JS for `locate_click_target`, given its already-encoded
@@ -85,7 +124,14 @@ fn render_locate_script(payload: &str) -> String {
                 a !== null && b !== null &&
                 a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
             let rect = null;
+            let target = null;
             let previous = null;
+            const describe = (node) => {{
+                const classes = [...node.classList].slice(0, 2).join(".");
+                return node.tagName.toLowerCase() +
+                    (node.id ? '#' + node.id : '') +
+                    (classes ? "." + classes : "");
+            }};
             while (performance.now() < deadline) {{
                 const matches = [...document.querySelectorAll(request.selector)].filter(
                     (candidate) =>
@@ -98,14 +144,31 @@ fn render_locate_script(payload: &str) -> String {
                     : null;
                 if (current && sameRect(current, previous)) {{
                     rect = current;
+                    target = el;
                     break;
                 }}
                 previous = current;
                 await new Promise((resolve) => setTimeout(resolve, 50));
             }}
+            // Task 058 §2.1: what is actually on top at the centre a real
+            // click would land on, not just where the target's own box is.
+            let hit = "nothing";
+            let topmost = "nothing (outside the viewport)";
+            if (rect) {{
+                const top = document.elementFromPoint(
+                    rect.x + rect.width / 2,
+                    rect.y + rect.height / 2,
+                );
+                if (top) {{
+                    topmost = describe(top);
+                    hit = top === target ? "target"
+                        : target !== null && target.contains(top) ? "inside"
+                        : "other";
+                }}
+            }}
             const response = rect
-                ? {{ found: true, x: rect.x, y: rect.y, width: rect.width, height: rect.height }}
-                : {{ found: false, x: 0, y: 0, width: 0, height: 0 }};
+                ? {{ found: true, x: rect.x, y: rect.y, width: rect.width, height: rect.height, hit, topmost }}
+                : {{ found: false, x: 0, y: 0, width: 0, height: 0, hit: "nothing", topmost: "" }};
             dioxus.send(response);
             // Stay alive until Rust acknowledges: the 2026-09-23 review
             // (§3.2) found that dropping this eval right after send(),
@@ -233,16 +296,17 @@ pub(in crate::webview_smoke) async fn click_via_xtest(
     if !target.found {
         return Err(format!("trusted-click target not found: {selector}"));
     }
+    let centre = rect_center(target.x, target.y, target.width, target.height);
+    if let Some(refusal) = click_refusal(selector, target.hit, &target.topmost, centre) {
+        return Err(refusal);
+    }
     let inner_position = desktop
         .window
         .inner_position()
         .map_err(|error| format!("cannot read window position for a trusted click: {error}"))?;
     let scale_factor = desktop.window.scale_factor();
-    let (screen_x, screen_y) = screen_point(
-        (inner_position.x, inner_position.y),
-        scale_factor,
-        rect_center(target.x, target.y, target.width, target.height),
-    );
+    let (screen_x, screen_y) =
+        screen_point((inner_position.x, inner_position.y), scale_factor, centre);
     println!(
         "  trusted click at {selector} (text_includes={text_includes:?}, index={index}): \
          rect=({}, {}, {}, {}) inner_position=({}, {}) scale_factor={scale_factor} \
@@ -373,5 +437,29 @@ mod tests {
         assert_eq!(screen_point((100, 50), 2.0, (10.0, 20.5)), (120, 91));
         // A fractional physical pixel rounds rather than truncates.
         assert_eq!(screen_point((0, 0), 1.5, (1.0, 1.0)), (2, 2));
+    }
+
+    /// Task 058 §4: a topmost element that is the target, or a child of
+    /// it, is clicked; anything else covering or clipping the target is
+    /// refused. Mutation: make `click_refusal` always return `None`, and
+    /// the refusal cases below fail.
+    #[test]
+    fn a_click_lands_only_on_the_target_or_something_inside_it() {
+        let at = (906.0, 336.0);
+        assert_eq!(click_refusal(".x", HitRelation::Target, "button", at), None);
+        assert_eq!(click_refusal(".x", HitRelation::Inside, "svg", at), None);
+        let refused = click_refusal(".x", HitRelation::Other, "button.table-add-row", at)
+            .expect("covered target must be refused");
+        assert_eq!(
+            refused,
+            "trusted-click target .x is covered or clipped at (906, 336): topmost is button.table-add-row"
+        );
+        assert!(click_refusal(".x", HitRelation::Nothing, "", at).is_some());
+    }
+
+    #[test]
+    fn the_refusal_names_the_point_rounded_to_whole_pixels() {
+        let refused = click_refusal(".x", HitRelation::Other, "div", (10.4, 20.6)).unwrap();
+        assert!(refused.contains("at (10, 21)"), "{refused}");
     }
 }

@@ -310,8 +310,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .table-row-actions-cell { border: none; padding: 0; min-width: 0; width: 1px; }
 .table-row-actions-wrap { position: relative; }
 .table-row-actions-btn { padding: 2px 6px; font-size: .9em; line-height: 1; }
+/* Fixed, not absolute: an absolute menu is clipped by .table-block's own
+   overflow, which clips vertically too once overflow-x is not visible.
+   Its top/left are set from the trigger's rectangle (table_view.rs). */
 .table-row-actions-menu {
-  position: absolute; top: calc(100% + 2px); right: 0;
+  position: fixed;
   width: min(180px, calc(100vw - 16px)); min-width: 0;
   background: var(--surface); border: 1px solid var(--line);
   border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12);

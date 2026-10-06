@@ -428,6 +428,23 @@ fn move_the_last_row_up_with_no_trailing_newline_is_byte_exact() {
     assert!(!out.ends_with('\n'));
 }
 
+/// Task 058 §2.3 pins the release scenario's own expected bytes here,
+/// headless: the table's last row of a two-row table, moved up, is the
+/// exact swap `table_row_insert_and_delete` asserts.
+#[test]
+fn move_up_of_the_last_row_in_a_two_row_table_is_the_scenario_swap() {
+    let doc = "| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n";
+    let out = apply(
+        doc,
+        FormBlockEdit::MoveTableRow {
+            row: 2,
+            direction: TableRowDirection::Up,
+        },
+    )
+    .unwrap();
+    assert_eq!(out, "| a | b |\n|---|---|\n| 3 | 4 |\n| 1 | 2 |\n");
+}
+
 #[test]
 fn move_up_from_the_first_data_row_is_refused() {
     let doc = "| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n";

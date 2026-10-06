@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   saving still happened through autosave. (Cmd on macOS.)
 - In Form Mode, a change that cannot be applied now says so, instead of
   doing nothing.
+- The row actions menu in a Form Mode table is no longer cut off at the
+  bottom of the table.
 
 ## [0.17.0] - 2026-10-01
 

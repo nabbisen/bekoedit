@@ -156,6 +156,80 @@ pub fn TableView(
     }
 }
 
+/// Places a row's menu (task 058 §2.2) against its own trigger: below it,
+/// or above when there is no room below, right-aligned to it and kept
+/// inside the viewport. Re-run on every scroll, so the menu stays
+/// attached to its row. Fixed positioning is what keeps the menu out of
+/// `.table-block`'s overflow clip. The listener removes itself once the
+/// menu is gone.
+fn place_row_menu_script(menu_id: &str, trigger_id: &str) -> String {
+    let menu_id = crate::bridge::js_string_literal(menu_id);
+    let trigger_id = crate::bridge::js_string_literal(trigger_id);
+    format!(
+        r#"(() => {{
+            const menuId = {menu_id};
+            const triggerId = {trigger_id};
+            const place = () => {{
+                const menu = document.getElementById(menuId);
+                const trigger = document.getElementById(triggerId);
+                if (!menu || !trigger) return false;
+                const t = trigger.getBoundingClientRect();
+                const m = menu.getBoundingClientRect();
+                const below = t.bottom + 2;
+                const top = below + m.height <= window.innerHeight
+                    ? below
+                    : Math.max(0, t.top - m.height - 2);
+                const left = Math.max(0, Math.min(t.right - m.width, window.innerWidth - m.width));
+                menu.style.top = top + "px";
+                menu.style.left = left + "px";
+                return true;
+            }};
+            const onScroll = () => {{
+                if (!place()) document.removeEventListener("scroll", onScroll, true);
+            }};
+            place();
+            document.addEventListener("scroll", onScroll, true);
+        }})();"#
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn is_balanced(script: &str) -> bool {
+        let mut parens = 0i32;
+        let mut braces = 0i32;
+        for c in script.chars() {
+            match c {
+                '(' => parens += 1,
+                ')' => parens -= 1,
+                '{' => braces += 1,
+                '}' => braces -= 1,
+                _ => {}
+            }
+            if parens < 0 || braces < 0 {
+                return false;
+            }
+        }
+        parens == 0 && braces == 0
+    }
+
+    /// Task 058 §2.2: the placement script must stay syntactically whole
+    /// (an unbalanced brace is a silent WebView SyntaxError), and must
+    /// name both the flip-upward fallback and the scroll re-placement.
+    #[test]
+    fn the_placement_script_is_balanced_and_handles_flip_and_scroll() {
+        let script = place_row_menu_script("fb-1-2-row-menu-2", "fb-1-2-row-actions-2");
+        assert!(is_balanced(&script), "{script}");
+        assert!(script.contains("t.top - m.height"), "flip-upward fallback");
+        assert!(
+            script.contains("addEventListener(\"scroll\""),
+            "re-placed on scroll"
+        );
+    }
+}
+
 /// What each menu item of [`RowActionsMenu`] does, and the focus it
 /// leaves behind (RFC-048 slice 3 §2.2): a plain function, not a
 /// closure captured once and reused, so there is no question of which
@@ -262,6 +336,8 @@ fn RowActionsMenu(
     let is_open = *open.read() == Some(row);
     let menu_id = format!("{field_id}-row-menu-{row}");
     let trigger_id = format!("{field_id}-row-actions-{row}");
+    let menu_id_for_place = menu_id.clone();
+    let trigger_id_for_place = trigger_id.clone();
 
     rsx! {
         div {
@@ -322,6 +398,7 @@ fn RowActionsMenu(
                     onmounted: {
                         let field_id = field_id.clone();
                         move |_| {
+                            document::eval(&place_row_menu_script(&menu_id_for_place, &trigger_id_for_place));
                             let pending = *entry.peek();
                             if let Some(target) = pending {
                                 entry.set(None);
