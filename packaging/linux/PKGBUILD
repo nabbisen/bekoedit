@@ -7,7 +7,7 @@ pkgname=bekoedit
 # since this project has no post-release version bump (unlike some other
 # projects): the workspace version at any commit on `main` is simply the
 # right packaging version.
-pkgver=0.17.0
+pkgver=0.18.0
 pkgrel=1
 pkgdesc="A source-preserving Markdown editor"
 arch=('x86_64')

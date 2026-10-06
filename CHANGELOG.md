@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-07
+
+### Highlights
+- Edit tables in Form Mode as a grid: type into cells, insert, delete and
+  move rows and columns, set alignment, and tidy the columns on request,
+  with Japanese text aligned. Each change touches only the cells it must.
+- Keyboard shortcuts now work: Ctrl+S saves, Ctrl+1 to 4 switch modes, and
+  Ctrl+B toggles the file explorer (Cmd on macOS). They did nothing in
+  earlier versions.
+- Text typed into a Form Mode field is kept when you save, switch mode or
+  use the toolbar without leaving the field first.
+- Line breaks in pasted text are now written as a backslash at the end of
+  the line. MkDocs (Python-Markdown) does not support this form.
+
 ### Added
 - Insert, delete and move table rows from the grid in Form Mode.
 - Insert, delete and move table columns, and set a column's alignment, from
@@ -219,7 +233,8 @@ Accessibility work in this release covers the shell: file tree, menus, mode
 tabs, conflict banner, Recovery, and Settings. **Form Mode block editing does
 not yet expose accessibility metadata** and is tracked by RFC-042 slice 5.
 
-[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.17.0...HEAD
+[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.18.0...HEAD
+[0.18.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.18.0
 [0.17.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.17.0
 [0.16.1]: https://github.com/nabbisen/bekoedit/releases/tag/0.16.1
 [0.16.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.16.0
