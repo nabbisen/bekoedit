@@ -144,7 +144,8 @@ conflict-safe section/history mutations.
 [Source Preservation](docs/src/source-preservation.md) ·
 [Architecture](docs/src/architecture.md) ·
 [Contributing](.github/CONTRIBUTING.md) ·
-[Distribution](docs/src/distribution.md)
+[Distribution](docs/src/distribution.md) ·
+[Privacy](PRIVACY.md)
 
 ---
 
