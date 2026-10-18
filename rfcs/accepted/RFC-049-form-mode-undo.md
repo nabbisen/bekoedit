@@ -84,6 +84,26 @@ increments `revision`, so a stale record can never apply:
 **Redo** is symmetric. An undo pushes its own inverse onto the redo stack. Any
 new Form edit clears Redo.
 
+**Which record is current** *(amended 2026-10-19, after slice 1)*. Read
+literally, the check above refuses every second Undo: the first Undo is itself
+a mutation, so the record beneath no longer matches the revision. Slice 1
+found this and built the rule below. A record's `revision_after` is the
+revision at which it is **current**:
+
+- **After a successful Undo or Redo,** the record now on top of that stack is
+  restamped to the new revision. The document is then exactly as that record
+  left it, so the restamp only states a fact.
+- **A new edit clears the Undo stack first if its top is not current.** So the
+  record beneath any record was current immediately before that one applied,
+  and a chain never spans a foreign mutation.
+- **A Form edit that changes no byte** still advances the revision. Each top
+  that was current is restamped, since the bytes are unchanged.
+- **Every operation updates both tops together,** so whenever both stacks hold
+  records, their tops are both current or both stale.
+
+The revision check is still the only way a record applies. A top that is not
+current is refused, and both stacks are cleared.
+
 ### 5.3 Lifetime
 
 - **The stacks belong to the open document,** and are cleared when:
