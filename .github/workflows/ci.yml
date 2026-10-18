@@ -33,6 +33,12 @@ jobs:
       - name: Packaging versions (task 046)
         shell: bash
         run: bash scripts/check-packaging-versions.sh
+      - name: Linux build-dependency check self-test (task 063)
+        shell: bash
+        run: python3 scripts/test-check-linux-build-deps.py
+      - name: Linux build dependencies come from one source (task 063)
+        shell: bash
+        run: python3 scripts/check-linux-build-deps.py
       - name: Release notes self-test (task 043)
         shell: bash
         run: bash scripts/test-release-notes.sh
@@ -73,9 +79,7 @@ jobs:
           PY
       - run: cargo +1.88.0 fmt --all -- --check
       - name: Install WebView deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev libssl-dev
+        run: bash scripts/install-linux-build-deps.sh libssl-dev
       - run: cargo +1.88.0 clippy --workspace --all-targets --locked -- -D warnings
       - run: git diff --exit-code -- Cargo.lock
       - name: ELOC compliance check
@@ -238,9 +242,8 @@ jobs:
           readelf --version
       - name: Install WebView deps
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
-            libxdo-dev libssl-dev xvfb xdotool python3-gi gir1.2-gtk-4.0 xclip
+          bash scripts/install-linux-build-deps.sh \
+            libssl-dev xvfb xdotool python3-gi gir1.2-gtk-4.0 xclip
       - name: Install JS dependencies
         run: cd crates/bekoedit-app/js && npm ci
       - name: Test source-editor JavaScript adapter
