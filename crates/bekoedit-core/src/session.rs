@@ -21,8 +21,10 @@ use serde::{Deserialize, Serialize};
 use bekoedit_fs::FileFingerprint;
 use bekoedit_markdown::{
     FormEditCommand, FormEditError, FormProjection, LineEnding, MarkdownIndex, PatchError,
-    patch::apply_patch, render_preview_html,
+    PatchOrigin, SourcePatch, patch::apply_patch, render_preview_html,
 };
+
+use crate::form_history::{FormHistory, FormRecord};
 
 /// Structured session errors (requirements §23.3).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize, Deserialize)]
@@ -37,6 +39,10 @@ pub enum SessionError {
     Read(String),
     #[error("file is not valid UTF-8; bekoedit edits UTF-8 Markdown only")]
     NotUtf8,
+    /// Undo or Redo found the document changed since the edit it would
+    /// reverse (RFC-049 §5.2). Both stacks were cleared; nothing was applied.
+    #[error("the document changed since that edit, so it was not undone or redone")]
+    FormHistoryStale,
 }
 
 /// One open Markdown document (RFC-006 §7).
@@ -56,6 +62,10 @@ pub struct DocumentSession {
     pub is_untitled: bool,
     pub disk_fingerprint: Option<FileFingerprint>,
     pub index: MarkdownIndex,
+    /// Undo and Redo of committed Form Mode edits (RFC-049). Not serialized;
+    /// replacing the session discards it.
+    #[serde(skip)]
+    form_history: FormHistory,
 }
 
 impl DocumentSession {
@@ -74,6 +84,7 @@ impl DocumentSession {
             is_untitled: false,
             disk_fingerprint: None,
             index,
+            form_history: FormHistory::default(),
         }
     }
 
@@ -94,6 +105,7 @@ impl DocumentSession {
             disk_fingerprint: None,
             index,
             canonical_text: text,
+            form_history: FormHistory::default(),
         }
     }
 
@@ -160,9 +172,98 @@ impl DocumentSession {
     pub fn apply_form_edit(&mut self, cmd: &FormEditCommand) -> Result<(), SessionError> {
         let patch =
             bekoedit_markdown::form::resolve_form_edit(&self.canonical_text, &self.index, cmd)?;
-        apply_patch(&mut self.canonical_text, self.revision, &patch)?;
+        let before = self.revision;
+        let replaced = self
+            .canonical_text
+            .get(patch.range.start..patch.range.end)
+            .map(str::to_owned);
+        let result = apply_patch(&mut self.canonical_text, self.revision, &patch)?;
         self.after_mutation();
+        match replaced {
+            Some(replaced) if replaced == patch.replacement => {
+                self.form_history.restamp_tops(before, self.revision);
+            }
+            Some(replaced) => self.form_history.record(
+                before,
+                FormRecord {
+                    revision_after: self.revision,
+                    range_after: result.affected_range,
+                    replaced,
+                },
+            ),
+            // apply_patch validated the range, so this cannot happen.
+            None => self.form_history.clear(),
+        }
         Ok(())
+    }
+
+    /// Undoes the newest committed Form Mode edit. `Ok(false)` when there is
+    /// none; an error, with both stacks cleared and the text untouched, when
+    /// the document is no longer exactly as that edit left it.
+    pub fn undo_form(&mut self) -> Result<bool, SessionError> {
+        self.step_form_history(true)
+    }
+
+    /// Redoes the newest undone edit; the mirror of [`Self::undo_form`].
+    pub fn redo_form(&mut self) -> Result<bool, SessionError> {
+        self.step_form_history(false)
+    }
+
+    pub fn can_undo_form(&self) -> bool {
+        self.form_history.depths().0 > 0
+    }
+
+    pub fn can_redo_form(&self) -> bool {
+        self.form_history.depths().1 > 0
+    }
+
+    /// Empties both stacks (a mode switch away from Form Mode).
+    pub fn clear_form_history(&mut self) {
+        self.form_history.clear();
+    }
+
+    fn step_form_history(&mut self, undo: bool) -> Result<bool, SessionError> {
+        let Some(top) = self.form_history.top_revision(undo) else {
+            return Ok(false);
+        };
+        if top != self.revision {
+            self.form_history.clear();
+            return Err(SessionError::FormHistoryStale);
+        }
+        let record = self.form_history.pop(undo).expect("the top was just read");
+        let range = record.range_after;
+        let Some(current) = self
+            .canonical_text
+            .get(range.start..range.end)
+            .map(str::to_owned)
+        else {
+            self.form_history.clear();
+            return Err(SessionError::FormHistoryStale);
+        };
+        let patch = SourcePatch {
+            base_revision: self.revision,
+            range,
+            replacement: record.replaced,
+            origin: PatchOrigin::FormMode,
+        };
+        let result = match apply_patch(&mut self.canonical_text, self.revision, &patch) {
+            Ok(result) => result,
+            Err(error) => {
+                self.form_history.clear();
+                return Err(error.into());
+            }
+        };
+        self.after_mutation();
+        self.form_history.applied(
+            undo,
+            FormRecord {
+                revision_after: self.revision,
+                range_after: result.affected_range,
+                replaced: current,
+            },
+            self.revision,
+        );
+        Ok(true)
     }
 
     /// Restore update: loads a saved/recovery snapshot as a new dirty edit.

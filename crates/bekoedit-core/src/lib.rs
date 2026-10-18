@@ -13,6 +13,7 @@
 
 pub mod conflict;
 pub mod editor_text;
+mod form_history;
 pub mod link_click;
 pub mod save;
 pub mod session;

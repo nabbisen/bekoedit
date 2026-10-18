@@ -205,6 +205,33 @@ impl AppState {
         Ok(())
     }
 
+    /// Undoes the newest committed Form Mode edit (RFC-049). `Ok(false)` when
+    /// there is nothing to undo. Passes the gates `edit_form` does.
+    pub fn undo_form(&mut self, now_ms: u64) -> Result<bool, StoreError> {
+        self.step_form_history(true, now_ms)
+    }
+
+    /// Redoes the newest undone edit; the mirror of [`Self::undo_form`].
+    pub fn redo_form(&mut self, now_ms: u64) -> Result<bool, StoreError> {
+        self.step_form_history(false, now_ms)
+    }
+
+    fn step_form_history(&mut self, undo: bool, now_ms: u64) -> Result<bool, StoreError> {
+        if self.conflict.requires_user_decision() {
+            return Err(StoreError::ConflictPending);
+        }
+        let session = self.session_mut()?;
+        let changed = if undo {
+            session.undo_form()?
+        } else {
+            session.redo_form()?
+        };
+        if changed {
+            self.after_edit(now_ms);
+        }
+        Ok(changed)
+    }
+
     /// Detects external modification of the open document (RFC-008).
     pub fn check_external_change(&mut self) -> ConflictState {
         if let Some(session) = &self.session {
