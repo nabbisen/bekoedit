@@ -27,6 +27,7 @@ fn successful_result() -> DriverResult {
             .collect(),
         error_toast_seen: false,
         error: None,
+        diagnosis: Vec::new(),
     }
 }
 
@@ -166,6 +167,7 @@ fn a_terminal_failure_s_own_reason_survives_a_structural_pin_mismatch() {
         milestones: Vec::new(),
         error_toast_seen: false,
         error: Some("invalid phase request: phase=\"garbage\"".into()),
+        diagnosis: Vec::new(),
     });
     // release expected, but the message reports none released -- exactly
     // failEarly's shape, which triggers the pin-release check.

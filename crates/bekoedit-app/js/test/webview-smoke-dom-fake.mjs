@@ -61,6 +61,10 @@ export class FakeElement {
     return this._attributes.get(name) ?? null;
   }
 
+  getAttributeNames() {
+    return [...this._attributes.keys()];
+  }
+
   /** Makes `element.contains(node)` true for `node` (and for the element
    * itself), for task 029's "is the active element inside the editor host". */
   withDescendant(node) {

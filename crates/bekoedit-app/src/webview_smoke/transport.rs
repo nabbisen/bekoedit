@@ -39,6 +39,10 @@ pub(super) struct DriverResult {
     pub(super) milestones: Vec<String>,
     pub(super) error_toast_seen: bool,
     pub(super) error: Option<String>,
+    /// Task 061: what the page saw when it failed, one line per fact, for a
+    /// driver that can say. Absent from every other result.
+    #[serde(default)]
+    pub(super) diagnosis: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]

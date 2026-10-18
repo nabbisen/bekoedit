@@ -5,6 +5,7 @@ use std::rc::Rc;
 use super::*;
 
 mod completion_failure;
+mod lifecycle_diagnosis;
 mod phase_bijection;
 mod speaking_rejection;
 mod transport_guard;
@@ -20,6 +21,7 @@ fn successful_result() -> DriverResult {
             .collect(),
         error_toast_seen: false,
         error: None,
+        diagnosis: Vec::new(),
     }
 }
 

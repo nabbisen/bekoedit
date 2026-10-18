@@ -16,25 +16,25 @@ use std::sync::Mutex;
 /// bound: a single scenario's own focus-claim sequence is a handful of
 /// events, nothing like trusted-click's many-interaction volume.
 #[derive(Debug, Default)]
-pub(super) struct FocusTraceLog {
+pub(in crate::webview_smoke) struct FocusTraceLog {
     entries: Mutex<Vec<String>>,
 }
 
 impl FocusTraceLog {
-    pub(super) const fn new() -> Self {
+    pub(in crate::webview_smoke) const fn new() -> Self {
         Self {
             entries: Mutex::new(Vec::new()),
         }
     }
 
-    pub(super) fn record(&self, event: &str, details: &str) {
+    pub(in crate::webview_smoke) fn record(&self, event: &str, details: &str) {
         let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
         entries.push(format!("{event} {details}").trim_end().to_string());
     }
 
     /// The whole log, one entry per line, for the end of this run. Says
     /// so when nothing was recorded, so silence is never read as "fine".
-    pub(super) fn render(&self) -> String {
+    pub(in crate::webview_smoke) fn render(&self) -> String {
         let entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
         let mut out = format!("focus trace ({} entries):", entries.len());
         if entries.is_empty() {

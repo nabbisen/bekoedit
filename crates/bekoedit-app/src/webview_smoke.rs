@@ -2,7 +2,7 @@ use std::ffi::OsString;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use crate::persistence::AppPersistence;
@@ -14,6 +14,7 @@ use self::protocol::*;
 use self::transport::{MessageKind, PhaseCompletion, PhaseMessage, SMOKE_PROTOCOL_VERSION};
 use self::transport::{PinnedExchange, run_driver_phase as run_transport_phase};
 
+mod lifecycle_trace;
 mod protocol;
 mod release_checks;
 mod shell_behaviour;
@@ -41,9 +42,11 @@ pub fn note_start_screen_mounted() {
 /// no-op in every other run, and it formats nothing there. Task 052 extends
 /// this again: a release-checks run also keeps its own `source.focus.*`
 /// events, so a scenario whose own symptom is a focus timeout (no clue which
-/// step failed) has somewhere to point.
+/// step failed) has somewhere to point. Task 061 does the same for the RFC-041
+/// lifecycle run.
 pub fn record_source_trace(event: &str, details: impl std::fmt::Display) {
     trusted_click::record_source_trace(event, &details);
+    lifecycle_trace::record_lifecycle_trace(event, &details);
     release_checks::record_focus_trace(event, &details);
     release_checks::record_form_trace(event, &details);
 }
@@ -55,6 +58,14 @@ fn in_trusted_click_run() -> bool {
     LAUNCH_CONFIG
         .get()
         .is_some_and(|config| config.trusted_click.is_some())
+}
+
+/// Whether this process is the RFC-041 lifecycle run. Same shape as the two
+/// above, for the same reason (task 061).
+fn in_lifecycle_run() -> bool {
+    LAUNCH_CONFIG
+        .get()
+        .is_some_and(|config| config.webview_smoke)
 }
 
 /// Whether this process is a release-checks run. Same shape as
@@ -407,10 +418,16 @@ impl SmokeProfile {
 #[derive(Debug, Default)]
 struct SmokeTerminal {
     state: AtomicU8,
+    /// Task 061: what the page said about a failure, kept so the driver can
+    /// print it after the `FAILED` line.
+    diagnosis: Mutex<Vec<String>>,
 }
 
 impl SmokeTerminal {
     fn accept(&self, result: &DriverResult) -> Result<(), String> {
+        if !result.ok {
+            *self.diagnosis.lock().unwrap_or_else(|e| e.into_inner()) = result.diagnosis.clone();
+        }
         validate_driver_result(result)?;
         self.state
             .compare_exchange(NOT_COMPLETE, SUCCEEDED, Ordering::SeqCst, Ordering::SeqCst)
@@ -420,6 +437,13 @@ impl SmokeTerminal {
 
     fn succeeded(&self) -> bool {
         self.state.load(Ordering::SeqCst) == SUCCEEDED
+    }
+
+    fn diagnosis(&self) -> Vec<String> {
+        self.diagnosis
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 }
 
@@ -497,8 +521,14 @@ pub fn WebViewSmokeDriver() -> Element {
                     }
                     println!("bekoedit WebView lifecycle smoke PASSED");
                 }
-                Err(error) => eprintln!("bekoedit WebView lifecycle smoke FAILED: {error}"),
+                Err(error) => {
+                    eprintln!("bekoedit WebView lifecycle smoke FAILED: {error}");
+                    for line in lifecycle_trace::diagnosis_lines(&terminal.diagnosis()) {
+                        eprintln!("{line}");
+                    }
+                }
             }
+            lifecycle_trace::print_final_trace();
             desktop.close();
         }
     });

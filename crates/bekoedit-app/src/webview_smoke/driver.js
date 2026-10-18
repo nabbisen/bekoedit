@@ -109,6 +109,11 @@ return (async () => {
       deadline: null,
       milestones: ["observer_installed"],
       errorToastSeen: Boolean(document.querySelector(".toast-error")),
+      // Task 061: when the New click landed, and when the editor view was
+      // first seen, on `performance.now()`'s clock. Read only by the editor
+      // phase's timeout diagnosis.
+      clickedAt: null,
+      viewSeenAt: null,
       observer: null,
     };
     state.observer = new MutationObserver((records) => {
@@ -132,7 +137,7 @@ return (async () => {
   };
 
   const state = window[stateKey] ?? createState();
-  const finish = (ok, error = null) => {
+  const finish = (ok, error = null, diagnosis = null) => {
     const result = {
       ok,
       stage: state.stage,
@@ -140,12 +145,64 @@ return (async () => {
       milestones: [...state.milestones],
       errorToastSeen: state.errorToastSeen,
       error,
+      // Task 061: present only on a failure that can say why.
+      ...(diagnosis ? { diagnosis } : {}),
     };
     state.observer.disconnect();
     delete window[stateKey];
     return { kind: "terminal", result };
   };
   const timedOut = () => state.deadline !== null && performance.now() >= state.deadline;
+
+  // Task 061: what the page looked like when the editor phase ran out of
+  // time. The wait is for five conditions at once, and "timed out" alone
+  // cannot say which one was missing. Everything here only reads the page,
+  // and none of it reads text: tags, ids, classes, fixed `data-source-focus-*`
+  // labels and booleans.
+  const editorConditions = () => {
+    const view = window.__bk?._view;
+    const host = document.querySelector('[data-source-focus-launch-region="text"]');
+    // `null` is "cannot be told": a condition about the view, or about the
+    // host's contents, when there is no view or no host to ask.
+    return {
+      view,
+      host,
+      viewExists: Boolean(view),
+      viewConnected: view ? Boolean(view.dom?.isConnected) : null,
+      viewHasFocus: view ? Boolean(view.hasFocus) : null,
+      hostExists: Boolean(host),
+      hostHasNoStatusMarker: host ? !host.querySelector?.(".source-editor-status") : null,
+    };
+  };
+  const classNames = (element) =>
+    typeof element.className === "string" && element.className.trim() !== ""
+      ? `.${element.className.trim().split(/\s+/).join(".")}`
+      : "";
+  const describeActiveElement = () => {
+    const active = document.activeElement ?? null;
+    if (!active) return "none";
+    const id = active.id ? `#${active.id}` : "";
+    const focusLabels = (active.getAttributeNames?.() ?? [])
+      .filter((name) => name.startsWith("data-source-focus-"))
+      .map((name) => `[${name}=${active.getAttribute(name)}]`)
+      .join("");
+    return `${String(active.tagName ?? "element").toLowerCase()}${id}${focusLabels}${classNames(active)}`;
+  };
+  const editorDiagnosis = (conditions) => {
+    const now = performance.now();
+    const after = (at) => `${Math.round(at - state.clickedAt)} ms`;
+    const marker = conditions.host?.querySelector?.(".source-editor-status") ?? null;
+    const shown = (value) => (value === null ? "n/a" : value);
+    return [
+      `editor conditions: window.__bk._view=${conditions.viewExists} ` +
+        `view.dom.isConnected=${shown(conditions.viewConnected)} view.hasFocus=${shown(conditions.viewHasFocus)} ` +
+        `textHost=${conditions.hostExists} hostHasNoStatusMarker=${shown(conditions.hostHasNoStatusMarker)}`,
+      `document.hasFocus()=${document.hasFocus?.()}; activeElement=${describeActiveElement()}`,
+      `statusMarker=${marker ? classNames(marker) || "present" : "none"}`,
+      `timing: ${after(now)} after new_clicked (deadline ${after(state.deadline)}); ` +
+        `editor view first seen ${state.viewSeenAt === null ? "never" : `${after(state.viewSeenAt)} after new_clicked`}`,
+    ];
+  };
 
   let outgoing;
   try {
@@ -167,6 +224,7 @@ return (async () => {
         if (!click(newButton)) throw new Error("New click was not accepted");
         state.milestones.push("new_clicked");
         state.deadline = performance.now() + 15000;
+        state.clickedAt = state.deadline - 15000;
         state.phase = "editor";
         outgoing = {
           kind: "progress",
@@ -175,7 +233,15 @@ return (async () => {
       }
     } else if (requestedPhase === "editor") {
       state.stage = "editor_ready_focused";
-      if (timedOut()) throw new Error("timed out at editor_ready_focused");
+      const conditions = editorConditions();
+      if (conditions.viewExists && state.viewSeenAt === null) {
+        state.viewSeenAt = performance.now();
+      }
+      if (timedOut()) {
+        const timeout = new Error("timed out at editor_ready_focused");
+        timeout.diagnosis = editorDiagnosis(conditions);
+        throw timeout;
+      }
       const view = window.__bk?._view;
       const host = document.querySelector(
         '[data-source-focus-launch-region="text"]',
@@ -224,7 +290,7 @@ return (async () => {
       throw new Error(`unknown phase: ${requestedPhase}`);
     }
   } catch (error) {
-    outgoing = finish(false, String(error));
+    outgoing = finish(false, String(error), error?.diagnosis ?? null);
   }
 
   const report = {

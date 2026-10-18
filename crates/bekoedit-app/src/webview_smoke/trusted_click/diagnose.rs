@@ -264,6 +264,7 @@ mod tests {
             milestones: Vec::new(),
             error_toast_seen: false,
             error: Some(error.into()),
+            diagnosis: Vec::new(),
         }
     }
 

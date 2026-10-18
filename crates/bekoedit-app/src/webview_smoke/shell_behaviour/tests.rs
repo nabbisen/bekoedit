@@ -25,6 +25,7 @@ fn successful_result() -> DriverResult {
             .collect(),
         error_toast_seen: false,
         error: None,
+        diagnosis: Vec::new(),
     }
 }
 

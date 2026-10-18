@@ -52,7 +52,7 @@ mod table_column_operations;
 mod table_keyboard_and_tidy;
 mod table_row_insert_and_delete;
 mod toolbar_probe;
-pub(super) use focus_trace::record_focus_trace;
+pub(super) use focus_trace::{FocusTraceLog, record_focus_trace};
 pub(super) use form_trace::record_form_trace;
 pub(super) use seed::prepare;
 

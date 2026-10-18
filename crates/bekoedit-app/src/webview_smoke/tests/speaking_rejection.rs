@@ -34,6 +34,7 @@ fn a_terminal_failure_s_own_reason_survives_a_structural_pin_mismatch() {
             milestones: Vec::new(),
             error_toast_seen: false,
             error: Some("invalid phase request: phase=\"garbage\"".into()),
+            diagnosis: Vec::new(),
         }),
     };
     let release = PinnedExchange {
