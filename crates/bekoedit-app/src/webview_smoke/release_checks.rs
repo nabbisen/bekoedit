@@ -33,6 +33,7 @@ use crate::i18n::Lang;
 mod bytes;
 mod ctrl_b_toggles_explorer;
 mod dom;
+mod empty_heading_survives;
 mod focus_trace;
 mod form_field_commits_before_mode_switch;
 mod form_trace;
@@ -106,6 +107,9 @@ pub enum ReleaseScenario {
     TableColumnOperations,
     /// RFC-048 slice 5 §2.5: the grid's keyboard and Tidy, end to end.
     TableKeyboardAndTidy,
+    /// Task 064: an empty heading (`# `) never crashes the index, on the
+    /// Text Mode sync, the open and the Form Mode clear.
+    EmptyHeadingSurvives,
 }
 
 impl ReleaseScenario {
@@ -130,6 +134,7 @@ impl ReleaseScenario {
             Self::TableRowInsertAndDelete => table_row_insert_and_delete::NAME,
             Self::TableColumnOperations => table_column_operations::NAME,
             Self::TableKeyboardAndTidy => table_keyboard_and_tidy::NAME,
+            Self::EmptyHeadingSurvives => empty_heading_survives::NAME,
         }
     }
 
@@ -152,6 +157,7 @@ impl ReleaseScenario {
             Self::TableRowInsertAndDelete,
             Self::TableColumnOperations,
             Self::TableKeyboardAndTidy,
+            Self::EmptyHeadingSurvives,
         ]
         .into_iter()
         .find(|scenario| scenario.name() == name)
@@ -164,7 +170,7 @@ impl ReleaseScenario {
                  form_field_commits_before_mode_switch, \
                  keyboard_mode_switch_commits_pending_field, ctrl_b_toggles_explorer or \
                  table_row_insert_and_delete, table_column_operations or \
-                 table_keyboard_and_tidy"
+                 table_keyboard_and_tidy or empty_heading_survives"
             )
         })
     }
@@ -266,6 +272,9 @@ pub fn WebViewReleaseChecksDriver() -> Element {
                 }
                 ReleaseScenario::TableKeyboardAndTidy => {
                     table_keyboard_and_tidy::run(&terminal, &desktop).await
+                }
+                ReleaseScenario::EmptyHeadingSurvives => {
+                    empty_heading_survives::run(&terminal, &desktop).await
                 }
                 _ => launch::run(&terminal, state, toasts, lang).await,
             };

@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Opening a file with an empty heading (`# `), typing `# ` at the start of a
+  new heading in Text Mode, or clearing a heading in Form Mode no longer
+  crashes bekoedit. Clearing a heading written with an `===` underline is
+  refused instead of leaving the underline behind.
+
 ## [0.18.0] - 2026-10-18
 
 ### Highlights

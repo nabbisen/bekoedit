@@ -180,6 +180,7 @@ fn resolve_replace_text(
                     reason: "heading text must be a single line".into(),
                 });
             }
+            require_heading_survives(text, block, content, new_text)?;
             new_text.to_string()
         }
         BlockKind::Blockquote => {
@@ -196,6 +197,36 @@ fn resolve_replace_text(
         }
     };
     Ok((content, replacement, PatchOrigin::FormMode))
+}
+
+/// Task 064: replacing a heading's text must leave a heading of the same
+/// level. Clearing a setext heading's text leaves its `===` underline
+/// behind, a paragraph that was never there; that is refused, not applied.
+/// The check re-parses the heading's own source with the new text in place.
+fn require_heading_survives(
+    text: &str,
+    block: &BlockNode,
+    content: ByteRange,
+    new_text: &str,
+) -> Result<(), FormEditError> {
+    let source = &text[block.source_range.start..block.source_range.end];
+    let (head, tail) = (
+        &source[..content.start - block.source_range.start],
+        &source[content.end - block.source_range.start..],
+    );
+    let candidate = format!("{head}{new_text}{tail}");
+    let reparsed = MarkdownIndex::build(&candidate, 0);
+    let same = matches!(
+        reparsed.blocks.as_slice(),
+        [only] if only.kind == BlockKind::Heading && only.heading_level == block.heading_level
+    );
+    if same {
+        Ok(())
+    } else {
+        Err(FormEditError::UnsupportedEditOperation {
+            reason: "the heading would no longer be a heading; edit it in Text Mode".into(),
+        })
+    }
 }
 
 fn resolve_set_level(text: &str, block: &BlockNode, level: u8) -> Result<Resolved, FormEditError> {

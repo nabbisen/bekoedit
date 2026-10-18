@@ -15,6 +15,10 @@ use super::{Expectation, ReleaseChecksTerminal, ReleaseScenario};
 
 pub(super) const SAVE_FILE: &str = "note.md";
 
+/// `empty_heading_survives`: the second seeded file, which opens with an
+/// empty heading.
+pub(super) const EMPTY_HEADING_FILE: &str = "empty.md";
+
 /// CI creates the opener stubs and their log before the launch, and tells the
 /// app where the log is with this variable (`link_clicks_reach_only_the_browser`).
 pub(super) const OPENER_LOG_ENV: &str = "BEKOEDIT_LINK_OPENER_LOG";
@@ -85,6 +89,17 @@ pub(super) fn original_tidy_note() -> Vec<u8> {
     "| 名前 | 年齢 |\n|---|---|\n| 太郎 | 20 |\n| Al | 3 |\n"
         .as_bytes()
         .to_vec()
+}
+
+/// `empty_heading_survives`: no heading at all, so typing `# ` on a new line is
+/// the sync that first makes one.
+pub(super) fn original_body_note() -> Vec<u8> {
+    b"body\n".to_vec()
+}
+
+/// `empty_heading_survives`: a file that holds an empty heading when opened.
+pub(super) fn original_empty_heading_note() -> Vec<u8> {
+    b"# \n\ntext\n".to_vec()
 }
 
 pub(super) fn original_table_note() -> Vec<u8> {
@@ -178,6 +193,19 @@ pub(in crate::webview_smoke) fn prepare(
         ReleaseScenario::TableKeyboardAndTidy => {
             let original = original_tidy_note();
             let workspace = make_workspace(&root, "save-project", &[(SAVE_FILE, &original)])?;
+            let file = workspace.join(SAVE_FILE);
+            (workspace, "Save Project".to_string(), original, Some(file))
+        }
+        ReleaseScenario::EmptyHeadingSurvives => {
+            let original = original_body_note();
+            let workspace = make_workspace(
+                &root,
+                "save-project",
+                &[
+                    (SAVE_FILE, &original),
+                    (EMPTY_HEADING_FILE, &original_empty_heading_note()),
+                ],
+            )?;
             let file = workspace.join(SAVE_FILE);
             (workspace, "Save Project".to_string(), original, Some(file))
         }

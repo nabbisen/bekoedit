@@ -27,7 +27,7 @@ fn random_edit(s: &DocumentSession, rng: &mut Rng) -> Option<FormEditCommand> {
         return None;
     }
     let block_id = blocks[rng.below(blocks.len())].block_id;
-    let words = ["x", "日本語", "a | b", "line", "  spaced  "];
+    let words = ["x", "日本語", "a | b", "line", "", "  spaced  "];
     let pick = |rng: &mut Rng| words[rng.below(words.len())].to_string();
     let edit = match rng.below(14) {
         0 => FormBlockEdit::ReplacePlainText { text: pick(rng) },

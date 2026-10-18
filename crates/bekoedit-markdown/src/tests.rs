@@ -6,6 +6,7 @@
 
 mod adversarial_tests;
 mod destination_tests;
+mod empty_heading_tests;
 mod form_tests;
 mod gfm_tests;
 mod index_tests;

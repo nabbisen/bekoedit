@@ -268,7 +268,9 @@ fn heading_content_range(text: &str, start: usize, end: usize) -> ByteRange {
         if first_line[content_start..].starts_with(' ') {
             content_start += 1;
         }
-        let mut content_end = first_line.trim_end().len();
+        // An empty heading (`# `, `#  `, `# #`) ends where its text would
+        // start: trimming the trailing space must not fall below that.
+        let mut content_end = first_line.trim_end().len().max(content_start);
         // Strip an ATX closing sequence (` ###`) when present.
         let body = &first_line[content_start..content_end];
         let closing = body.chars().rev().take_while(|c| *c == '#').count();
@@ -278,10 +280,7 @@ fn heading_content_range(text: &str, start: usize, end: usize) -> ByteRange {
                 content_end = content_start + body[..before].trim_end().len();
             }
         }
-        ByteRange::new(
-            start + content_start,
-            start + content_end.max(content_start),
-        )
+        ByteRange::new(start + content_start, start + content_end)
     } else {
         // Setext heading: editable text is the first line.
         ByteRange::new(start, start + first_line.trim_end().len())
