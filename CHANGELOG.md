@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.18.0] - 2026-10-07
+## [0.18.0] - 2026-10-18
 
 ### Highlights
 - Edit tables in Form Mode as a grid: type into cells, insert, delete and
@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   use the toolbar without leaving the field first.
 - Line breaks in pasted text are now written as a backslash at the end of
   the line. MkDocs (Python-Markdown) does not support this form.
+- Security: rustls is updated to 0.23.46, fixing RUSTSEC-2026-0346 to
+  -0349. It reaches bekoedit only through Dioxus's developer tooling;
+  bekoedit itself makes no network connections.
 
 ### Added
 - Insert, delete and move table rows from the grid in Form Mode.
@@ -56,6 +59,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   quote, now keeps them. Line breaks in pasted text are written as a
   backslash at the end of the line (`\`) instead of two trailing spaces.
   Note: MkDocs (Python-Markdown) does not support the backslash form.
+
+### Security
+- Updated rustls from 0.23.45 to 0.23.46 for RUSTSEC-2026-0346,
+  RUSTSEC-2026-0347, RUSTSEC-2026-0348 and RUSTSEC-2026-0349.
 
 ## [0.17.0] - 2026-10-01
 
