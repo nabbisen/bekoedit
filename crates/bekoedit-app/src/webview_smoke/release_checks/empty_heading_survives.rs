@@ -39,15 +39,41 @@ async fn key(keys: &str) -> Result<(), String> {
     run_xdotool(&["key", "--clearmodifiers", keys]).await
 }
 
-async fn editor_text() -> Result<String, String> {
+/// The editor's text, or `None` while there is no editor view yet.
+async fn editor_text_now() -> Result<Option<String>, String> {
     match dom::value_of("window.__bk?._view?.state.doc.toString() ?? null").await? {
-        serde_json::Value::String(text) => Ok(text),
-        other => Err(format!("{NAME}: the editor has no text yet ({other})")),
+        serde_json::Value::String(text) => Ok(Some(text)),
+        serde_json::Value::Null => Ok(None),
+        other => Err(format!("{NAME}: unexpected editor text value ({other})")),
     }
 }
 
 async fn editor_text_is(expected: &str) -> Result<bool, String> {
-    Ok(editor_text().await? == expected)
+    Ok(editor_text_now().await?.as_deref() == Some(expected))
+}
+
+/// Task 065: what a wait for the editor's text says when the text is not yet
+/// what it should be, so a timeout names this condition and quotes the text
+/// instead of leaving it to be guessed from a bare "timed out".
+fn text_mismatch(expected: &str, actual: Option<&str>) -> String {
+    match actual {
+        Some(actual) => format!("the editor holds {actual:?}, not the seeded text {expected:?}"),
+        None => format!("the editor has no text (null), not the seeded text {expected:?}"),
+    }
+}
+
+/// Waits for the editor's text alone, with no condition on focus. The last
+/// mismatch is the timeout's "last error", so it is quoted.
+async fn wait_editor_text(what: &str, expected: &str) -> Result<(), String> {
+    wait_until(NAME, what, || async {
+        let actual = editor_text_now().await?;
+        if actual.as_deref() == Some(expected) {
+            Ok(true)
+        } else {
+            Err(text_mismatch(expected, actual.as_deref()))
+        }
+    })
+    .await
 }
 
 async fn heading_values() -> Result<Vec<String>, String> {
@@ -136,10 +162,11 @@ pub(super) async fn run(
     key("ctrl+2").await?;
     wait_heading_fields(&[""]).await?;
     key("ctrl+1").await?;
-    wait_until(NAME, "Text Mode to return with the same text", || async {
-        Ok(dom::editor_focused().await? && editor_text_is(&empty_text).await?)
-    })
-    .await?;
+    // The text only. Whether the editor takes focus after Ctrl+2 then Ctrl+1
+    // with nothing focused in Form Mode is a separate question (task 065); it
+    // is recorded below, not asserted.
+    wait_editor_text("Text Mode to return with the same text", &empty_text).await?;
+    let focused_after_return = dom::editor_focused().await?;
     tokio::time::sleep(Duration::from_millis(800)).await;
     let on_disk = std::fs::read(&empty_file)
         .map_err(|error| format!("{NAME}: cannot read {}: {error}", empty_file.display()))?;
@@ -174,6 +201,10 @@ pub(super) async fn run(
     wait_heading_fields(&[""]).await?;
 
     Ok(vec![
+        format!(
+            "after Ctrl+2 then Ctrl+1 with nothing focused, the editor is focused: \
+             {focused_after_return}"
+        ),
         "typing `# ` in Text Mode synced without a crash, and `Title` saved byte-exact".to_string(),
         "a file holding `# ` opened, went to Form Mode and back, with its bytes unchanged"
             .to_string(),
@@ -192,5 +223,18 @@ mod tests {
         assert_eq!(format!("{}{}", "body\n", "# Title"), AFTER_TYPING);
         assert_eq!(AFTER_TYPING.replace("Title", ""), AFTER_CLEARING);
         assert_ne!(AFTER_TYPING, AFTER_CLEARING);
+    }
+
+    /// The timeout of the text wait names the condition and quotes the text.
+    #[test]
+    fn a_text_mismatch_quotes_the_actual_text_or_says_null() {
+        assert_eq!(
+            text_mismatch("# \n\ntext\n", Some("# \ntext\n")),
+            "the editor holds \"# \\ntext\\n\", not the seeded text \"# \\n\\ntext\\n\""
+        );
+        assert_eq!(
+            text_mismatch("# \n", None),
+            "the editor has no text (null), not the seeded text \"# \\n\""
+        );
     }
 }
