@@ -101,7 +101,14 @@ above when that release goes out.
 
 | RFC | Title | Notes |
 |-----|-------|-------|
-| RFC-048 | [Form Mode table editing](done/RFC-048-form-mode-table-editing.md) | Accepted 2026-10-02; merged in five slices, 2026-10-02 to 2026-10-06, the last green at `590d06a` (run `37479946441`). Every GFM table outside a list or quote is a Form Mode grid: cells edited as Markdown text (formatted cells included), row and column insert, delete and move, alignment, and an explicit Tidy aligned by display width. Every operation is a minimal patch, re-parsed and verified or refused. Slice 1 was task 045, a data-loss fix. Handoffs: [`handoffs/048-form-mode-table-editing/`](handoffs/048-form-mode-table-editing/) |
+
+## Implemented — v0.18.0 (`done/`)
+
+Released 2026-10-18.
+
+| RFC | Title | Notes |
+|-----|-------|-------|
+| RFC-048 | [Form Mode table editing](done/RFC-048-form-mode-table-editing.md) | Released in 0.18.0 (2026-10-18). Accepted 2026-10-02; merged in five slices, 2026-10-02 to 2026-10-06, the last green at `590d06a` (run `37479946441`). Every GFM table outside a list or quote is a Form Mode grid: cells edited as Markdown text (formatted cells included), row and column insert, delete and move, alignment, and an explicit Tidy aligned by display width. Every operation is a minimal patch, re-parsed and verified or refused. Slice 1 was task 045, a data-loss fix. Handoffs: [`handoffs/048-form-mode-table-editing/`](handoffs/048-form-mode-table-editing/) |
 
 ## Implemented — v0.17.0 (`done/`)
 

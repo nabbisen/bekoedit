@@ -1,7 +1,7 @@
 # RFC-048: Form Mode table editing
 
 **Project:** bekoedit
-**Status:** Implemented — on `main`, not yet released. Approved by the owner on
+**Status:** Implemented — released in 0.18.0 (2026-10-18). Approved by the owner on
 2026-10-02, the day it was drafted, after the owner named easy table editing as
 a key requirement. All of §10 is answered. Merged in five slices, the last
 green on `main` at `590d06a` (run `37479946441`, 2026-10-06):
