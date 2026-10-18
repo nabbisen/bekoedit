@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-10-19
+
+### Highlights
+- bekoedit no longer crashes when it opens a file with an empty heading
+  (`# `), when you start typing a heading in Text Mode, or when you clear
+  a heading in Form Mode.
+
 ### Fixed
 - Opening a file with an empty heading (`# `), typing `# ` at the start of a
   new heading in Text Mode, or clearing a heading in Form Mode no longer
@@ -246,7 +253,8 @@ Accessibility work in this release covers the shell: file tree, menus, mode
 tabs, conflict banner, Recovery, and Settings. **Form Mode block editing does
 not yet expose accessibility metadata** and is tracked by RFC-042 slice 5.
 
-[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.18.0...HEAD
+[Unreleased]: https://github.com/nabbisen/bekoedit/compare/0.18.1...HEAD
+[0.18.1]: https://github.com/nabbisen/bekoedit/releases/tag/0.18.1
 [0.18.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.18.0
 [0.17.0]: https://github.com/nabbisen/bekoedit/releases/tag/0.17.0
 [0.16.1]: https://github.com/nabbisen/bekoedit/releases/tag/0.16.1
