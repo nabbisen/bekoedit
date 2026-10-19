@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Undo and Redo in Form Mode: Ctrl+Z and Ctrl+Shift+Z (or the buttons) step
+  back and forward through committed edits. Inside a field, Ctrl+Z still
+  undoes your typing there.
+
 ## [0.18.1] - 2026-10-19
 
 ### Highlights

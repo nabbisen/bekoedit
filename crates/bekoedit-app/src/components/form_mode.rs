@@ -34,6 +34,7 @@ pub fn FormMode() -> Element {
 
     rsx! {
         div { class: "form-mode", "data-source-focus-launch-region": "form",
+            FormHistoryBar { lang }
             for block in projection.blocks {
                 FormBlockView {
                     key: "{block_key(block.block_id)}",
@@ -223,6 +224,7 @@ fn current_text(display: &FormBlockDisplay, cell: Option<(usize, usize)>) -> Opt
 }
 
 mod block_view;
+mod history;
 mod inline_toolbar;
 mod placement;
 mod table_column_menu;
@@ -231,6 +233,8 @@ mod table_row_menu;
 mod table_view;
 
 use block_view::FormBlockView;
+use history::FormHistoryBar;
+pub(crate) use history::run_history_step;
 
 #[cfg(test)]
 mod tests {

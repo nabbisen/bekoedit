@@ -20,6 +20,7 @@ pub fn execute(
 ) -> Result<Option<CommandNotice>, StoreError> {
     match command {
         SourceCommand::SwitchMode(target) => {
+            leave_form_mode(state, *mode, *target);
             *mode = *target;
             Ok(None)
         }
@@ -67,9 +68,24 @@ pub fn execute(
     }
 }
 
+/// RFC-049 §5.3 / slice 2 §2.4: leaving Form Mode, by any route (the tabs,
+/// Ctrl+1/3/4, Split), empties its Undo and Redo history. Every mode switch
+/// runs through [`execute`], so this is the one place.
+fn leave_form_mode(state: &mut AppState, from: EditorMode, to: EditorMode) {
+    if from == EditorMode::Form
+        && to != EditorMode::Form
+        && let Some(session) = state.session.as_mut()
+    {
+        session.clear_form_history();
+    }
+}
+
 fn notice(kind: ToastKind, message: &str) -> CommandNotice {
     CommandNotice {
         kind,
         message: message.to_string(),
     }
 }
+
+#[cfg(test)]
+mod form_history_tests;

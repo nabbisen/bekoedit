@@ -91,6 +91,11 @@ pub(super) fn original_tidy_note() -> Vec<u8> {
         .to_vec()
 }
 
+/// `form_undo_redo`: a two-data-row table, then a paragraph field to type into.
+pub(super) fn original_undo_note() -> Vec<u8> {
+    b"| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n\nabc\n".to_vec()
+}
+
 /// `empty_heading_survives`: no heading at all, so typing `# ` on a new line is
 /// the sync that first makes one.
 pub(super) fn original_body_note() -> Vec<u8> {
@@ -196,6 +201,12 @@ pub(in crate::webview_smoke) fn prepare(
             let file = workspace.join(SAVE_FILE);
             (workspace, "Save Project".to_string(), original, Some(file))
         }
+        ReleaseScenario::FormUndoRedo => {
+            let original = original_undo_note();
+            let workspace = make_workspace(&root, "save-project", &[(SAVE_FILE, &original)])?;
+            let file = workspace.join(SAVE_FILE);
+            (workspace, "Save Project".to_string(), original, Some(file))
+        }
         ReleaseScenario::EmptyHeadingSurvives => {
             let original = original_body_note();
             let workspace = make_workspace(
@@ -234,6 +245,7 @@ pub(in crate::webview_smoke) fn prepare(
                 | ReleaseScenario::TableRowInsertAndDelete
                 | ReleaseScenario::TableColumnOperations
                 | ReleaseScenario::TableKeyboardAndTidy
+                | ReleaseScenario::FormUndoRedo
         ) {
             // Each of these five starts with a Form Mode field.
             EditorMode::Form

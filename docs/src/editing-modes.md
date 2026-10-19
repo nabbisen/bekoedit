@@ -76,6 +76,25 @@ trailing blank lines so no gaps accumulate.
 Pasting into a field always inserts plain text; formatted content from the
 clipboard is not converted here, unlike in Text Mode above.
 
+### Undo and Redo
+
+The **Undo** and **Redo** buttons at the top of the Form view step back and
+forward through the edits you have committed here: text, checkboxes, table
+cells, rows, columns and alignment, Tidy, and block deletes. Each step reverses
+exactly one edit.
+
+- **Ctrl+Z** undoes, and **Ctrl+Shift+Z** (or **Ctrl+Y**) redoes; on macOS,
+  Cmd+Z and Cmd+Shift+Z. This works when no text field has focus. **Inside a
+  field**, Ctrl+Z keeps its usual meaning, undoing the typing you have not
+  committed yet.
+- The history is kept up to 100 edits, and **survives a save**: undoing past a
+  save makes the document unsaved again. It is **cleared when you leave Form
+  Mode**, open another document, or reload the file from disk.
+- An undo is applied only when the document is exactly as that edit left it. If
+  it changed since (for example, you edited in Text Mode), nothing is undone,
+  you see a notice, and the history is cleared. A document is never changed by
+  an undo that no longer fits.
+
 ### Raw Markdown Islands
 
 Front matter, HTML blocks, math, nested or multi-paragraph lists,

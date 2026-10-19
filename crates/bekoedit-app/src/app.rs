@@ -249,6 +249,19 @@ pub fn App() -> Element {
                         if key == "toggle_explorer" {
                             let collapsed = *explorer_collapsed_for_shortcuts.read();
                             explorer_collapsed_for_shortcuts.set(!collapsed);
+                        } else if key == "form_undo" || key == "form_redo" {
+                            // RFC-049 slice 2: `shortcuts.js` sends these only
+                            // while Form Mode is shown and focus is not in a
+                            // text field; Rust checks the mode again. Not a
+                            // source command: it saves and leaves nothing.
+                            if *mode_sig.read() == EditorMode::Form {
+                                crate::components::form_mode::run_history_step(
+                                    app_st,
+                                    toasts_for_shortcuts,
+                                    *lang_for_shortcuts.read(),
+                                    key == "form_undo",
+                                );
+                            }
                         } else {
                             match shortcut_command(&key) {
                                 // Task 051 §2.1: refused outright, exactly as

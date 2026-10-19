@@ -8,22 +8,54 @@
  * where `key` matches the action names in the Rust handler.
  *
  * Text-Mode editing keys (Ctrl+Z, Ctrl+F, etc.) are handled by CM6 directly
- * when the editor has focus; this script handles app-level actions only.
+ * when the editor has focus; this script handles app-level actions only, and
+ * Form Mode's own Undo and Redo (RFC-049 slice 2) outside a text field.
  */
 (function () {
   const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
   const mod = (e) => isMac ? e.metaKey : e.ctrlKey;
 
-  window.addEventListener("keydown", (e) => {
-    if (!mod(e)) return;
-    let key = null;
+  // RFC-049 slice 2: which Form Mode history shortcut `e` is, if any, and only
+  // while Form Mode is shown and focus is not in a text field. Inside a field
+  // the browser keeps its own undo of uncommitted typing (RFC-049 §9 Q1), and
+  // Text Mode keeps CodeMirror's: neither shows `.form-mode`. Ctrl+Z / Cmd+Z
+  // undo, with Shift they redo, and Ctrl+Y redoes too. Nothing is decided when
+  // an IME composition is open.
+  const isTextField = (el) =>
+    !!el &&
+    (el.tagName === "INPUT" ||
+      el.tagName === "TEXTAREA" ||
+      el.isContentEditable === true ||
+      (typeof el.closest === "function" && el.closest("[contenteditable]") !== null));
 
-    if (e.key === "s" || e.key === "S") { key = "save"; }
-    else if (e.key === "1") { key = "mode_text"; }
-    else if (e.key === "2") { key = "mode_form"; }
-    else if (e.key === "3") { key = "mode_preview"; }
-    else if (e.key === "b" || e.key === "B") { key = "toggle_explorer"; }
-    else if (e.key === "4") { key = "mode_split"; }
+  const formHistoryKey = (e) => {
+    const k = typeof e.key === "string" ? e.key.toLowerCase() : "";
+    let key = null;
+    if (k === "z" && mod(e) && !e.altKey) key = e.shiftKey ? "form_redo" : "form_undo";
+    else if (k === "y" && e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) key = "form_redo";
+    if (!key) return null;
+    if (e.isComposing || window.__bk_form_composing === true) return null;
+    if (!document.querySelector(".form-mode")) return null;
+    if (isTextField(document.activeElement)) return null;
+    return key;
+  };
+
+  window.addEventListener("keydown", (e) => {
+    // The history keys share the one relay call below, after the flush that
+    // every other shortcut gets (task 051): they need none, since focus is not
+    // in a text field when they are chosen.
+    const historyKey = formHistoryKey(e);
+    if (!historyKey && !mod(e)) return;
+    let key = historyKey;
+
+    if (!key) {
+      if (e.key === "s" || e.key === "S") { key = "save"; }
+      else if (e.key === "1") { key = "mode_text"; }
+      else if (e.key === "2") { key = "mode_form"; }
+      else if (e.key === "3") { key = "mode_preview"; }
+      else if (e.key === "b" || e.key === "B") { key = "toggle_explorer"; }
+      else if (e.key === "4") { key = "mode_split"; }
+    }
 
     if (key) {
       e.preventDefault();
@@ -41,7 +73,9 @@
       let composing = false;
       if (key !== "toggle_explorer") {
         const el = document.activeElement;
-        if (el && typeof el.value === "string" && el.closest && el.closest(".form-mode")) {
+        // A history key never flushes: a flush would send `change` to a
+        // focused <select> (the heading level) and re-apply its value.
+        if (!historyKey && el && typeof el.value === "string" && el.closest && el.closest(".form-mode")) {
           composing = e.isComposing || window.__bk_form_composing === true;
           if (!composing) {
             el.dispatchEvent(new Event("change", { bubbles: true }));

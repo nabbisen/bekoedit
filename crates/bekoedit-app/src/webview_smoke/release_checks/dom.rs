@@ -128,6 +128,22 @@ pub(super) async fn active_table_cell_index() -> Result<Option<usize>, String> {
     .await
 }
 
+/// Whether the Form view's Undo and Redo buttons are disabled, as
+/// `(undo_disabled, redo_disabled)` (RFC-049 slice 2, `form_undo_redo`).
+pub(super) async fn form_history_disabled() -> Result<(bool, bool), String> {
+    #[derive(Deserialize)]
+    struct Disabled {
+        undo: bool,
+        redo: bool,
+    }
+    let disabled: Disabled = returned(
+        "({ undo: document.getElementById('form-undo')?.disabled ?? null, \
+         redo: document.getElementById('form-redo')?.disabled ?? null })",
+    )
+    .await?;
+    Ok((disabled.undo, disabled.redo))
+}
+
 /// Whether the document shows its unsaved-changes dot.
 pub(super) async fn document_dirty() -> Result<bool, String> {
     returned("document.querySelector('.dirty-dot') !== null").await

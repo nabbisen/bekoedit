@@ -186,7 +186,8 @@ pub(super) fn judge(
         | ReleaseScenario::TableRowInsertAndDelete
         | ReleaseScenario::TableColumnOperations
         | ReleaseScenario::TableKeyboardAndTidy
-        | ReleaseScenario::EmptyHeadingSurvives => {
+        | ReleaseScenario::EmptyHeadingSurvives
+        | ReleaseScenario::FormUndoRedo => {
             unreachable!(
                 "save.rs, mode_switch.rs, link_clicks.rs, paste_probe.rs, \
                  paste_conversion.rs, toolbar_probe.rs, save_pending_field.rs, \
@@ -194,7 +195,7 @@ pub(super) fn judge(
                  keyboard_mode_switch_commits_pending_field.rs, \
                  ctrl_b_toggles_explorer.rs, table_row_insert_and_delete.rs and \
                  table_column_operations.rs, table_keyboard_and_tidy.rs and \
-                 empty_heading_survives.rs run these scenarios"
+                 empty_heading_survives.rs and form_undo_redo.rs run these scenarios"
             )
         }
     }

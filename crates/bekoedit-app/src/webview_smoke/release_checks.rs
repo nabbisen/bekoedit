@@ -37,6 +37,7 @@ mod empty_heading_survives;
 mod focus_trace;
 mod form_field_commits_before_mode_switch;
 mod form_trace;
+mod form_undo_redo;
 mod keyboard_mode_switch_commits_pending_field;
 mod launch;
 mod link_clicks;
@@ -110,6 +111,9 @@ pub enum ReleaseScenario {
     /// Task 064: an empty heading (`# `) never crashes the index, on the
     /// Text Mode sync, the open and the Form Mode clear.
     EmptyHeadingSurvives,
+    /// RFC-049 slice 2: Form Mode's Undo and Redo, by real keys and a real
+    /// click, end to end.
+    FormUndoRedo,
 }
 
 impl ReleaseScenario {
@@ -135,6 +139,7 @@ impl ReleaseScenario {
             Self::TableColumnOperations => table_column_operations::NAME,
             Self::TableKeyboardAndTidy => table_keyboard_and_tidy::NAME,
             Self::EmptyHeadingSurvives => empty_heading_survives::NAME,
+            Self::FormUndoRedo => form_undo_redo::NAME,
         }
     }
 
@@ -158,6 +163,7 @@ impl ReleaseScenario {
             Self::TableColumnOperations,
             Self::TableKeyboardAndTidy,
             Self::EmptyHeadingSurvives,
+            Self::FormUndoRedo,
         ]
         .into_iter()
         .find(|scenario| scenario.name() == name)
@@ -170,7 +176,7 @@ impl ReleaseScenario {
                  form_field_commits_before_mode_switch, \
                  keyboard_mode_switch_commits_pending_field, ctrl_b_toggles_explorer or \
                  table_row_insert_and_delete, table_column_operations or \
-                 table_keyboard_and_tidy or empty_heading_survives"
+                 table_keyboard_and_tidy, empty_heading_survives or form_undo_redo"
             )
         })
     }
@@ -276,6 +282,7 @@ pub fn WebViewReleaseChecksDriver() -> Element {
                 ReleaseScenario::EmptyHeadingSurvives => {
                     empty_heading_survives::run(&terminal, &desktop).await
                 }
+                ReleaseScenario::FormUndoRedo => form_undo_redo::run(&terminal, &desktop).await,
                 _ => launch::run(&terminal, state, toasts, lang).await,
             };
             // Task 052 §2.3: the focus-claim path's own trace, on every

@@ -25,6 +25,8 @@ impl Lang {
 
 /// Resolves a label key for `lang`. Unknown keys return an empty string;
 /// inventory tests keep all user-visible call sites translated.
+mod form_history;
+
 pub fn tr(lang: Lang, key: &str) -> &'static str {
     match lang {
         Lang::En => tr_en(key),
@@ -263,7 +265,7 @@ fn tr_en(key: &str) -> &'static str {
         }
         "paste.image_omitted" => "image",
         "paste.discarded" => "Paste not applied: the document changed before it was ready.",
-        _ => "",
+        _ => form_history::en(key),
     }
 }
 
@@ -494,7 +496,7 @@ fn tr_ja(key: &str) -> &'static str {
         "paste.discarded" => {
             "貼り付けは反映されませんでした: 準備が整う前にドキュメントが変更されました。"
         }
-        _ => "",
+        _ => form_history::ja(key),
     }
 }
 
