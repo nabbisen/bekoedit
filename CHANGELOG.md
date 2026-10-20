@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   back and forward through committed edits. Inside a field, Ctrl+Z still
   undoes your typing there.
 
+### Security
+- Updated rustls-webpki from 0.103.15 to 0.103.16 for RUSTSEC-2026-0382.
+
 ## [0.18.1] - 2026-10-19
 
 ### Highlights
