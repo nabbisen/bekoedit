@@ -85,8 +85,8 @@ exactly one edit.
 
 - **Ctrl+Z** undoes, and **Ctrl+Shift+Z** (or **Ctrl+Y**) redoes; on macOS,
   Cmd+Z and Cmd+Shift+Z. This works when no text field has focus. **Inside a
-  field**, Ctrl+Z keeps its usual meaning, undoing the typing you have not
-  committed yet.
+  text field**, Ctrl+Z is left to the field itself, and never changes the
+  edits you have committed.
 - The history is kept up to 100 edits, and **survives a save**: undoing past a
   save makes the document unsaved again. It is **cleared when you leave Form
   Mode**, open another document, or reload the file from disk.

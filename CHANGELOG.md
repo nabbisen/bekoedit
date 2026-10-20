@@ -8,8 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Undo and Redo in Form Mode: Ctrl+Z and Ctrl+Shift+Z (or the buttons) step
-  back and forward through committed edits. Inside a field, Ctrl+Z still
-  undoes your typing there.
+  back and forward through committed edits. Inside a text field, Ctrl+Z is
+  left to the field and never changes the committed edits.
 
 ### Security
 - Updated rustls-webpki from 0.103.15 to 0.103.16 for RUSTSEC-2026-0382.

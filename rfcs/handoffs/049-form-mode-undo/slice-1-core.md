@@ -1,6 +1,6 @@
 # RFC-049 handoff — slice 1: the core
 
-**Governing RFC:** [RFC-049](../../accepted/RFC-049-form-mode-undo.md) §5.1–§5.3, §6, §7
+**Governing RFC:** [RFC-049](../../done/RFC-049-form-mode-undo.md) §5.1–§5.3, §6, §7
 **Slice:** 1 of 2. Slice 2 is the UI: buttons, shortcuts, notices, the
 end-to-end scenario and the docs.
 **Baseline:** `main` at the 0.18.0 release commit or later. **Do not start

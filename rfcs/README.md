@@ -92,7 +92,6 @@ to `done/` when the work ships.
 | RFC | Title | Notes |
 |-----|-------|-------|
 | RFC-045 | [Release artifact portability and completeness](accepted/RFC-045-release-artifact-portability-and-completeness.md) | Accepted 2026-08-17. Slices 1–2 shipped to `main`: the platform scripts now ship in every archive, and a cross-distribution `ldd` check gates both pull requests and the publish job. Slice 3 (Linux portability) is open — see its §10 Q1. Handoffs: [`handoffs/045-release-artifact-portability-and-completeness/`](handoffs/045-release-artifact-portability-and-completeness/) |
-| RFC-049 | [Form Mode undo](accepted/RFC-049-form-mode-undo.md) | Accepted 2026-10-07, as written. Undo and Redo for committed Form Mode edits, each one inverse source patch, applied only when the document's revision is exactly the one the edit left; the history lives in the open document's session and is cleared on leaving Form Mode. Ctrl+Z inside a field stays the browser's own. After 0.18.0, in two slices. Handoffs: [`handoffs/049-form-mode-undo/`](handoffs/049-form-mode-undo/) |
 
 ## Implemented — merged to `main`, not yet released (`done/`)
 
@@ -101,6 +100,7 @@ above when that release goes out.
 
 | RFC | Title | Notes |
 |-----|-------|-------|
+| RFC-049 | [Form Mode undo](done/RFC-049-form-mode-undo.md) | Accepted 2026-10-07; merged in two slices, the last green at `1ef35d6` (run `39513465302`). Undo and Redo of committed Form Mode edits, by buttons and by Ctrl+Z / Ctrl+Shift+Z outside a text field; each step is one inverse source patch, applied only while the document is exactly as that edit left it; the history is cleared on leaving Form Mode. Open: whether the browser's own in-field undo works at a real keyboard (it did not in CI). Handoffs: [`handoffs/049-form-mode-undo/`](handoffs/049-form-mode-undo/) |
 
 ## Implemented — v0.18.0 (`done/`)
 

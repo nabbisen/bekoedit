@@ -1,10 +1,22 @@
 # RFC-049: Form Mode undo
 
 **Project:** bekoedit
-**Status:** Accepted — approved by the owner on 2026-10-07, as written, so each
-§9 question takes its proposed answer. Drafted 2026-10-06, after the owner
-chose the contained option ("B") over a single history shared with Text Mode.
-Implementation is after 0.18.0.
+**Status:** Implemented — on `main`, not yet released. Approved by the owner on
+2026-10-07, as written, so each §9 question takes its proposed answer. Drafted
+2026-10-06, after the owner chose the contained option ("B") over a single
+history shared with Text Mode. Merged in two slices, the last green on `main`
+at `1ef35d6` (run `39513465302`, 2026-10-21):
+
+- **Slice 1** (`ce8d4bf`): the core: the records, the guard, and the
+  restamping rule now stated in §5.2;
+- **Slice 2** (`6f01126`, then `1ef35d6` for the scenario's step 4): the
+  buttons, the shortcuts, the notice, the mode-switch clear, and the docs.
+
+**One open fact, about §9 Q1's premise.** Ctrl+Z inside a field is left to the
+field, and never changes the Form history: that is asserted end to end. But in
+CI (WebKitGTK under Xvfb, `xdotool` input), the field's own undo reverted
+nothing in eight presses. Whether a user at a real keyboard gets the browser's
+in-field undo is not yet known. The owner is asked to try it.
 **Handoffs:** [`handoffs/049-form-mode-undo/`](../handoffs/049-form-mode-undo/)
 **Track:** Editing
 **Priority:** Medium — today a committed Form Mode edit cannot be stepped back
