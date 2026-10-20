@@ -7,8 +7,11 @@
 //! 2. Click a non-field area, then Ctrl+Z twice (focus on `body`: Form undo),
 //!    save: the original bytes are back.
 //! 3. Ctrl+Shift+Z twice, save: the bytes after both edits.
-//! 4. In a paragraph field, Ctrl+Z undoes only the typing there, and the
-//!    committed history (the buttons' state) does not change.
+//! 4. In a paragraph field, Ctrl+Z up to eight times. **Asserted:** the Form
+//!    history is untouched after every press (Undo enabled, Redo disabled): that
+//!    is this app's invariant. **Recorded, not asserted:** the field's value after
+//!    each press, which is the browser engine's own undo (task 067). The field is
+//!    then restored to `abc` with real keys.
 //! 5. One Undo by a real click on the button, save.
 
 use std::time::Duration;
@@ -85,24 +88,71 @@ async fn expect_bytes(
     Ok(saved)
 }
 
-/// Ctrl+Z in the focused paragraph field until the browser's own undo has
-/// taken the typed suffix back off. WebKit decides how many undo steps the
-/// typing was, so this presses until the value is the committed text again.
-async fn undo_typing_in_the_field() -> Result<(), String> {
-    for _ in 0..8 {
-        if dom::paragraph_field_value_is("abc").await? {
-            return Ok(());
-        }
+/// How many times Ctrl+Z is pressed inside the field at most.
+const FIELD_UNDO_PRESSES: usize = 8;
+
+/// The two result lines for step 4, built from the field's value after each
+/// press, in order: what WebKit's own undo left (recorded, never asserted),
+/// and whether it reached the committed text. Pure, so the wording is tested.
+fn field_undo_lines(values: &[String]) -> [String; 2] {
+    let quoted: Vec<String> = values.iter().map(|value| format!("{value:?}")).collect();
+    let reached = values.iter().any(|value| value == "abc");
+    [
+        format!(
+            "inside the paragraph field, Ctrl+Z x{} left the value at: {}",
+            values.len(),
+            quoted.join(", ")
+        ),
+        format!(
+            "the browser's own undo {} the typed text back to \"abc\"",
+            if reached { "took" } else { "did not take" }
+        ),
+    ]
+}
+
+/// What the assertion failure says: the press, and both buttons' states.
+fn history_changed_message(press: usize, now: (bool, bool), value: &str) -> String {
+    format!(
+        "{NAME}: Ctrl+Z inside the paragraph field changed the Form history at press {press}: \
+         (Undo disabled, Redo disabled) is {now:?}, expected (false, true); the field then held \
+         {value:?}"
+    )
+}
+
+/// Step 4: Ctrl+Z inside the field, up to `FIELD_UNDO_PRESSES` times. **Asserted
+/// (ours):** after every press the Form history is untouched, Undo enabled and
+/// Redo disabled. **Recorded (the engine's):** the field's value after each press.
+async fn press_ctrl_z_in_the_field() -> Result<Vec<String>, String> {
+    let mut values = Vec::new();
+    for press in 1..=FIELD_UNDO_PRESSES {
         key("ctrl+z").await?;
         tokio::time::sleep(Duration::from_millis(250)).await;
+        let value = dom::paragraph_field_value().await?.unwrap_or_default();
+        let now = dom::form_history_disabled().await?;
+        if now != (false, true) {
+            return Err(history_changed_message(press, now, &value));
+        }
+        let done = value == "abc";
+        values.push(value);
+        if done {
+            break;
+        }
     }
-    if dom::paragraph_field_value_is("abc").await? {
-        Ok(())
-    } else {
-        Err(format!(
-            "{NAME}: Ctrl+Z inside the paragraph field never took the typed text back to \"abc\""
-        ))
-    }
+    Ok(values)
+}
+
+/// Puts the field back to `abc` with real keys, so that step 5's click on the
+/// Undo button (which blurs the field, and the blur commits what it holds) does
+/// not commit the typed ` def` as a new edit and undo that instead.
+async fn restore_the_field() -> Result<(), String> {
+    key("ctrl+a").await?;
+    run_xdotool(&["type", "--clearmodifiers", "abc"]).await?;
+    wait_until(
+        NAME,
+        "the paragraph field to hold \"abc\" again",
+        || async { dom::paragraph_field_value_is("abc").await },
+    )
+    .await
 }
 
 pub(super) async fn run(
@@ -196,8 +246,12 @@ pub(super) async fn run(
         || async { dom::paragraph_field_value_is("abc def").await },
     )
     .await?;
-    undo_typing_in_the_field().await?;
-    expect_buttons(false, true, "after Ctrl+Z inside a field").await?;
+    let values = press_ctrl_z_in_the_field().await?;
+    let [pressed_line, reached_line] = field_undo_lines(&values);
+    println!("  {NAME}: {pressed_line}");
+    println!("  {NAME}: {reached_line}");
+    restore_the_field().await?;
+    expect_buttons(false, true, "after restoring the field").await?;
 
     // 5. One Undo by a real click on the button.
     click_via_xtest(desktop, "#form-undo", None, 0).await?;
@@ -214,8 +268,9 @@ pub(super) async fn run(
         "a cell edit and a row delete were saved, then Ctrl+Z twice restored the exact original bytes"
             .to_string(),
         "Ctrl+Shift+Z twice brought back the bytes after both edits".to_string(),
-        "Ctrl+Z inside a paragraph field undid only the typing; the history did not change"
-            .to_string(),
+        pressed_line,
+        reached_line,
+        "Ctrl+Z inside a paragraph field never changed the Form history".to_string(),
         "the Undo button undid the row delete, byte-exact".to_string(),
     ])
 }
@@ -224,6 +279,42 @@ pub(super) async fn run(
 mod tests {
     use super::*;
     use crate::webview_smoke::release_checks::seed::original_undo_note;
+
+    #[test]
+    fn the_per_press_values_are_recorded_in_order_and_quoted() {
+        let values: Vec<String> = ["abc def", "abc de", "abc"].map(String::from).to_vec();
+        let [pressed, reached] = field_undo_lines(&values);
+        assert_eq!(
+            pressed,
+            "inside the paragraph field, Ctrl+Z x3 left the value at: \"abc def\", \"abc de\", \"abc\""
+        );
+        assert_eq!(
+            reached,
+            "the browser's own undo took the typed text back to \"abc\""
+        );
+    }
+
+    #[test]
+    fn an_undo_that_reverts_nothing_is_recorded_not_failed() {
+        let values = vec!["abc def".to_string(); 8];
+        let [pressed, reached] = field_undo_lines(&values);
+        assert!(pressed.starts_with(
+            "inside the paragraph field, Ctrl+Z x8 left the value at: \"abc def\", \"abc def\""
+        ));
+        assert_eq!(
+            reached,
+            "the browser's own undo did not take the typed text back to \"abc\""
+        );
+    }
+
+    #[test]
+    fn a_changed_history_names_the_press_and_both_states() {
+        assert_eq!(
+            history_changed_message(3, (false, false), "abc"),
+            "form_undo_redo: Ctrl+Z inside the paragraph field changed the Form history at press 3: \
+             (Undo disabled, Redo disabled) is (false, false), expected (false, true); the field then held \"abc\""
+        );
+    }
 
     /// The expected bytes follow from the seed and the two edits, or the
     /// scenario would compare against the wrong text.

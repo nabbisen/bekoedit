@@ -173,6 +173,12 @@ pub(super) async fn paragraph_field_value_is(expected: &str) -> Result<bool, Str
     .await
 }
 
+/// The seeded paragraph field's own live value, or `None` if there is no such
+/// field (RFC-049 slice 2, `form_undo_redo` step 4, which records it per press).
+pub(super) async fn paragraph_field_value() -> Result<Option<String>, String> {
+    returned("document.querySelector('.form-mode .paragraph-input')?.value ?? null").await
+}
+
 /// `document.activeElement`'s own tag, id, first two classes, and
 /// whether it is inside `.form-mode` -- never its value or text. Used
 /// only to name what has focus (`save_pending_field`'s own focus-thief
