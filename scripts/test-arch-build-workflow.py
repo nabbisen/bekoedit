@@ -195,12 +195,83 @@ def structure_cases():
           jobs["publish-crates"]["needs"] == "publish")
 
 
+def step_index(name):
+    return [i for i, s in enumerate(JOB["steps"]) if s.get("name") == name]
+
+
+TRUST = "Trust the workspace for later git commands"
+LOCKFILE = "Confirm committed lockfile is unchanged"
+
+
+def trust_structure_cases():
+    """Task 068: the later git commands trust the workspace, and only it."""
+    trust, lockfile = step_index(TRUST), step_index(LOCKFILE)
+    checkouts = [i for i, s in enumerate(JOB["steps"]) if s.get("uses", "").startswith("actions/checkout@")]
+    check("the trust step exists exactly once", len(trust) == 1, str(trust))
+    if len(trust) != 1 or len(lockfile) != 1:
+        return
+    run = JOB["steps"][trust[0]]["run"]
+    check("the trust step adds $GITHUB_WORKSPACE to the global safe.directory",
+          'git config --global --add safe.directory "$GITHUB_WORKSPACE"' in run, run)
+    check("the trust step never trusts '*'", "*" not in run, run)
+    check("the trust step comes after the last checkout", trust[0] > max(checkouts), f"{trust} vs {checkouts}")
+    check("the trust step comes before the lockfile step", trust[0] < lockfile[0], f"{trust} vs {lockfile}")
+    check("the lockfile step is exactly the plain git diff, not weakened",
+          JOB["steps"][lockfile[0]]["run"].strip() == "git diff --exit-code -- Cargo.lock"
+          and "continue-on-error" not in JOB["steps"][lockfile[0]], str(JOB["steps"][lockfile[0]]))
+
+
+def trust_behaviour_cases(work):
+    """Task 068, headless: git's own switch for a work tree owned by someone else."""
+    def scratch_repo():
+        repo = pathlib.Path(tempfile.mkdtemp(dir=work))
+        env = {**os.environ, "GIT_CONFIG_GLOBAL": str(repo.parent / f"{repo.name}.gitconfig"),
+               "GIT_CONFIG_SYSTEM": "/dev/null"}
+        env.pop("GIT_TEST_ASSUME_DIFFERENT_OWNER", None)
+        (repo / "Cargo.lock").write_text("lock\n")
+        for command in (["git", "init", "-q"], ["git", "add", "Cargo.lock"],
+                        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "lock"]):
+            subprocess.run(command, cwd=repo, env=env, check=True, capture_output=True)
+        return repo, {**env, "GIT_TEST_ASSUME_DIFFERENT_OWNER": "1", "GITHUB_WORKSPACE": str(repo)}
+
+    def run_steps(repo, env, names):
+        last = None
+        for name in names:
+            last = subprocess.run(["bash", "-c", step_run(name)], cwd=repo, env=env,
+                                  capture_output=True, text=True)
+        return last
+
+    repo, env = scratch_repo()
+    done = run_steps(repo, env, [LOCKFILE])
+    check("without the trust step the lockfile step fails with 'Not a git repository'",
+          done.returncode != 0 and "Not a git repository" in done.stderr,
+          f"exit {done.returncode}: {done.stderr[:200]}")
+
+    repo, env = scratch_repo()
+    done = run_steps(repo, env, [TRUST, LOCKFILE])
+    check("with the trust step the lockfile step passes on a clean Cargo.lock", done.returncode == 0,
+          f"exit {done.returncode}: {done.stderr[:200]}")
+
+    repo, env = scratch_repo()
+    (repo / "Cargo.lock").write_text("changed\n")
+    done = run_steps(repo, env, [TRUST, LOCKFILE])
+    check("with the trust step the lockfile step still fails on a changed Cargo.lock",
+          done.returncode == 1 and "Cargo.lock" in done.stdout, f"exit {done.returncode}: {done.stdout[:200]}")
+
+    repo, env = scratch_repo()
+    other = pathlib.Path(tempfile.mkdtemp(dir=work))
+    done = run_steps(repo, {**env, "GITHUB_WORKSPACE": str(other)}, [TRUST, LOCKFILE])
+    check("trusting a different directory does not make this repository trusted",
+          done.returncode != 0 and "Not a git repository" in done.stderr, f"exit {done.returncode}")
+
+
 def main():
     with tempfile.TemporaryDirectory() as work:
         work = pathlib.Path(work)
-        for group in (structure_cases, libxdo_cases, version_cases, package_cases):
+        for group in (structure_cases, trust_structure_cases, libxdo_cases, version_cases,
+                      package_cases, trust_behaviour_cases):
             try:
-                group() if group is structure_cases else group(work)
+                group() if group in (structure_cases, trust_structure_cases) else group(work)
             except MissingStep as error:
                 check(f"{group.__name__}: every step it runs exists", False, str(error))
     print(f"test-arch-build-workflow: {cases} case(s), {failures} failure(s)")

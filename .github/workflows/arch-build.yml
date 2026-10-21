@@ -35,6 +35,14 @@ jobs:
       - name: Install Arch build dependencies
         run: bash scripts/install-arch-build-deps.sh
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # The workspace is the runner's mount, owned by another user than this
+      # container's root, and the checkout only trusts it in a temporary HOME
+      # that is gone by the next step. Without this entry git treats the work
+      # tree as no repository at all, so `git diff` printed "Not a git
+      # repository" and exited 129 (task 068). Only the workspace, not '*'.
+      - name: Trust the workspace for later git commands
+        shell: bash
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install the pinned Rust toolchain
         shell: bash
         run: |
