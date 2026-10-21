@@ -142,6 +142,7 @@ superseded).
 | RFC-032 | [Performance optimization and incremental parsing](proposed/RFC-032-performance-optimization-and-incremental-parsing.md) | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | [Plugin system evaluation](proposed/RFC-039-plugin-system-evaluation.md) | Future evaluation only |
 | RFC-040 | [Sync and collaboration evaluation](proposed/RFC-040-sync-and-collaboration-evaluation.md) | Future evaluation only |
+| RFC-050 | [Accessibility baseline: what a screen reader gets](proposed/RFC-050-accessibility-baseline.md) | Drafted 2026-10-22; direction accepted by the owner. A blocking AT-SPI tree check with a save done through accessibility actions alone, in both languages; Orca's speech recorded in CI; fixes. The Flatpak conditions (WebKit sandbox, app ID) are recorded for the Flathub app-side RFC. Awaiting §9 answers |
 
 ## Implemented — v0.3.0 (`done/`)
 
