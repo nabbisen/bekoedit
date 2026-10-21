@@ -4,7 +4,8 @@
 #
 # Usage:  AUR_GIT_NAME=... AUR_GIT_EMAIL=... scripts/aur-push.sh PACKAGE_DIR REMOTE
 #
-# PACKAGE_DIR holds the two files CI proved, and nothing is re-rendered here.
+# PACKAGE_DIR holds the two files CI proved, and nothing is re-rendered here. Its
+# name, the .SRCINFO's pkgbase and REMOTE's repository name must all be the same.
 # REMOTE is the AUR repository (ssh://aur@aur.archlinux.org/<pkgname>.git in CI,
 # a local bare repository in the tests). SSH is configured by the caller through
 # GIT_SSH_COMMAND, which git reads itself; this script never touches a key.
@@ -79,6 +80,20 @@ NEW_REL="$(srcinfo_value "$NEW_SRCINFO" pkgrel)"
 if [ -z "$PKGNAME" ] || ! is_semver "$NEW_VER" || ! is_integer "$NEW_REL" \
   || grep -q '^[[:space:]]*epoch = ' "$NEW_SRCINFO"; then
   echo "aur-push: refused: the new .SRCINFO does not name a pkgbase, a bare SemVer pkgver and an integer pkgrel (or has an epoch): '${PKGNAME}' '${NEW_VER}' '${NEW_REL}'" >&2
+  exit 1
+fi
+
+# The package must be the repository's: the new .SRCINFO's pkgbase, the package
+# directory's name and the repository's name must all agree, so that a mix-up
+# (the wrong directory, the wrong remote) stops here, before any commit. The AUR's
+# own hook may refuse a mismatched pkgbase too; this does not rely on it.
+DIR_NAME="$(basename "$(cd "$PACKAGE_DIR" && pwd)")"
+REPO_NAME="${REMOTE%/}"
+REPO_NAME="${REPO_NAME##*/}"
+REPO_NAME="${REPO_NAME##*:}"
+REPO_NAME="${REPO_NAME%.git}"
+if [ "$PKGNAME" != "$DIR_NAME" ] || [ "$PKGNAME" != "$REPO_NAME" ]; then
+  echo "aur-push: refused: the package is not the repository's: .SRCINFO pkgbase is '$PKGNAME', the package directory is '$DIR_NAME' and the repository is '$REPO_NAME'; all three must be the same" >&2
   exit 1
 fi
 

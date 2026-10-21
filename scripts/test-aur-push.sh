@@ -30,9 +30,10 @@ srcinfo() {
     "$2" "$3" "$4" "$2" >"$1"
 }
 
-# package <name> <pkgname> <ver> <rel> [extra line for PKGBUILD]
+# package <case> <pkgname> <ver> <rel> [extra line for PKGBUILD]: in a directory named
+# after the package, as the job's aur-out/<package> is
 package() {
-  local dir="$WORK/pkg-$1"
+  local dir="$WORK/pkg-$1/$2"
   mkdir -p "$dir"
   printf 'pkgname=%s\npkgver=%s\npkgrel=%s\n%s\n' "$2" "$3" "$4" "${5:-}" >"$dir/PKGBUILD"
   srcinfo "$dir/.SRCINFO" "$2" "$3" "$4"
@@ -42,7 +43,8 @@ package() {
 # remote <name> <pkgname> <ver> <rel>: a bare repository holding that version, like the
 # owner's placeholder. With no version: an empty bare repository.
 remote() {
-  local bare="$WORK/remote-$1.git" seed="$WORK/seed-$1"
+  local bare="$WORK/remote-$1/$2.git" seed="$WORK/seed-$1"
+  mkdir -p "$WORK/remote-$1"
   git init --quiet --bare "$bare"
   git -C "$bare" config receive.denyNonFastForwards true
   if [ "$#" -ge 4 ]; then
@@ -146,7 +148,7 @@ if [ "$STATUS" -eq 0 ] && git -C "$r3" show master:NOTES.txt | grep -q "owner's 
 else fail "an extra file in the remote" "status $STATUS" "$OUT"; fi
 
 # --- 8. a brand-new, empty AUR repository ---
-r4=$(remote empty)
+r4=$(remote empty bekoedit-bin)
 run "$(package empty bekoedit-bin 0.18.1 1)" "$r4"
 if [ "$STATUS" -eq 0 ] && [ "$(git -C "$r4" log -1 --format=%s master)" = "bekoedit-bin 0.18.1-1" ]; then ok "an empty remote takes the first commit on master"
 else fail "an empty remote" "status $STATUS" "$OUT"; fi
@@ -167,6 +169,26 @@ before="$(head_of "$r5")"
 run "$(package odd bekoedit 0.19.0 1)" "$r5"
 if [ "$STATUS" -ne 0 ] && [ "$(head_of "$r5")" = "$before" ] && echo "$OUT" | grep -q "does not compare"; then ok "an AUR .SRCINFO this script cannot compare is refused, not guessed at"
 else fail "uncomparable remote" "$OUT"; fi
+
+# --- 9b. the package must be the repository's ---
+good=$(package match bekoedit 0.18.1 1); rm_=$(remote match bekoedit 0.0.0 1)
+wrongdir="$WORK/wrong-dir/bekoedit-bin"; mkdir -p "$WORK/wrong-dir"; cp -r "$good" "$wrongdir"
+before="$(head_of "$rm_")"
+run "$wrongdir" "$rm_"
+if [ "$STATUS" -ne 0 ] && [ "$(head_of "$rm_")" = "$before" ] && echo "$OUT" | grep -q "not the repository's" \
+  && echo "$OUT" | grep -q "package directory is 'bekoedit-bin'"; then
+  ok "a package directory whose name is not the pkgbase is refused, naming all three, before any commit"
+else fail "wrong directory name" "status $STATUS" "$OUT"; fi
+wrongremote=$(remote mismatch bekoedit-bin 0.0.0 1)
+before="$(head_of "$wrongremote")"
+run "$good" "$wrongremote"
+if [ "$STATUS" -ne 0 ] && [ "$(head_of "$wrongremote")" = "$before" ] && echo "$OUT" | grep -q "the repository is 'bekoedit-bin'"; then
+  ok "a pkgbase pushed to another package's repository is refused, and that repository is unchanged"
+else fail "wrong remote" "status $STATUS" "$OUT"; fi
+run "$good" "$rm_/"
+if [ "$STATUS" -eq 0 ] && [ "$(git -C "$rm_" log -1 --format=%s master)" = "bekoedit 0.18.1-1" ]; then
+  ok "a remote written with a trailing slash still names its repository"
+else fail "trailing slash" "status $STATUS" "$OUT"; fi
 
 # --- 10. the script never forces ---
 code="$(grep -v '^[[:space:]]*#' "$PUSH")"

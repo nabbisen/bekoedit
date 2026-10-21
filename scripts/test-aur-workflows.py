@@ -56,22 +56,24 @@ def aur_workflow_cases():
     check("aur.yml never mentions the key, the environment, or a push",
           not re.search(r"AUR_SSH_PRIVATE_KEY|environment:|secrets\.|aur-push\.sh|git push", RAW["aur.yml"]),
           "a dry run must hold no key and push nothing")
-    prove = AUR["jobs"]["prove"]
+    prove = AUR["jobs"].get("prove", {})
     check("the proof runs in archlinux:base pinned by digest, the digest arch-build.yml uses",
-          prove["container"]["image"] == ARCH["jobs"]["build-arch"]["container"]["image"]
-          and re.fullmatch(r"archlinux:base@sha256:[0-9a-f]{64}", prove["container"]["image"]) is not None,
-          prove["container"]["image"])
+          prove.get("container", {}).get("image") == ARCH["jobs"]["build-arch"]["container"]["image"]
+          and re.fullmatch(r"archlinux:base@sha256:[0-9a-f]{64}", str(prove.get("container", {}).get("image"))) is not None,
+          str(prove.get("container")))
     upload = [s for s in steps_of(prove) if s.get("uses", "").startswith("actions/upload-artifact@")]
     check("the proof uploads aur-out as 'aur-packages' with hidden files included (.SRCINFO is hidden)",
-          len(upload) == 1 and upload[0]["with"]["name"] == "aur-packages"
-          and upload[0]["with"]["path"] == "aur-out" and upload[0]["with"].get("include-hidden-files") is True,
+          len(upload) == 1 and upload[0].get("with", {}).get("name") == "aur-packages"
+          and upload[0].get("with", {}).get("path") == "aur-out"
+          and upload[0].get("with", {}).get("include-hidden-files") is True,
           str(upload))
     check("the proof runs scripts/aur-prove.sh, with AUR_MODE chosen by the ref type",
           "bash scripts/aur-prove.sh" in run_text(prove) and "AUR_MODE=tag" in run_text(prove)
           and "AUR_MODE=dry-run" in run_text(prove))
     check("the Arch archive is built for a dry run only, and not at a tag",
-          AUR["jobs"]["arch-archive"]["if"] == "github.ref_type != 'tag'"
-          and AUR["jobs"]["arch-archive"]["uses"] == "./.github/workflows/arch-build.yml")
+          AUR["jobs"].get("arch-archive", {}).get("if") == "github.ref_type != 'tag'"
+          and AUR["jobs"].get("arch-archive", {}).get("uses") == "./.github/workflows/arch-build.yml",
+          str(AUR["jobs"].get("arch-archive")))
 
 
 def release_cases():
@@ -79,13 +81,16 @@ def release_cases():
     check("release.yml is started only by a tag push (no workflow_dispatch can reach aur-push)",
           triggers(RELEASE) == {"push"} and set(RELEASE[True]["push"]) == {"tags"}, str(triggers(RELEASE)))
     check("aur-prove needs publish, and calls the reusable workflow",
-          jobs["aur-prove"]["needs"] == "publish" and jobs["aur-prove"]["uses"] == "./.github/workflows/aur.yml")
-    push = jobs["aur-push"]
+          jobs.get("aur-prove", {}).get("needs") == "publish"
+          and jobs.get("aur-prove", {}).get("uses") == "./.github/workflows/aur.yml")
+    push = jobs.get("aur-push", {})
     check("aur-push needs aur-prove and uses the aur environment",
-          push["needs"] == "aur-prove" and push["environment"] == "aur", str(push.get("needs")))
+          push.get("needs") == "aur-prove" and push.get("environment") == "aur",
+          f"needs={push.get('needs')!r} environment={push.get('environment')!r}")
     check("publish-crates neither needs the AUR jobs nor is needed by them",
-          jobs["publish-crates"]["needs"] == "publish"
-          and all(jobs[name].get("needs") not in ("publish-crates", ["publish-crates"]) for name in ("aur-prove", "aur-push")))
+          jobs.get("publish-crates", {}).get("needs") == "publish"
+          and all(jobs.get(name, {}).get("needs") not in ("publish-crates", ["publish-crates"])
+                  for name in ("aur-prove", "aur-push")))
     uses = [s["uses"] for s in steps_of(push) if "uses" in s]
     check("aur-push uses only actions/checkout and actions/download-artifact, each pinned by commit",
           len(uses) == 2 and all(re.fullmatch(r"actions/(checkout|download-artifact)@[0-9a-f]{40}", u.split(" ")[0]) for u in uses),
@@ -99,22 +104,24 @@ def release_cases():
           RAW["release.yml"].count("secrets.AUR_SSH_PRIVATE_KEY") == 1
           and "secrets.AUR_SSH_PRIVATE_KEY" in str([s for s in steps_of(push) if s.get("name") == "Write the SSH key"]))
     check("no other workflow references the key", all("AUR_SSH_PRIVATE_KEY" not in text for name, text in RAW.items() if name != "release.yml"))
-    write = [s for s in steps_of(push) if s.get("name") == "Write the SSH key"][0]["run"]
+    write = "\n".join(s.get("run", "") for s in steps_of(push) if s.get("name") == "Write the SSH key")
     check("the key is written with umask 077 and chmod 600 under RUNNER_TEMP, and never echoed or put on a command line",
           "umask 077" in write and 'chmod 600 "$RUNNER_TEMP/aur_key"' in write
           and write.count("$AUR_SSH_PRIVATE_KEY") == 1 and re.search(r"printf '%s\\n' \"\$AUR_SSH_PRIVATE_KEY\" > ", write)
           and not re.search(r"\becho\b|\bset -x\b|\bcurl\b|\bbase64\b", write), write)
     remove = [s for s in steps_of(push) if s.get("name") == "Remove the SSH key"]
     check("the key is removed in a step that runs whatever happened (if: always())",
-          len(remove) == 1 and remove[0]["if"] == "always()" and "rm -f" in remove[0]["run"]
-          and steps_of(push).index(remove[0]) == len(steps_of(push)) - 1)
-    pushing = [s for s in steps_of(push) if s.get("name") == "Push both packages"][0]
-    ssh = pushing["run"]
+          len(remove) == 1 and remove[0].get("if") == "always()" and "rm -f" in remove[0].get("run", "")
+          and steps_of(push).index(remove[0]) == len(steps_of(push)) - 1,
+          str(remove))
+    pushing = ([s for s in steps_of(push) if s.get("name") == "Push both packages"] or [{}])[0]
+    ssh = pushing.get("run", "")
     check("ssh pins the host key file, checks it strictly, and offers only this identity",
           "StrictHostKeyChecking=yes" in ssh and "IdentitiesOnly=yes" in ssh
           and "UserKnownHostsFile=$GITHUB_WORKSPACE/packaging/linux/aur-known-hosts" in ssh and "-i $RUNNER_TEMP/aur_key" in ssh, ssh)
     check("the commit identity comes from the environment's variables, not hard-coded",
-          pushing["env"] == {"AUR_GIT_NAME": "${{ vars.AUR_GIT_NAME }}", "AUR_GIT_EMAIL": "${{ vars.AUR_GIT_EMAIL }}"}, str(pushing["env"]))
+          pushing.get("env") == {"AUR_GIT_NAME": "${{ vars.AUR_GIT_NAME }}", "AUR_GIT_EMAIL": "${{ vars.AUR_GIT_EMAIL }}"},
+          str(pushing.get("env")))
     check("both packages are attempted even if the first fails, and the job fails if either did",
           "for package in bekoedit bekoedit-bin" in ssh and "|| failed=1" in ssh and 'exit "$failed"' in ssh)
     check("it pushes aur-out/<package> to the AUR over ssh, with no force",
@@ -138,9 +145,11 @@ def host_key_cases():
 
 
 def main():
-    aur_workflow_cases()
-    release_cases()
-    host_key_cases()
+    for group in (aur_workflow_cases, release_cases, host_key_cases):
+        try:
+            group()
+        except Exception as error:  # a malformed workflow is a named failure, not a traceback
+            check(f"{group.__name__} could read the workflows it checks", False, f"{type(error).__name__}: {error}")
     print(f"test-aur-workflows: {cases} case(s), {failures} failure(s)")
     return 1 if failures else 0
 

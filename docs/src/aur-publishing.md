@@ -41,10 +41,16 @@ they are already done.
   nothing is placed in advance: `makepkg` downloads the tag's tarball and the
   **published** Arch archive and checks them against the rendered checksums. That
   is the check that the checksums are what users will download.
-- **`namcap`** on the `PKGBUILD` and the built package. An error fails the job;
-  warnings are printed.
-- **Install and start.** Each package is installed with `pacman -U` (the first is
-  removed before the second, since they conflict). The installed
+- **`namcap`** on the `PKGBUILD` and every built package, the debug one included.
+  An error fails the job; warnings are printed. One error is excused, by its exact
+  shape: the debug package's build-id symlinks point into the main package, which
+  `namcap` cannot see (`scripts/aur-namcap-errors.py`).
+- **Install and start.** Exactly the package under proof is installed with
+  `pacman -U` (`scripts/aur-pick-package.py` picks it from the built files by its
+  exact package name), and removed before the next, since they conflict. Arch's
+  default `makepkg.conf` also builds a `<pkgname>-debug` package; it is checked by
+  `namcap` but never installed, because it would outlive the removal and conflict
+  with the next package's own debug file. The installed
   `/usr/bin/bekoedit` must list `libxdo.so.4` and not `libxdo.so.3`, pass
   `scripts/check-linux-portability.sh` with no exemption, and exit 0 from
   `--headless-smoke`. The `.desktop` file and the icon must be in place.
@@ -62,7 +68,9 @@ as does the owner's `0.0.0-1` placeholder):
 | equal, files different | fails: it would overwrite a fix made by hand |
 | older | fails: a re-run of an old tag must not push an older version |
 
-It never uses `--force`; if the AUR moved during the run, the push fails as an
+It first checks that the package is the repository's: the `.SRCINFO`'s `pkgbase`,
+the package directory's name and the repository's name must be the same, so a
+mix-up stops before any commit. It never uses `--force`; if the AUR moved during the run, the push fails as an
 ordinary non-fast-forward. It never deletes: any other file in the AUR repository
 is left alone and listed in the log. It compares only bare `N.N.N` versions and
 integer `pkgrel`s, which gives Arch's `vercmp` result for them

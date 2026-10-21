@@ -154,13 +154,23 @@ for index in 0 1; do
     namcap PKGBUILD
     for built in ./*.pkg.tar.*; do namcap "$built"; done
   ) 2>&1 | tee "$namcap_log"
-  if grep -E ' E: ' "$namcap_log"; then
+  # Every built file is checked, the -debug package included. One error is excused,
+  # by shape: that package's build-id symlinks point into the main package, which
+  # namcap cannot see (scripts/aur-namcap-errors.py says exactly which).
+  if ! python "$REPO_DIR/scripts/aur-namcap-errors.py" < "$namcap_log"; then
     echo "namcap reported errors for $name" >&2
     exit 1
   fi
 
-  banner "$name: install, and check the installed files"
-  pacman -U --noconfirm "$build_dir"/*.pkg.tar.*
+  banner "$name: install exactly this package, and check the installed files"
+  # Arch's default makepkg.conf also builds a $name-debug package. It is namcap'd
+  # above with the rest, but never installed: it would outlive the `pacman -R`
+  # below and conflict with the next package's own -debug file.
+  mapfile -t built_files < <(printf '%s\n' "$build_dir"/*.pkg.tar.*)
+  printf 'built: %s\n' "${built_files[*]}"
+  package_file="$(python "$REPO_DIR/scripts/aur-pick-package.py" "$name" "${built_files[@]}")"
+  echo "installing: $package_file"
+  pacman -U --noconfirm "$package_file"
   check_installed
   pacman -R --noconfirm "$name"
 

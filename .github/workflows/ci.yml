@@ -48,6 +48,11 @@ jobs:
       - name: AUR push script self-test (RFC-045 slice 3b)
         shell: bash
         run: bash scripts/test-aur-push.sh
+      - name: AUR proof helpers self-test (RFC-045 slice 3b)
+        shell: bash
+        run: |
+          python3 scripts/test-aur-pick-package.py
+          python3 scripts/test-aur-namcap-errors.py
       - name: AUR workflows and pinned host keys (RFC-045 slice 3b)
         shell: bash
         run: python3 scripts/test-aur-workflows.py
