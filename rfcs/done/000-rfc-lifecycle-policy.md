@@ -1,6 +1,6 @@
 # RFC 000 — RFC lifecycle policy
 
-**Status.** Implemented
+**Status.** Implemented — **The 5-folder variant is adopted** (see [§ Folder layout: 5-folder variant](#folder-layout-5-folder-variant) below).
 **Tracks.** Cross-cutting documentation policy. Not tied to any
 single feature; applies to the RFC directory itself.
 **Touches.** `rfcs/` folder structure, the index file at
