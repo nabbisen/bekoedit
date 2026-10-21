@@ -88,6 +88,13 @@ A reusable workflow, for example `.github/workflows/aur.yml`, with
 `workflow_call` (from `release.yml`) and `workflow_dispatch` (the dry run).
 In a **clean** Arch container, pinned by digest, with a non-root build user:
 
+*Learned from slice 3a (task 068):* in a `container:` job, the workspace is the
+runner's mount, owned by another user than the container's root. Git then
+treats it as no repository unless it is in the global `safe.directory`, which
+the checkout sets only under a temporary home. Any git command on the
+workspace in this container needs that same trust step. A clone made inside
+the container, such as the AUR repository, does not.
+
 1. Render both packages and their `.SRCINFO`.
 2. **`makepkg` each one,** with dependencies, from a clean build directory.
    - **At a tag:** nothing is placed in advance. `makepkg` downloads the
