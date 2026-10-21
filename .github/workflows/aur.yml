@@ -1,0 +1,80 @@
+name: AUR packages
+
+# RFC-045 slice 3b: renders both AUR packages (bekoedit and bekoedit-bin) from
+# their templates in packaging/linux, and PROVES them in a clean Arch container
+# before anything is pushed: makepkg builds each from what users will download,
+# namcap checks it, and each is installed, checked and started. It pushes
+# nothing and holds no key. The push is a separate job in release.yml
+# (`aur-push`), which only a tag can run; this workflow can be started by hand
+# (`workflow_dispatch`) as a dry run, which is how it is proved before a release.
+#
+# At a tag (called from release.yml, after `publish`): nothing is placed in
+# advance. makepkg downloads the tag's source tarball and the PUBLISHED Arch
+# archive, and checks them against the rendered sums.
+# In a dry run: the source package uses the workspace version's existing tag. The
+# Arch archive for bekoedit-bin is built here (slice 3a's workflow), since none
+# is published before the first release that carries one; it is placed in the
+# build directory under its source name, where makepkg uses it and still checks
+# its sum.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  arch-archive:
+    name: Build the Arch archive (dry run only)
+    if: github.ref_type != 'tag'
+    uses: ./.github/workflows/arch-build.yml
+    permissions:
+      contents: read
+
+  prove:
+    name: Render, build, check and install both packages
+    needs: arch-archive
+    if: ${{ !cancelled() && (needs.arch-archive.result == 'success' || needs.arch-archive.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    container:
+      # Pinned by digest, as arch-build.yml and the portability harness pin theirs.
+      image: archlinux:base@sha256:b0deabeb3d283da2c7f7dbf0eea051b7b2cd0554e0b737cc457fd21683bdcdd1
+    steps:
+      # The image has no git, so this only downloads the tree, which is all this
+      # job needs: it runs no git command on the workspace (if a later step ever
+      # does, it needs the trust step arch-build.yml has, task 068).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Download the Arch archive built for this dry run
+        if: github.ref_type != 'tag'
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: release-x86_64-unknown-linux-gnu-arch
+          path: arch-archive
+      - name: Render, build, check, install and start both packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            export AUR_MODE=tag
+          else
+            export AUR_MODE=dry-run
+            export AUR_ARCH_ARCHIVE="$(ls "$PWD"/arch-archive/*-arch.tar.gz)"
+          fi
+          export AUR_OUT="$PWD/aur-out"
+          bash scripts/aur-prove.sh
+      - name: Upload the two rendered PKGBUILD and .SRCINFO pairs
+        # The push job pushes exactly these files and re-renders nothing.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aur-packages
+          path: aur-out
+          if-no-files-found: error
+          retention-days: 7
+          # .SRCINFO is a hidden file, and upload-artifact leaves those out by
+          # default. Without this the push job would have no .SRCINFO to push.
+          include-hidden-files: true

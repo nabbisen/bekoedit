@@ -18,6 +18,7 @@
 # For Maintainers
 
 - [Distribution & unsigned binaries](distribution.md)
+- [Publishing to the AUR](aur-publishing.md)
 - [Changelog and Release Notes](changelog-policy.md)
 - [Release Evidence Log](release-evidence.md)
 - [Manual Release Checklist](manual-release-checklist.md)

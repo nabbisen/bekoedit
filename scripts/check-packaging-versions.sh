@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
 # Task 046 §2.5: the packaging files under packaging/ declare their version
-# by hand (no release-time automation builds or publishes either package),
-# so nothing else keeps them in step with the workspace version except this
-# check. Unlike some other projects, this one has no post-release version
+# by hand, so nothing else keeps them in step with the workspace version except
+# this check. Unlike some other projects, this one has no post-release version
 # bump: the workspace version at any commit on `main` is already the right
 # packaging version, so a plain equality check is correct at every commit,
 # not only at a tagged release.
 #
+# No release-time automation builds or publishes the Microsoft Store package;
+# the owner does, by hand. The two AUR packages are different (RFC-045 slice 3b):
+# CI renders them from the two PKGBUILD templates below at each tag, with
+# scripts/aur-render.py, which itself refuses a template whose pkgver is not
+# the tag. This check is what keeps the templates equal to the workspace
+# version before the tag is made.
+#
 # Fails, naming the file and both values, unless:
 #   - packaging/windows/AppxManifest.xml's Identity Version is "<W>.0";
-#   - packaging/linux/PKGBUILD has pkgver=<W> and pkgrel=1.
+#   - packaging/linux/PKGBUILD has pkgver=<W> and pkgrel=1;
+#   - packaging/linux/bin/PKGBUILD (bekoedit-bin) has pkgver=<W> and pkgrel=1.
 #
 # Neither file is read with a grep a reformat could silently defeat: the
 # manifest is parsed as XML (python3's stdlib ElementTree), and the
@@ -30,14 +37,15 @@ cd "$ROOT"
 CARGO_TOML="Cargo.toml"
 APPX="packaging/windows/AppxManifest.xml"
 PKGBUILD="packaging/linux/PKGBUILD"
+PKGBUILD_BIN="packaging/linux/bin/PKGBUILD"
 
 fail() {
   echo "FAIL [$1]: $2"
   ERRORS=$((ERRORS + 1))
 }
 
-if [ ! -f "$CARGO_TOML" ] || [ ! -f "$APPX" ] || [ ! -f "$PKGBUILD" ]; then
-  echo "check-packaging-versions: missing one of $CARGO_TOML, $APPX, $PKGBUILD (run from the repo root)"
+if [ ! -f "$CARGO_TOML" ] || [ ! -f "$APPX" ] || [ ! -f "$PKGBUILD" ] || [ ! -f "$PKGBUILD_BIN" ]; then
+  echo "check-packaging-versions: missing one of $CARGO_TOML, $APPX, $PKGBUILD, $PKGBUILD_BIN (run from the repo root)"
   exit 1
 fi
 
@@ -91,31 +99,37 @@ esac
 # Sourced in a subshell, not grepped: the one reader that can never
 # disagree with what `makepkg` itself would see for these two variables,
 # whatever the file's own formatting or comments look like.
-read_pkgbuild_var() {
+read_pkgbuild_var() { # <file> <variable>
   (
     set +u
     # shellcheck disable=SC1090
-    source "$PKGBUILD" >/dev/null 2>&1
-    printf '%s' "${!1-}"
+    source "$1" >/dev/null 2>&1
+    printf '%s' "${!2-}"
   )
 }
-PKG_VER="$(read_pkgbuild_var pkgver)"
-PKG_REL="$(read_pkgbuild_var pkgrel)"
 
-if [ -z "$PKG_VER" ] && [ -z "$PKG_REL" ]; then
-  fail pkgbuild-unparseable "$PKGBUILD: could not read pkgver or pkgrel (sourcing it produced neither)"
-else
-  if [ "$PKG_VER" = "$WORKSPACE_VERSION" ]; then
-    echo "ok: $PKGBUILD pkgver is $PKG_VER"
-  else
-    fail pkgbuild-version-mismatch "$PKGBUILD has pkgver=$PKG_VER, expected pkgver=$WORKSPACE_VERSION (the workspace version)"
+check_pkgbuild() { # <file>
+  local file="$1" pkg_ver pkg_rel
+  pkg_ver="$(read_pkgbuild_var "$file" pkgver)"
+  pkg_rel="$(read_pkgbuild_var "$file" pkgrel)"
+  if [ -z "$pkg_ver" ] && [ -z "$pkg_rel" ]; then
+    fail pkgbuild-unparseable "$file: could not read pkgver or pkgrel (sourcing it produced neither)"
+    return
   fi
-  if [ "$PKG_REL" = "1" ]; then
-    echo "ok: $PKGBUILD pkgrel is 1"
+  if [ "$pkg_ver" = "$WORKSPACE_VERSION" ]; then
+    echo "ok: $file pkgver is $pkg_ver"
   else
-    fail pkgbuild-pkgrel-not-one "$PKGBUILD has pkgrel=$PKG_REL, expected pkgrel=1"
+    fail pkgbuild-version-mismatch "$file has pkgver=$pkg_ver, expected pkgver=$WORKSPACE_VERSION (the workspace version)"
   fi
-fi
+  if [ "$pkg_rel" = "1" ]; then
+    echo "ok: $file pkgrel is 1"
+  else
+    fail pkgbuild-pkgrel-not-one "$file has pkgrel=$pkg_rel, expected pkgrel=1"
+  fi
+}
+
+check_pkgbuild "$PKGBUILD"
+check_pkgbuild "$PKGBUILD_BIN"
 
 echo ""
 echo "check-packaging-versions result: $ERRORS error(s)"

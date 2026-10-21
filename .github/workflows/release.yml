@@ -351,3 +351,60 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: bash scripts/publish-crates.sh "$GITHUB_REF_NAME"
+
+  # RFC-045 slice 3b: renders both AUR packages and proves them (makepkg from the
+  # published files, namcap, install, start) in a clean Arch container. It pushes
+  # nothing and holds no key.
+  aur-prove:
+    name: Prove both AUR packages
+    needs: publish
+    permissions:
+      contents: read
+    uses: ./.github/workflows/aur.yml
+
+  # Pushes exactly the two proven pairs to the AUR. It lives here and not in the
+  # reusable workflow, so no manual run can reach the key; the `aur` environment
+  # holds AUR_SSH_PRIVATE_KEY (a secret) and AUR_GIT_NAME and AUR_GIT_EMAIL
+  # (variables), and is restricted to tags by the owner. It runs no project build
+  # and no third-party action. publish-crates neither needs it nor is needed by it.
+  aur-push:
+    name: Push both AUR packages
+    needs: aur-prove
+    runs-on: ubuntu-latest
+    environment: aur
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: aur-packages
+          path: aur-out
+      - name: Write the SSH key
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/aur_key"
+          chmod 600 "$RUNNER_TEMP/aur_key"
+      - name: Push both packages
+        env:
+          AUR_GIT_NAME: ${{ vars.AUR_GIT_NAME }}
+          AUR_GIT_EMAIL: ${{ vars.AUR_GIT_EMAIL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Host key pinned in the repository, checked strictly; this key only.
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/aur_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$GITHUB_WORKSPACE/packaging/linux/aur-known-hosts -o BatchMode=yes"
+          # Both are attempted even if the first fails; the job fails if either did.
+          failed=0
+          for package in bekoedit bekoedit-bin; do
+            bash scripts/aur-push.sh "aur-out/$package" "ssh://aur@aur.archlinux.org/$package.git" || failed=1
+          done
+          exit "$failed"
+      - name: Remove the SSH key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/aur_key"

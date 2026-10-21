@@ -1,12 +1,20 @@
 # Arch Linux PKGBUILD for bekoedit.
 # makepkg downloads the source directly from GitHub's own per-tag archive.
+# >>> template-only
+# This file is a TEMPLATE (RFC-045 slice 3b): scripts/aur-render.py turns it into
+# the PKGBUILD that CI pushes to the AUR, with the real checksums. Comments
+# between "template-only" markers, like this one, describe the template, not the
+# AUR copy, and the renderer drops them.
+# <<< template-only
 
 pkgname=bekoedit
+# >>> template-only
 # Keep pkgver in sync with [workspace.package] version in Cargo.toml --
 # checked on every commit to `main` by scripts/check-packaging-versions.sh,
 # since this project has no post-release version bump (unlike some other
 # projects): the workspace version at any commit on `main` is simply the
 # right packaging version.
+# <<< template-only
 pkgver=0.18.1
 pkgrel=1
 pkgdesc="A source-preserving Markdown editor"
@@ -15,19 +23,21 @@ url="https://github.com/nabbisen/bekoedit"
 license=('Apache-2.0')
 # xdotool provides libxdo, which the binary links. A source build links
 # the host's own libxdo, for example libxdo.so.4 on Arch (RFC-045: readelf
-# -d on this machine's own release build confirms it) -- without xdotool
-# installed the package builds and installs cleanly and then fails to
-# start. Temporary: once Dioxus 0.8 drops the libxdo linkage, this
-# dependency should be removed.
+# -d on a release build confirms it) -- without xdotool installed the
+# package builds and installs cleanly and then fails to start. Temporary:
+# once Dioxus 0.8 drops the libxdo linkage, this dependency should be
+# removed.
 depends=('webkit2gtk-4.1' 'gtk3' 'xdotool' 'openssl')
 makedepends=('cargo' 'pkg-config')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/nabbisen/bekoedit/archive/refs/tags/$pkgver.tar.gz")
+# >>> template-only
 # SKIP here is permanent, not a gap to close before the next release: a
 # tag's own tarball contains this file, so the file cannot hold the
-# tarball's own hash. The real hash is computed at publish time
-# (updpkgsums) into the copy of this file pushed to the AUR -- never
-# committed here. This file is a template; do not copy it and run
+# tarball's own hash. The real hash is computed at publish time by
+# scripts/aur-render.py into the copy of this file pushed to the AUR --
+# never committed here. This file is a template; do not copy it and run
 # `makepkg -si` expecting a verified download.
+# <<< template-only
 sha256sums=('SKIP')
 
 prepare() {

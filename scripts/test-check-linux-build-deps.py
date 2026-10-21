@@ -154,6 +154,13 @@ def arch_cases(work):
            "scripts/renamed-harness.sh] installs")
 
     root = fresh_tree(work)
+    prove = root / "scripts" / "aur-prove.sh"
+    expect("the AUR proof script's own pacman install is the second named exception", root, True)
+    prove.rename(root / "scripts" / "renamed-prove.sh")
+    expect("that exception is by name too: the same lines in another script fail", root, False,
+           "scripts/renamed-prove.sh] installs")
+
+    root = fresh_tree(work)
     arch_script = root / "scripts" / "install-arch-build-deps.sh"
     arch_script.write_text(arch_script.read_text().replace("BUILD_DEPS=(", "ALSO_DEPS=("))
     expect("an Arch script with no BUILD_DEPS list fails", root, False, "has no BUILD_DEPS")

@@ -19,8 +19,9 @@ required to run the apt script: running the apt script there does not pass, it
 fails. A workflow step, or a script, that installs one of the Arch script's own
 packages with a raw `pacman -S...` fails too, except
 scripts/check-linux-portability-containers.sh, which installs the *runtime*
-packages inside `docker run` (never on the host, never to build) and is the one
-named exception.
+packages inside `docker run` (never on the host, never to build), and
+scripts/aur-prove.sh, which builds the AUR packages in a clean container; those two
+are the named exceptions.
 
 The workflows are parsed as YAML, so a reformat (a folded scalar, a flow
 mapping, a reordered key) neither defeats the check nor trips it. A step's
@@ -40,9 +41,18 @@ import yaml
 SHARED = "scripts/install-linux-build-deps.sh"
 PACKAGES = ("libwebkit2gtk-4.1-dev", "libgtk-3-dev", "libxdo-dev")
 ARCH_SHARED = "scripts/install-arch-build-deps.sh"
-# Installs runtime packages inside `docker run`, to check a binary resolves
-# there. It is not a build, and it is named here, not matched by a pattern.
-PACMAN_ALLOWED_SCRIPTS = ("scripts/check-linux-portability-containers.sh",)
+# Two scripts install packages with pacman on purpose, and are named here, not
+# matched by a pattern:
+#   - the portability harness installs runtime packages inside `docker run`, to
+#     check that a binary resolves there. It is not a build;
+#   - scripts/aur-prove.sh (RFC-045 slice 3b) sets up the AUR proof container: a
+#     clean Arch with what a user has (base-devel, the repository's own `rust`),
+#     which is deliberately NOT the release build environment of
+#     scripts/install-arch-build-deps.sh (that one uses rustup).
+PACMAN_ALLOWED_SCRIPTS = (
+    "scripts/check-linux-portability-containers.sh",
+    "scripts/aur-prove.sh",
+)
 
 # `cargo <verb> ...` that compiles the desktop app: it names the package, or
 # the whole workspace. `-p bekoedit-fs` is another crate, and a bare

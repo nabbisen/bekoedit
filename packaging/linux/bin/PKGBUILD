@@ -1,0 +1,52 @@
+# Arch Linux PKGBUILD for bekoedit-bin: the prebuilt Linux binary, built in an
+# Arch Linux container and published with each release (RFC-045 slice 3a).
+# >>> template-only
+# This file is a TEMPLATE (RFC-045 slice 3b): scripts/aur-render.py turns it into
+# the PKGBUILD that CI pushes to the AUR, with the real checksums. Comments
+# between "template-only" markers, like this one, describe the template, not the
+# AUR copy, and the renderer drops them.
+# <<< template-only
+
+pkgname=bekoedit-bin
+# >>> template-only
+# Keep pkgver in sync with [workspace.package] version in Cargo.toml --
+# checked on every commit to `main` by scripts/check-packaging-versions.sh,
+# as for packaging/linux/PKGBUILD.
+# <<< template-only
+pkgver=0.18.1
+pkgrel=1
+pkgdesc="A source-preserving Markdown editor (prebuilt binary)"
+arch=('x86_64')
+url="https://github.com/nabbisen/bekoedit"
+license=('Apache-2.0')
+# xdotool provides libxdo, which the binary links (libxdo.so.4, as built on
+# Arch). It is listed only because Dioxus 0.7 links libxdo: without it the
+# package installs cleanly and then fails to start. Temporary: once Dioxus 0.8
+# drops the libxdo linkage, this dependency should be removed.
+depends=('webkit2gtk-4.1' 'gtk3' 'xdotool' 'openssl')
+provides=('bekoedit')
+conflicts=('bekoedit')
+# Each source gets a local name that includes $pkgname-$pkgver, so a cached file
+# from another version is never reused. The archive is the release's Arch build,
+# which is flat (the binary, LICENSE and NOTICE at its root); the desktop file
+# and the icon are taken from the same tag.
+source=("$pkgname-$pkgver-x86_64.tar.gz::https://github.com/nabbisen/bekoedit/releases/download/$pkgver/bekoedit-$pkgver-x86_64-unknown-linux-gnu-arch.tar.gz"
+        "$pkgname-$pkgver.desktop::https://raw.githubusercontent.com/nabbisen/bekoedit/$pkgver/packaging/linux/bekoedit.desktop"
+        "$pkgname-$pkgver.png::https://raw.githubusercontent.com/nabbisen/bekoedit/$pkgver/packaging/windows/Assets/Square150x150Logo.png")
+# >>> template-only
+# SKIP here is permanent, as in packaging/linux/PKGBUILD: the real hashes are
+# computed at publish time by scripts/aur-render.py, in source order, into the
+# copy of this file pushed to the AUR -- never committed here. This file is a
+# template; do not copy it and run `makepkg -si` expecting verified downloads.
+# <<< template-only
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+package() {
+    install -Dm755 "$srcdir/bekoedit" "$pkgdir/usr/bin/bekoedit"
+    install -Dm644 "$srcdir/$pkgname-$pkgver.desktop" \
+        "$pkgdir/usr/share/applications/bekoedit.desktop"
+    install -Dm644 "$srcdir/$pkgname-$pkgver.png" \
+        "$pkgdir/usr/share/pixmaps/bekoedit.png"
+    install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 "$srcdir/NOTICE" "$pkgdir/usr/share/licenses/$pkgname/NOTICE"
+}

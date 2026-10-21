@@ -42,6 +42,15 @@ jobs:
       - name: Arch build workflow self-test (RFC-045 slice 3a)
         shell: bash
         run: python3 scripts/test-arch-build-workflow.py
+      - name: AUR renderer self-test (RFC-045 slice 3b)
+        shell: bash
+        run: python3 scripts/test-aur-render.py
+      - name: AUR push script self-test (RFC-045 slice 3b)
+        shell: bash
+        run: bash scripts/test-aur-push.sh
+      - name: AUR workflows and pinned host keys (RFC-045 slice 3b)
+        shell: bash
+        run: python3 scripts/test-aur-workflows.py
       - name: Release notes self-test (task 043)
         shell: bash
         run: bash scripts/test-release-notes.sh
