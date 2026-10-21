@@ -1,10 +1,10 @@
 # RFC-050: Accessibility baseline: what a screen reader gets
 
 **Project:** bekoedit
-**Status:** Proposed — drafted 2026-10-22, after the owner accepted the
-direction the same day: a CI accessibility check; the Flatpak fixes recorded
-for the Flathub app-side RFC; a real screen reader run by the dev team rather
-than by the owner. §9 asks the remaining questions.
+**Status:** Accepted — by the owner on 2026-10-22, as written, so each §9
+question takes its proposed answer: blocking from the start; Windows and macOS
+later; on every push. Drafted the same day.
+**Handoffs:** [`handoffs/050-accessibility-baseline/`](../handoffs/050-accessibility-baseline/)
 **Track:** Accessibility
 **Priority:** Medium — never verified on any platform; a known Flatpak defect
 in the same stack

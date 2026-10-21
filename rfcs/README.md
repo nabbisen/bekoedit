@@ -92,6 +92,7 @@ to `done/` when the work ships.
 | RFC | Title | Notes |
 |-----|-------|-------|
 | RFC-045 | [Release artifact portability and completeness](accepted/RFC-045-release-artifact-portability-and-completeness.md) | Accepted 2026-08-17. Slices 1–2 shipped to `main`: the platform scripts now ship in every archive, and a cross-distribution `ldd` check gates both pull requests and the publish job. Slice 3 (Linux portability) waits for Dioxus 0.8 stable; amended 2026-10-21 with interim slices 3a (an Arch-built archive, merged `c21b743`, proof run green) and 3b (both AUR packages published from CI, merged `6338b16`, dry run green; first push at the next tag). Handoffs: [`handoffs/045-release-artifact-portability-and-completeness/`](handoffs/045-release-artifact-portability-and-completeness/) |
+| RFC-050 | [Accessibility baseline: what a screen reader gets](accepted/RFC-050-accessibility-baseline.md) | Accepted 2026-10-22, §9 as proposed. Slice 1: a blocking AT-SPI tree check in both languages, with a save done through accessibility actions alone. Slice 2: Orca's speech recorded in CI. Then fixes. The Flatpak conditions (WebKit sandbox, app ID) are recorded for the Flathub app-side RFC. Handoffs: [`handoffs/050-accessibility-baseline/`](handoffs/050-accessibility-baseline/) |
 
 ## Implemented — merged to `main`, not yet released (`done/`)
 
@@ -142,7 +143,6 @@ superseded).
 | RFC-032 | [Performance optimization and incremental parsing](proposed/RFC-032-performance-optimization-and-incremental-parsing.md) | Deferred until profiling shows full reparse is insufficient |
 | RFC-039 | [Plugin system evaluation](proposed/RFC-039-plugin-system-evaluation.md) | Future evaluation only |
 | RFC-040 | [Sync and collaboration evaluation](proposed/RFC-040-sync-and-collaboration-evaluation.md) | Future evaluation only |
-| RFC-050 | [Accessibility baseline: what a screen reader gets](proposed/RFC-050-accessibility-baseline.md) | Drafted 2026-10-22; direction accepted by the owner. A blocking AT-SPI tree check with a save done through accessibility actions alone, in both languages; Orca's speech recorded in CI; fixes. The Flatpak conditions (WebKit sandbox, app ID) are recorded for the Flathub app-side RFC. Awaiting §9 answers |
 
 ## Implemented — v0.3.0 (`done/`)
 
