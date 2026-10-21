@@ -378,7 +378,7 @@ macOS and Windows have no equivalent cheap check and are out of scope here.
 | 1 | Part 2 — ship the platform scripts | **Implemented** — merged `a9eb427` |
 | 2 | Part 3 — the cross-distribution check | **Implemented** — merged `f977fc7` |
 | 3a | Interim Arch-built archive (§5.5) | **Implemented** — merged `d97b1a3`, fixed by task 068 (`c21b743`); manual proof run `39556325411` green: `libxdo.so.4` only, `--headless-smoke` passed. First used by `release.yml` at the next tag |
-| 3b | Both AUR packages published from CI (§5.6) | **Decided 2026-10-21** — handed to the dev team |
+| 3b | Both AUR packages published from CI (§5.6) | **Implemented** — merged `bd24f66` and `6338b16`; dry run `39608588090` green: both packages rendered, built, `namcap`'d, installed and started in a clean Arch container. The first real push is at the next tag, after the owner's one-time AUR and GitHub setup |
 | 3 | Part 1 — Linux portability | **Deferred 2026-08-24** — fixed upstream, unreleased on the 0.7 line. Trigger: Dioxus 0.8 stable (§5.1). Retires 3a |
 
 Deliberately in that order, and it worked as intended: the two cheap slices made

@@ -91,7 +91,7 @@ to `done/` when the work ships.
 
 | RFC | Title | Notes |
 |-----|-------|-------|
-| RFC-045 | [Release artifact portability and completeness](accepted/RFC-045-release-artifact-portability-and-completeness.md) | Accepted 2026-08-17. Slices 1–2 shipped to `main`: the platform scripts now ship in every archive, and a cross-distribution `ldd` check gates both pull requests and the publish job. Slice 3 (Linux portability) waits for Dioxus 0.8 stable; amended 2026-10-21 with interim slices 3a (an Arch-built archive, merged `c21b743`, proof run green) and 3b (both AUR packages published from CI, in progress). Handoffs: [`handoffs/045-release-artifact-portability-and-completeness/`](handoffs/045-release-artifact-portability-and-completeness/) |
+| RFC-045 | [Release artifact portability and completeness](accepted/RFC-045-release-artifact-portability-and-completeness.md) | Accepted 2026-08-17. Slices 1–2 shipped to `main`: the platform scripts now ship in every archive, and a cross-distribution `ldd` check gates both pull requests and the publish job. Slice 3 (Linux portability) waits for Dioxus 0.8 stable; amended 2026-10-21 with interim slices 3a (an Arch-built archive, merged `c21b743`, proof run green) and 3b (both AUR packages published from CI, merged `6338b16`, dry run green; first push at the next tag). Handoffs: [`handoffs/045-release-artifact-portability-and-completeness/`](handoffs/045-release-artifact-portability-and-completeness/) |
 
 ## Implemented — merged to `main`, not yet released (`done/`)
 
