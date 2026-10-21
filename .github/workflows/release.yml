@@ -173,9 +173,19 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # RFC-045 slice 3a: the Linux binary built in an Arch container, which links
+  # libxdo.so.4. Reusable workflow; it publishes nothing. `publish` needs it, so
+  # a failed Arch build stops the release like any other target; re-running
+  # failed jobs re-runs it, and then `publish`, from the tagged commit's files.
+  build-arch:
+    name: Build Arch release archive
+    permissions:
+      contents: read
+    uses: ./.github/workflows/arch-build.yml
+
   publish:
     name: Verify and publish complete release
-    needs: build
+    needs: [build, build-arch]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -271,6 +281,20 @@ jobs:
             "$ARTIFACT_DIR/bekoedit-$EXPECTED_VERSION-x86_64-unknown-linux-gnu.tar.gz" \
             bekoedit
           bash scripts/check-linux-portability-containers.sh "$EXTRACT_DIR/bekoedit"
+      - name: Arch archive portability check, Arch only and no exemption (RFC-045 slice 3a)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The Arch archive's binary must resolve every library on Arch itself,
+          # with no libxdo.so.3 exemption (that exemption is the Ubuntu binary's
+          # expected gap and stays with it). Not on Fedora: it has no libxdo.so.4.
+          EXTRACT_DIR="$RUNNER_TEMP/bekoedit-arch-portability-check"
+          mkdir -p "$EXTRACT_DIR"
+          tar -C "$EXTRACT_DIR" -xzf \
+            "$ARTIFACT_DIR/bekoedit-$EXPECTED_VERSION-x86_64-unknown-linux-gnu-arch.tar.gz" \
+            bekoedit
+          bash scripts/check-linux-portability-containers.sh --only arch --no-exemptions \
+            "$EXTRACT_DIR/bekoedit"
       - name: Release notes from this tag's CHANGELOG.md
         shell: bash
         run: |
@@ -288,6 +312,8 @@ jobs:
           files: |
             dist/bekoedit-${{ env.EXPECTED_VERSION }}-x86_64-unknown-linux-gnu.tar.gz
             dist/bekoedit-${{ env.EXPECTED_VERSION }}-x86_64-unknown-linux-gnu.tar.gz.sha256
+            dist/bekoedit-${{ env.EXPECTED_VERSION }}-x86_64-unknown-linux-gnu-arch.tar.gz
+            dist/bekoedit-${{ env.EXPECTED_VERSION }}-x86_64-unknown-linux-gnu-arch.tar.gz.sha256
             dist/bekoedit-${{ env.EXPECTED_VERSION }}-aarch64-apple-darwin.tar.gz
             dist/bekoedit-${{ env.EXPECTED_VERSION }}-aarch64-apple-darwin.tar.gz.sha256
             dist/bekoedit-${{ env.EXPECTED_VERSION }}-x86_64-pc-windows-msvc.zip

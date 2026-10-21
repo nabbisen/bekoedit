@@ -17,7 +17,11 @@ TARGETS = (
     ("x86_64-unknown-linux-gnu", ".tar.gz", "bekoedit", "run-linux.sh"),
     ("aarch64-apple-darwin", ".tar.gz", "bekoedit", "run-macos.sh"),
     ("x86_64-pc-windows-msvc", ".zip", "bekoedit.exe", "run-windows.ps1"),
+    # RFC-045 slice 3a: the Linux binary built in an Arch container, which links
+    # libxdo.so.4. The same members as the Ubuntu archive.
+    ("x86_64-unknown-linux-gnu-arch", ".tar.gz", "bekoedit", "run-linux.sh"),
 )
+EXPECTED_FILES = 2 * len(TARGETS)
 DOCUMENTS = ("README.md", "LICENSE", "NOTICE", "CHANGELOG.md")
 
 
@@ -153,11 +157,11 @@ def main() -> None:
     if unsafe_entries:
         fail(f"artifact directory contains non-regular entries: {unsafe_entries}")
     actual_names = {entry.name for entry in entries}
-    if len(entries) != 6 or actual_names != expected_names:
+    if len(entries) != EXPECTED_FILES or actual_names != expected_names:
         missing = sorted(expected_names - actual_names)
         unexpected = sorted(actual_names - expected_names)
         fail(
-            f"artifact directory must contain exactly six expected files; "
+            f"artifact directory must contain exactly eight expected files; "
             f"missing={missing}, unexpected={unexpected}, count={len(entries)}"
         )
 
@@ -169,7 +173,7 @@ def main() -> None:
         else:
             validate_zip(archive, expected_members)
 
-    print(f"verified six release files for bekoedit {version} in {artifact_dir}")
+    print(f"verified eight release files for bekoedit {version} in {artifact_dir}")
 
 
 if __name__ == "__main__":

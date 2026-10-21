@@ -28,6 +28,7 @@ TARGETS = (
     ("x86_64-unknown-linux-gnu", ".tar.gz", "bekoedit", "run-linux.sh"),
     ("aarch64-apple-darwin", ".tar.gz", "bekoedit", "run-macos.sh"),
     ("x86_64-pc-windows-msvc", ".zip", "bekoedit.exe", "run-windows.ps1"),
+    ("x86_64-unknown-linux-gnu-arch", ".tar.gz", "bekoedit", "run-linux.sh"),
 )
 DOCUMENTS = ("README.md", "LICENSE", "NOTICE", "CHANGELOG.md")
 PAYLOADS = {
@@ -122,6 +123,12 @@ def create_valid(directory: pathlib.Path) -> None:
 
 def rewrite_linux(directory: pathlib.Path, members: list[tuple[str, str, bytes]]) -> None:
     archive = archive_path(directory, TARGETS[0][0], TARGETS[0][1])
+    write_tar(archive, members)
+    write_sidecar(archive)
+
+
+def rewrite_arch(directory: pathlib.Path, members: list[tuple[str, str, bytes]]) -> None:
+    archive = archive_path(directory, TARGETS[3][0], TARGETS[3][1])
     write_tar(archive, members)
     write_sidecar(archive)
 
@@ -329,6 +336,61 @@ def main() -> None:
         lambda case: rewrite_linux(
             case, [("bekoedit\n", "file", b"bad"), *linux_members[1:]]
         ),
+    )
+    # RFC-045 slice 3a: the Arch archive is a fourth target, held to the same
+    # exact-set rules, and the directory to exactly eight files.
+    arch = archive_path(valid, TARGETS[3][0], TARGETS[3][1])
+    arch_members = normal_members("bekoedit", "run-linux.sh")
+    expect_rejected(
+        verifier,
+        valid,
+        run_root,
+        "arch-archive-missing",
+        lambda case: archive_path(case, TARGETS[3][0], TARGETS[3][1]).unlink(),
+    )
+    expect_rejected(
+        verifier,
+        valid,
+        run_root,
+        "arch-sidecar-missing",
+        lambda case: case.joinpath(f"{arch.name}.sha256").unlink(),
+    )
+    expect_rejected(
+        verifier,
+        valid,
+        run_root,
+        "arch-sidecar-wrong",
+        lambda case: write_sidecar(archive_path(case, TARGETS[3][0], TARGETS[3][1]), "0" * 64),
+    )
+    expect_rejected(
+        verifier,
+        valid,
+        run_root,
+        "ninth-file",
+        lambda case: (case / "bekoedit-ninth.txt").write_text("a ninth, unexpected file"),
+    )
+    expect_rejected(
+        verifier,
+        valid,
+        run_root,
+        "arch-member-missing",
+        lambda case: rewrite_arch(
+            case, [member for member in arch_members if member[0] != "README.md"]
+        ),
+    )
+    expect_rejected(
+        verifier,
+        valid,
+        run_root,
+        "arch-member-extra",
+        lambda case: rewrite_arch(case, [*arch_members, ("EXTRA", "file", b"extra")]),
+    )
+    expect_rejected(
+        verifier,
+        valid,
+        run_root,
+        "arch-archive-with-only-a-subset",
+        lambda case: rewrite_arch(case, arch_members[:2]),
     )
     print(f"all release artifact verifier fixtures passed in {run_root}")
 

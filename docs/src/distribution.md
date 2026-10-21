@@ -71,12 +71,28 @@ requirement is a SONAME/ABI break, and there is no supported way around it —
 installing the `xdotool` package will not help on a `.so.4`-only system, and
 symlinking `.so.4` to `.so.3` is not something this project advises, since it
 defeats a versioning guarantee on a guess. On such distributions, the
-prebuilt binary cannot run; build from source instead, which links against
-whatever `libxdo` your system actually has:
+default Linux binary cannot run; use the Arch archive below, or build from
+source, which links against whatever `libxdo` your system actually has:
 
 ```sh
 cargo install bekoedit
 ```
+
+**The Arch archive.** Each release also carries a Linux binary built inside an
+Arch Linux container, which links `libxdo.so.4`:
+
+```text
+bekoedit-<version>-x86_64-unknown-linux-gnu-arch.tar.gz
+bekoedit-<version>-x86_64-unknown-linux-gnu-arch.tar.gz.sha256
+```
+
+Use it on Arch and Arch-based distributions, where the default archive does
+not start. It has the same contents (the binary, `run-linux.sh` and the
+documents) and is verified the same way (see
+[Checksum verification](#checksum-verification)). It does **not** start on
+distributions that ship `libxdo.so.3` (Debian, Ubuntu, Fedora and most
+others): use the default archive there. `run-linux.sh` tells the two cases
+apart by which `libxdo` is missing.
 
 **The failure is silent from a desktop launcher.** If a required library is
 missing, the dynamic loader fails before bekoedit's own code runs — no

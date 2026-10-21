@@ -71,8 +71,11 @@ chmod +x run-linux.sh && ./run-linux.sh ./bekoedit
 ./bekoedit
 ```
 Distributions shipping a different `libxdo` major (e.g. Arch: `libxdo.so.4`)
-can't use the prebuilt binary — `run-linux.sh` says so and points at building
-from source instead, which links locally: `cargo install bekoedit`.
+can't use the default prebuilt binary. On Arch and Arch-based distributions,
+download the `-arch` archive instead
+(`bekoedit-<version>-x86_64-unknown-linux-gnu-arch.tar.gz`); `run-linux.sh`
+says which one a system needs. Or build from source, which links locally:
+`cargo install bekoedit`.
 
 **Build from source** (requires Rust stable + Node.js >= 24):
 ```sh

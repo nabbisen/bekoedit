@@ -1,0 +1,119 @@
+name: Arch build
+
+# RFC-045 slice 3a: builds the Linux binary in an Arch Linux container, so that
+# it links libxdo.so.4 and starts on Arch and Arch-based distributions, where
+# the Ubuntu-built binary (libxdo.so.3) cannot. Called by release.yml at a tag,
+# and runnable by hand to prove it. No push or pull_request trigger: it costs
+# 10 to 15 CI minutes, accepted per release and not per push. It publishes
+# nothing; release.yml's publish job picks up the artifact.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  TARGET: x86_64-unknown-linux-gnu
+
+jobs:
+  build-arch:
+    name: Build Arch release archive
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    container:
+      # Pinned by digest, as scripts/check-linux-portability-containers.sh pins
+      # its images: a tag is a moving target, a digest is not.
+      image: archlinux:base@sha256:b0deabeb3d283da2c7f7dbf0eea051b7b2cd0554e0b737cc457fd21683bdcdd1
+    steps:
+      # The image has no git, so this first checkout can only download the
+      # tree. It exists to get scripts/install-arch-build-deps.sh, which
+      # installs git; the checkout after it is a real clone.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Arch build dependencies
+        run: bash scripts/install-arch-build-deps.sh
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install the pinned Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.88.0 --profile minimal --no-self-update
+          RUSTC_VERBOSE="$(rustc +1.88.0 -vV)"
+          printf '%s\n' "$RUSTC_VERBOSE"
+          RUSTC_HOST="$(printf '%s\n' "$RUSTC_VERBOSE" | sed -n 's/^host: //p')"
+          test "$RUSTC_HOST" = "$TARGET"
+          printf '%s\n' "$RUSTC_VERBOSE" | grep -Fx 'release: 1.88.0'
+      - name: Resolve the version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            VERSION="$GITHUB_REF_NAME"
+          else
+            # A manual run: the workspace version, [workspace.package] in Cargo.toml.
+            VERSION="$(awk '/^\[workspace\.package\]/{in_section=1; next} /^\[/{in_section=0} in_section && /^version[[:space:]]*=/{gsub(/[^0-9.]/, ""); print; exit}' Cargo.toml)"
+          fi
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "invalid bare SemVer version: $VERSION" >&2
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Arch archive version: $VERSION"
+      - run: cargo +1.88.0 metadata --locked --format-version 1 > /dev/null
+      - name: Test native target
+        shell: bash
+        run: cargo +1.88.0 test --locked --target "$TARGET"
+      - name: Build native target
+        shell: bash
+        run: cargo +1.88.0 build -p bekoedit --release --locked --target "$TARGET"
+      - name: Confirm committed lockfile is unchanged
+        run: git diff --exit-code -- Cargo.lock
+      - name: The binary links libxdo.so.4 and not libxdo.so.3
+        shell: bash
+        run: |
+          set -euo pipefail
+          BINARY="target/$TARGET/release/bekoedit"
+          test -f "$BINARY"
+          NEEDED="$(readelf -d "$BINARY" | grep NEEDED)"
+          printf '%s\n' "$NEEDED"
+          if ! printf '%s\n' "$NEEDED" | grep -qF 'libxdo.so.4'; then
+            echo "the Arch binary does not list libxdo.so.4 as NEEDED" >&2
+            exit 1
+          fi
+          if printf '%s\n' "$NEEDED" | grep -qF 'libxdo.so.3'; then
+            echo "the Arch binary lists libxdo.so.3 as NEEDED; it was not built against this container's libxdo" >&2
+            exit 1
+          fi
+      - name: Start the binary once, headless
+        shell: bash
+        run: |
+          set -euo pipefail
+          env -u DISPLAY -u WAYLAND_DISPLAY timeout 10 "./target/$TARGET/release/bekoedit" --headless-smoke
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          NAME="bekoedit-${VERSION}-${TARGET}-arch"
+          mkdir -p stage
+          cp "target/$TARGET/release/bekoedit" stage/bekoedit
+          cp README.md LICENSE NOTICE CHANGELOG.md stage/
+          cp scripts/run-linux.sh stage/run-linux.sh
+          chmod +x stage/run-linux.sh
+          test -x stage/run-linux.sh
+          tar -C stage -czf "${NAME}.tar.gz" bekoedit README.md LICENSE NOTICE CHANGELOG.md run-linux.sh
+          sha256sum "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256"
+          cat "${NAME}.tar.gz.sha256"
+          echo "ARCHIVE=${NAME}.tar.gz" >> "$GITHUB_ENV"
+      - name: Upload the Arch archive
+        # The name starts with "release-", so release.yml's publish job, which
+        # downloads `pattern: release-*`, picks it up with the other targets.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ env.TARGET }}-arch
+          path: |
+            ${{ env.ARCHIVE }}
+            ${{ env.ARCHIVE }}.sha256
+          if-no-files-found: error
+          retention-days: 7

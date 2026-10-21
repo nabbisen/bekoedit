@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Undo and Redo in Form Mode: Ctrl+Z and Ctrl+Shift+Z (or the buttons) step
   back and forward through committed edits. Inside a text field, Ctrl+Z is
   left to the field and never changes the committed edits.
+- An Arch Linux build of the Linux binary,
+  `bekoedit-<version>-x86_64-unknown-linux-gnu-arch.tar.gz`, for Arch and
+  Arch-based distributions, where the default Linux binary does not start.
 
 ### Security
 - Updated rustls-webpki from 0.103.15 to 0.103.16 for RUSTSEC-2026-0382.

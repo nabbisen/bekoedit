@@ -98,22 +98,25 @@ pre-upload Cargo.lock cleanliness result. These values must agree with the
 fixed workflow matrix.
 
 The publisher must invoke `scripts/check-release-artifacts.sh` on the merged
-download directory. After verification, pass exactly those six explicit
+download directory. After verification, pass exactly those eight explicit
 archive/sidecar paths to the publication action without an intervening step or
 wildcard.
 
 | Artifact | Root layout inspected | Checksum verified | Notes |
 |----------|-----------------------|-------------------|-------|
 | Linux `.tar.gz` | `yes / no` | `yes / no` | `________` |
+| Linux Arch `-arch.tar.gz` | `yes / no` | `yes / no` | `________` |
 | macOS `.tar.gz` | `yes / no` | `yes / no` | `________` |
 | Windows `.zip` | `yes / no` | `yes / no` | `________` |
 
-Expected root layout after extraction — six entries, the platform binary and
-helper script named per target (RFC-045 slice 1: the layout is deliberately
+Expected root layout after extraction — six entries in each archive, the
+platform binary and helper script named per target (RFC-045 slice 1: the layout is deliberately
 flat, no `scripts/` subdirectory):
 
 ```text
 Linux (.tar.gz):    bekoedit       run-linux.sh
+Linux Arch (-arch.tar.gz): the same entries as Linux, built in an Arch
+                    container (RFC-045 slice 3a)
 macOS (.tar.gz):    bekoedit       run-macos.sh
 Windows (.zip):     bekoedit.exe   run-windows.ps1
 
@@ -125,7 +128,13 @@ Expected checksum sidecars:
 ```text
 bekoedit-<version>-<target>.tar.gz.sha256
 bekoedit-<version>-<target>.zip.sha256
+bekoedit-<version>-x86_64-unknown-linux-gnu-arch.tar.gz.sha256
 ```
+
+A release has exactly eight files: those four archives and their four
+sidecars. The Arch archive is built by `.github/workflows/arch-build.yml`;
+record that run's `readelf -d` `NEEDED` lines (`libxdo.so.4` listed, no
+`libxdo.so.3`) and its `--headless-smoke` result beside the other builders'.
 
 ## Manual release walkthrough
 

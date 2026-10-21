@@ -39,6 +39,9 @@ jobs:
       - name: Linux build dependencies come from one source (task 063)
         shell: bash
         run: python3 scripts/check-linux-build-deps.py
+      - name: Arch build workflow self-test (RFC-045 slice 3a)
+        shell: bash
+        run: python3 scripts/test-arch-build-workflow.py
       - name: Release notes self-test (task 043)
         shell: bash
         run: bash scripts/test-release-notes.sh

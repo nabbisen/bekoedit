@@ -15,6 +15,7 @@ libxdo.so.3 (scripts/linux-portability-exemptions.tsv -- the same data
 scripts/check-linux-portability-containers.sh reads, not a copy of it), the
 page also carries a known-issue note after the CHANGELOG section and before
 the closing line. Emptying that row removes the note, with no other edit.
+RFC-045 slice 3a: while it exists, the note names the release's Arch archive.
 
 Exits non-zero, naming the problem, if the version has no dated section or the
 section is empty.
@@ -24,12 +25,17 @@ import pathlib
 import re
 import sys
 
-KNOWN_ISSUE_NOTE = (
-    "### Known issue (Linux)\n"
-    "This binary does not start on Arch Linux and Arch-based distributions, "
-    "which ship `libxdo.so.4` instead of `libxdo.so.3`. Install with "
-    "`cargo install bekoedit` instead."
-)
+def known_issue_note(version: str) -> str:
+    """RFC-045 slice 3a: the note names the Arch archive of this very release,
+    with its real file name, so the page tells an Arch user where to go."""
+    return (
+        "### Known issue (Linux)\n"
+        "The default Linux archive does not start on Arch Linux and Arch-based "
+        "distributions, which ship `libxdo.so.4` instead of `libxdo.so.3`. On "
+        f"those, use `bekoedit-{version}-x86_64-unknown-linux-gnu-arch.tar.gz` "
+        "instead, or `cargo install bekoedit`."
+    )
+
 
 EXEMPTIONS_FILE = pathlib.Path(__file__).parent / "linux-portability-exemptions.tsv"
 
@@ -64,12 +70,12 @@ def section(changelog: str, version: str) -> str:
     return body
 
 
-def notes_body(section_body: str, exemption_active: bool) -> str:
+def notes_body(section_body: str, exemption_active: bool, version: str) -> str:
     """The CHANGELOG section, with the known-issue note appended when
     `exemption_active` says the Arch exemption is still live -- the one
     place that decides placement (after the section, before the footer)."""
     if exemption_active:
-        return f"{section_body}\n\n{KNOWN_ISSUE_NOTE}"
+        return f"{section_body}\n\n{known_issue_note(version)}"
     return section_body
 
 
@@ -78,7 +84,9 @@ def main() -> None:
         raise SystemExit(__doc__)
     version, path, repository, tag = sys.argv[1:]
     with open(path, encoding="utf-8") as handle:
-        body = notes_body(section(handle.read(), version), arch_libxdo_exemption_active())
+        body = notes_body(
+            section(handle.read(), version), arch_libxdo_exemption_active(), version
+        )
     link = f"https://github.com/{repository}/blob/{tag}/CHANGELOG.md"
     sys.stdout.write(f"{body}\n\n---\n\nFull history: [CHANGELOG.md]({link})\n")
 

@@ -12,6 +12,16 @@ installed by scripts/install-linux-build-deps.sh, and this check fails unless:
   2. no other workflow step and no other script installs those packages with
      a raw `apt-get install`.
 
+RFC-045 slice 3a adds the Arch side. A job that runs in an Arch container
+(`container: archlinux...`) and builds `bekoedit` is held to the Arch script,
+scripts/install-arch-build-deps.sh, before its first build step, and is not
+required to run the apt script: running the apt script there does not pass, it
+fails. A workflow step, or a script, that installs one of the Arch script's own
+packages with a raw `pacman -S...` fails too, except
+scripts/check-linux-portability-containers.sh, which installs the *runtime*
+packages inside `docker run` (never on the host, never to build) and is the one
+named exception.
+
 The workflows are parsed as YAML, so a reformat (a folded scalar, a flow
 mapping, a reordered key) neither defeats the check nor trips it. A step's
 `run` text is split like a shell would split it, with backslash continuations
@@ -29,6 +39,10 @@ import yaml
 
 SHARED = "scripts/install-linux-build-deps.sh"
 PACKAGES = ("libwebkit2gtk-4.1-dev", "libgtk-3-dev", "libxdo-dev")
+ARCH_SHARED = "scripts/install-arch-build-deps.sh"
+# Installs runtime packages inside `docker run`, to check a binary resolves
+# there. It is not a build, and it is named here, not matched by a pattern.
+PACMAN_ALLOWED_SCRIPTS = ("scripts/check-linux-portability-containers.sh",)
 
 # `cargo <verb> ...` that compiles the desktop app: it names the package, or
 # the whole workspace. `-p bekoedit-fs` is another crate, and a bare
@@ -73,6 +87,12 @@ def runs_shared(run):
     )
 
 
+def runs_arch_shared(run):
+    return any(
+        t.removeprefix("./") == ARCH_SHARED for tokens in logical_lines(run) for t in tokens
+    )
+
+
 def raw_install(run):
     """The packages a raw apt install in `run` names, if any."""
     found = []
@@ -80,6 +100,29 @@ def raw_install(run):
         if "install" in tokens and any(t in ("apt", "apt-get") for t in tokens):
             found += [t for t in tokens if t in PACKAGES]
     return found
+
+
+def arch_packages(text):
+    """The packages in the Arch script's BUILD_DEPS=( ... ) array."""
+    found = re.search(r"^BUILD_DEPS=\(([^)]*)\)", text, re.M)
+    return tuple(found.group(1).split()) if found else ()
+
+
+def raw_pacman_install(run, packages):
+    """The Arch script's packages a raw `pacman -S...` in `run` names, if any.
+    Words are split further on whitespace, so `sh -c "pacman -S git"` is seen."""
+    found = []
+    for tokens in logical_lines(run):
+        words = [word for token in tokens for word in token.split()]
+        if "pacman" in words and any(w.startswith("-S") for w in words):
+            found += [w for w in words if w in packages]
+    return found
+
+
+def is_arch_job(job):
+    container = job.get("container")
+    image = container.get("image", "") if isinstance(container, dict) else container
+    return "archlinux" in str(image or "").lower()
 
 
 def runs_on_linux(job):
@@ -101,20 +144,31 @@ def active_on_linux(step):
 def check_job(label, job, errors):
     if not runs_on_linux(job):
         return False
+    arch = is_arch_job(job)
+    required = ARCH_SHARED if arch else SHARED
     steps = [s for s in job.get("steps") or [] if isinstance(s, dict) and "run" in s]
     builds = [i for i, s in enumerate(steps) if active_on_linux(s) and step_builds_app(s["run"])]
     if not builds:
         return False
     first = builds[0]
-    installs = [i for i, s in enumerate(steps) if runs_shared(s["run"])]
+    if arch and any(runs_shared(s["run"]) for s in steps):
+        errors.append(
+            f"[{label}] builds bekoedit in an Arch container but runs {SHARED}, "
+            f"the apt script; an Arch container uses {ARCH_SHARED}"
+        )
+    installs = [
+        i
+        for i, s in enumerate(steps)
+        if (runs_arch_shared(s["run"]) if arch else runs_shared(s["run"]))
+    ]
     if not installs:
         errors.append(
             f"[{label}] builds or publishes bekoedit on Linux (step "
-            f"{steps[first].get('name', first)!r}) but never runs {SHARED}"
+            f"{steps[first].get('name', first)!r}) but never runs {required}"
         )
     elif not any(i < first and active_on_linux(steps[i]) for i in installs):
         errors.append(
-            f"[{label}] runs {SHARED} only after, or only off Linux from, its first "
+            f"[{label}] runs {required} only after, or only off Linux from, its first "
             f"bekoedit build step ({steps[first].get('name', first)!r})"
         )
     return True
@@ -136,6 +190,15 @@ def main(argv):
         text = shared.read_text()
         errors += [f"{SHARED} does not list {p}" for p in PACKAGES if p not in text]
 
+    arch_script = root / ARCH_SHARED
+    arch_list = ()
+    if not arch_script.is_file():
+        errors.append(f"{ARCH_SHARED} is missing")
+    else:
+        arch_list = arch_packages(arch_script.read_text())
+        if not arch_list:
+            errors.append(f"{ARCH_SHARED} has no BUILD_DEPS=( ... ) list")
+
     workflows = sorted((root / ".github").rglob("*.y*ml"))
     if not workflows:
         errors.append("no workflow files found under .github")
@@ -147,7 +210,8 @@ def main(argv):
             if check_job(label, job, errors):
                 checked += 1
                 if len(errors) == before:
-                    print(f"ok   [{label}] runs {SHARED} before it builds bekoedit")
+                    used = ARCH_SHARED if is_arch_job(job) else SHARED
+                    print(f"ok   [{label}] runs {used} before it builds bekoedit")
             for step in job.get("steps") or []:
                 found = raw_install(str(step.get("run", ""))) if isinstance(step, dict) else []
                 if found:
@@ -155,14 +219,32 @@ def main(argv):
                         f"[{label}] step {step.get('name', '(unnamed)')!r} installs "
                         f"{', '.join(found)} with a raw apt install; use {SHARED}"
                     )
+                raw = (
+                    raw_pacman_install(str(step.get("run", "")), arch_list)
+                    if isinstance(step, dict)
+                    else []
+                )
+                if raw:
+                    errors.append(
+                        f"[{label}] step {step.get('name', '(unnamed)')!r} installs "
+                        f"{', '.join(raw)} with a raw pacman install; use {ARCH_SHARED}"
+                    )
 
     for path in sorted((root / "scripts").glob("*")):
-        if not path.is_file() or path.relative_to(root).as_posix() == SHARED:
+        relative = path.relative_to(root).as_posix()
+        if not path.is_file() or relative in (SHARED, ARCH_SHARED):
             continue
         try:
-            found = raw_install(path.read_text())
+            text = path.read_text()
         except UnicodeDecodeError:
             continue
+        raw = [] if relative in PACMAN_ALLOWED_SCRIPTS else raw_pacman_install(text, arch_list)
+        if raw:
+            errors.append(
+                f"[{relative}] installs {', '.join(raw)} with a raw pacman install; "
+                f"use {ARCH_SHARED}"
+            )
+        found = raw_install(text)
         if found:
             errors.append(
                 f"[{path.relative_to(root).as_posix()}] installs {', '.join(found)} "

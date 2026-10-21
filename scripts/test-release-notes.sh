@@ -81,8 +81,28 @@ expect_no_note() { # <case-name> <dir>
   fi
 }
 
+# RFC-045 slice 3a: the note names this release's own Arch archive, with the
+# real version, and says what the default archive does. No AUR mention yet.
+expect_note_text() { # <case-name> <dir>
+  CASES=$((CASES + 1))
+  local out
+  out=$(run "$2")
+  if printf '%s' "$out" | grep -qF 'The default Linux archive does not start on Arch Linux' \
+    && printf '%s' "$out" | grep -qF 'use `bekoedit-1.2.3-x86_64-unknown-linux-gnu-arch.tar.gz` instead, or `cargo install bekoedit`.' \
+    && ! printf '%s' "$out" | grep -qiF 'AUR' \
+    && ! printf '%s' "$out" | grep -qF '<version>'; then
+    echo "ok:   $1"
+  else
+    echo "FAIL: $1 -- the note does not name the Arch archive as expected:"
+    printf '%s' "$out" | sed 's/^/        /'
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
 d=$(fixture exempt yes)
 expect_note_after_section_before_footer "Arch exemption active: the note is printed, after the section, before the footer" "$d"
+
+expect_note_text "Arch exemption active: the note names the Arch archive of this version, and no AUR" "$d"
 
 d=$(fixture not-exempt no)
 expect_no_note "Arch exemption emptied: no note, and nothing else changes" "$d"

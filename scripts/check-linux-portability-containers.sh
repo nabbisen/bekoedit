@@ -9,7 +9,14 @@
 # container against the mounted binary.
 #
 # Usage:
-#   scripts/check-linux-portability-containers.sh BINARY
+#   scripts/check-linux-portability-containers.sh [--only NAME] [--no-exemptions] BINARY
+#
+# --only NAME        run just that distribution (arch or fedora).
+# --no-exemptions    pass no --expect-missing at all: every library must
+#                    resolve. RFC-045 slice 3a uses both for the Arch archive,
+#                    whose binary links libxdo.so.4 and has no gap to exempt.
+#                    The exemptions file keeps its one meaning, the default
+#                    Linux (Ubuntu-built) binary's expected gaps.
 #
 # Fails loudly -- not silently, and not by falling back to a host-local
 # check -- if Docker itself is unavailable. Distinguishes "the image pull
@@ -27,8 +34,35 @@
 
 set -euo pipefail
 
+ONLY=""
+NO_EXEMPTIONS=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --only)
+      if [ "$#" -lt 2 ]; then
+        echo "Error: --only requires a distribution name" >&2
+        exit 1
+      fi
+      ONLY="$2"
+      shift 2
+      ;;
+    --no-exemptions)
+      NO_EXEMPTIONS=1
+      shift
+      ;;
+    -*)
+      echo "Error: unknown option: $1" >&2
+      echo "Usage: $0 [--only NAME] [--no-exemptions] BINARY" >&2
+      exit 1
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
 if [ "$#" -ne 1 ]; then
-  echo "Usage: $0 BINARY" >&2
+  echo "Usage: $0 [--only NAME] [--no-exemptions] BINARY" >&2
   exit 1
 fi
 BIN="$1"
@@ -91,11 +125,28 @@ done <"$EXEMPTIONS_FILE"
 
 overall_status=0
 
+if [ -n "$ONLY" ]; then
+  found=0
+  for name in "${DISTRO_NAMES[@]}"; do
+    [ "$name" = "$ONLY" ] && found=1
+  done
+  if [ "$found" -eq 0 ]; then
+    echo "Error: --only $ONLY names no distribution (have: ${DISTRO_NAMES[*]})" >&2
+    exit 1
+  fi
+fi
+
 for i in "${!DISTRO_NAMES[@]}"; do
   name="${DISTRO_NAMES[$i]}"
   image="${DISTRO_IMAGES[$i]}"
   install_cmd="${DISTRO_INSTALL[$i]}"
   expect_missing="${DISTRO_EXPECT_MISSING[$i]}"
+  if [ -n "$ONLY" ] && [ "$name" != "$ONLY" ]; then
+    continue
+  fi
+  if [ "$NO_EXEMPTIONS" -eq 1 ]; then
+    expect_missing=""
+  fi
 
   echo "=== $name ($image) ==="
 
