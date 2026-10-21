@@ -6,6 +6,9 @@
 (the cross-distribution check) merged as `f977fc7`. Moves to `done/` when slice
 3 lands. §10 Q1 and Q2 are now answered — on slice 2's evidence plus a verified
 local trial (§5.1) — and Q3 was answered by the owner on 2026-10-01.
+**Amended 2026-10-21** by the owner's decisions: an interim Arch-built archive
+(§5.5, slice 3a) and publishing both AUR packages from CI (§5.6, slice 3b).
+Slice 3 itself, the Dioxus 0.8 fix, stays deferred and retires both.
 **Handoffs:** [`handoffs/045-release-artifact-portability-and-completeness/`](../handoffs/045-release-artifact-portability-and-completeness/)
 **Track:** Distribution
 **Priority:** High — the Linux artifact cannot start on a whole family of distributions
@@ -100,6 +103,9 @@ not the right long-term answer for three.
 - Code signing, on any platform. RFC-024's unsigned posture stands (DEC-009).
 - Distribution packaging — no `.deb`, `.rpm`, AUR, Homebrew, or Flatpak. This
   is about the artifacts already published.
+  *Amended 2026-10-21:* the AUR is now in scope, through §5.6 only. It is the
+  delivery route for §5.5's interim archive, and the owner chose to publish
+  both AUR packages from CI. `.deb`, `.rpm`, Homebrew and Flatpak stay out.
 - Changing the supported target triples.
 - Fixing `muda`/`tray-icon` upstream as a *prerequisite*. Worth pursuing (§5.1),
   but this RFC must not block on someone else's release cycle.
@@ -230,12 +236,86 @@ address.
 ### 5.4 Rejected
 
 **Build on a `libxdo.so.4` distribution** — moves the breakage to Ubuntu users,
-who are the majority.
+who are the majority. *(As a replacement for the Ubuntu build. §5.5 adds one
+beside it, which moves nothing.)*
 
 **Advise a `.so.3 → .so.4` symlink** — a SONAME bump signals an ABI break. It
 may work in practice for `xdo`'s small API; "may work in practice" is not
 something this project should tell users to rely on, and if it half-works the
 failure mode is a crash rather than a clean load error.
+
+### 5.5 Interim: an Arch-built archive beside the Ubuntu one · **decided 2026-10-21**
+
+**Why now.** The owner registered two AUR packages on 2026-10-19,
+[`bekoedit`](https://aur.archlinux.org/packages/bekoedit) (source) and
+[`bekoedit-bin`](https://aur.archlinux.org/packages/bekoedit-bin) (binary).
+The source package works today: it builds on the user's machine and links
+`libxdo.so.4`. A `-bin` package cannot repackage the Ubuntu archive, which
+links `libxdo.so.3`. §5.1's fix needs Dioxus 0.8 stable, which does not exist
+yet: on the crates.io index, `dioxus-desktop` 0.8.0-alpha.3 is the newest, and
+0.7.10 has no `linux-libxdo` feature. Vendoring or `[patch]`ing Dioxus is
+ruled out by the owner: upstream is respected as published.
+
+**The route.** Each release also builds the Linux binary **in an Arch Linux
+container**, with the same toolchain, lockfile and tests as the Ubuntu build.
+That binary links `libxdo.so.4`, so it starts on Arch-family systems, and it
+is published as one more archive:
+`bekoedit-<version>-x86_64-unknown-linux-gnu-arch.tar.gz`, with its `.sha256`.
+The release has eight files instead of six. `bekoedit-bin` repackages it.
+
+**What does not change.** The Ubuntu archive is still the default Linux
+download, and its Arch exemption in slice 2's check stays, required as before:
+nothing about it is fixed. The release page's "Known issue (Linux)" note
+(Q3) stays while that exemption exists, and now points Arch users to the Arch
+archive and the AUR.
+
+**Why this is not §5.4's rejected option.** §5.4 rejected building *only* on a
+`.so.4` distribution, which would move the breakage to Ubuntu users. This adds
+a second binary for the distributions the first cannot serve.
+
+**Checked like the other.** The Arch archive passes the same exact-member
+check as the Ubuntu one, and slice 2's harness runs it in the Arch container
+**with no exemption**: every library must resolve. It is not run on Fedora,
+which has `libxdo.so.3` only; the archive says which distributions it is for.
+
+**Retired by slice 3.** When Dioxus 0.8 stable removes `libxdo`, one binary
+starts everywhere again. Slice 3 then removes the Arch build, the eighth and
+seventh files, and points `bekoedit-bin` back at the single Linux archive, in
+the same change that empties the Arch exemption.
+
+**Cost, recorded.** About 10–15 CI minutes and two files per release, and a
+second Linux build job to maintain until slice 3.
+
+### 5.6 Publishing both AUR packages from CI · **decided 2026-10-21**
+
+The owner chose full automation (level 2) over CI preparing files for a manual
+push (level 1). This reverses, for the AUR only, the owner's 2026-10-02 rule
+that releases to the Microsoft Store and the AUR are manual. **The Microsoft
+Store stays manual.**
+
+**What CI does at each tag,** after the GitHub release is published:
+
+1. Renders both PKGBUILDs from templates in the repository, with `pkgver`,
+   `pkgrel=1` and real `sha256sums` filled in, and their `.SRCINFO` files.
+2. **Proves them before anything is pushed:** in a clean Arch container,
+   `makepkg` builds each package from what users will download (the tag's
+   source tarball, and the published Arch archive), `namcap` checks it, each
+   installs, and the installed binary passes slice 2's check with no exemption
+   and `--headless-smoke`.
+3. Pushes the two proven files to each AUR repository over SSH.
+
+**The risks of level 2, and what removes each:**
+
+| Risk | Design answer |
+|---|---|
+| The SSH key leaks from CI and is used against the owner's AUR account | A **separate AUR account**, co-maintainer of these two packages only. Its key is stored only in a GitHub environment, `aur`, that only tag pushes may use. The job that holds it runs no project build, no third-party action, and pins the AUR host key. |
+| A broken package goes to users without a human seeing it | Step 2 above: nothing is pushed that has not been built, checked, installed and started from the real downloads. |
+| A re-run of an old tag's workflow pushes an older version | The push refuses unless the new `pkgver-pkgrel` is newer than the AUR's, by `vercmp`. Equal and identical is a no-op success. |
+| A push failure leaves the release half done | The GitHub release and crates.io do not depend on it. The job is re-runnable, and the manual procedure stays as the fallback. |
+
+**What stays with the owner:** creating the CI account and its key, adding it
+as co-maintainer, and storing the key in the `aur` environment, once. After
+that, nothing per release.
 
 ## 6. Part 2 — ship the platform scripts
 
@@ -297,7 +377,9 @@ macOS and Windows have no equivalent cheap check and are out of scope here.
 |---|---|---|
 | 1 | Part 2 — ship the platform scripts | **Implemented** — merged `a9eb427` |
 | 2 | Part 3 — the cross-distribution check | **Implemented** — merged `f977fc7` |
-| 3 | Part 1 — Linux portability | **Deferred 2026-08-24** — fixed upstream, unreleased on the 0.7 line. Trigger: Dioxus 0.8 stable (§5.1) |
+| 3a | Interim Arch-built archive (§5.5) | **Decided 2026-10-21** — handoff written |
+| 3b | Both AUR packages published from CI (§5.6) | **Decided 2026-10-21** — after 3a merges; handoff written |
+| 3 | Part 1 — Linux portability | **Deferred 2026-08-24** — fixed upstream, unreleased on the 0.7 line. Trigger: Dioxus 0.8 stable (§5.1). Retires 3a |
 
 Deliberately in that order, and it worked as intended: the two cheap slices made
 the expensive one measurable.
@@ -366,7 +448,9 @@ see §5.1.
 note below the CHANGELOG copy, pointing to `cargo install bekoedit`. It is printed only
 while the portability check's Arch exemption (`libxdo.so.3`) exists, so slice 3's
 removal of that exemption also removes the note. The 0.17.0 page was edited by hand
-the same day. The automatic version is task 043. The original question follows.
+the same day. The automatic version is task 043. *From slice 3a, the note points
+Arch users to the Arch archive and the AUR as well (§5.5).* The original question
+follows.
 
 No longer time-boxed. Slice 3's deferral to Dioxus 0.8 stable (§5.1) means the
 wait is open-ended, and any release cut in the meantime — including one carrying
