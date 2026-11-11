@@ -4,6 +4,12 @@
 **Status:** Accepted — by the owner on 2026-10-22, as written, so each §9
 question takes its proposed answer: blocking from the start; Windows and macOS
 later; on every push. Drafted the same day.
+**Amended 2026-11-11** to follow the owner's updated GUI test rules
+(`.git-exclude/rules/project-instructions-gui-common.md`, "Test Optimization
+Rules" and "GUI Evidence and Automation Rules"). §5.0 sets the level each
+property is checked at. §9 Q3's answer is narrowed: the real-WebKit run
+happens when the code it exercises changes, and on every release commit. That
+changes *where* checks run, never *what* is checked.
 **Handoffs:** [`handoffs/050-accessibility-baseline/`](../handoffs/050-accessibility-baseline/)
 **Track:** Accessibility
 **Priority:** Medium — never verified on any platform; a known Flatpak defect
@@ -85,6 +91,22 @@ downloads.
 
 ## 5. Design
 
+### 5.0 Which level checks what (amended 2026-11-11)
+
+The owner's rules: check each property "at the cheapest level that can prove
+it, and cover every combination there". The real UI comes last, for "only
+what needs human eyes … or what the headless level cannot reach".
+
+| Level | What it proves here | Combinations |
+|---|---|---|
+| 1. Logic and state | every label key has a non-empty translation in both languages. **Exists already:** `core_label_keys_are_translated_in_both_languages` (`i18n.rs`) and `i18n_all_keys_have_both_languages` (`tests.rs`) | both languages, every key |
+| 2. Headless UI | the rendered markup: every control in §5.1's table has an accessible name (text, `aria-label` or `aria-labelledby`) and the right role or ARIA state; the notices area is a live region | **both languages**, every mode, on every CI run |
+| 3. Real WebKit, through AT-SPI | what only WebKit can show: that the markup reaches AT-SPI with the expected roles and names, that actions work, and the save done through accessibility actions alone, checked on disk | one language, §5.1 |
+
+Level 2 uses Dioxus's own headless renderer, `dioxus-ssr`, as published, as a
+test-only dependency. If a component cannot render headless, slice 1 says
+which and why, and that control is checked at level 3 instead.
+
 ### 5.1 The accessibility-tree check (Linux)
 
 It runs **beside** the release-check scenarios, under the same Xvfb, in a
@@ -115,9 +137,11 @@ interface. Press Save through its action. **Assert the bytes on disk.** The
 other project proved exactly this, and it shows the tree is usable, not just
 present.
 
-**Both languages.** The check runs once in English and once in Japanese, so a
-missing translation that leaves a label blank fails it. Task 044 found seven
-of those by hand.
+**Languages** *(amended 2026-11-11).* Both languages are covered at levels 1
+and 2 (§5.0), which catch a blank or untranslated label, the defect task 044
+found by hand. The real-WebKit run uses **Japanese**. WebKit passes names
+through to AT-SPI the same way in any language, and Japanese is the harder
+case: non-ASCII text through the whole path.
 
 **Blocking from the start** (§9 Q1), like every other step in CI. If it is
 flaky, the flakiness is a finding to fix, not a reason to soften it. No
@@ -220,3 +244,15 @@ defect, and because Orca runs in CI.
 **Q3. Where it runs.** *Proposed: on every push,* like the release-check
 scenarios, because a label can break in any change. About two more minutes per
 run for §5.1. §5.2's cost is measured in its slice.
+
+*Amended 2026-11-11, by the owner's rule* that an expensive pass "runs when
+the code it exercises changed" and "at least once per release, on the release
+commit":
+
+- **Levels 1 and 2:** on every CI run.
+- **Level 3,** the real-WebKit run: on every push that changes what it
+  exercises (the app crate and its assets and JavaScript, the workspace
+  manifest and lockfile, the check itself, or its workflow). The release
+  commit always changes the manifest, so it always runs there.
+
+A docs-only push skips level 3.
