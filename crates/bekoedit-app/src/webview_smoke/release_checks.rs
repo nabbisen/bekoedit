@@ -30,6 +30,7 @@ use bekoedit_core::AppState;
 use crate::components::toast::Toast;
 use crate::i18n::Lang;
 
+mod a11y_tree;
 mod bytes;
 mod ctrl_b_toggles_explorer;
 mod dom;
@@ -54,6 +55,8 @@ mod table_column_operations;
 mod table_keyboard_and_tidy;
 mod table_row_insert_and_delete;
 mod toolbar_probe;
+#[cfg(test)]
+pub(crate) use a11y_tree::A11Y_NOTE;
 pub(super) use focus_trace::{FocusTraceLog, record_focus_trace};
 pub(super) use form_trace::record_form_trace;
 pub(super) use seed::prepare;
@@ -114,6 +117,9 @@ pub enum ReleaseScenario {
     /// RFC-049 slice 2: Form Mode's Undo and Redo, by real keys and a real
     /// click, end to end.
     FormUndoRedo,
+    /// RFC-050 slice 1, level 3: the app's side of the accessibility-tree
+    /// observer. Needs the observer; not in the scenario loop.
+    A11yTree,
 }
 
 impl ReleaseScenario {
@@ -140,6 +146,7 @@ impl ReleaseScenario {
             Self::TableKeyboardAndTidy => table_keyboard_and_tidy::NAME,
             Self::EmptyHeadingSurvives => empty_heading_survives::NAME,
             Self::FormUndoRedo => form_undo_redo::NAME,
+            Self::A11yTree => a11y_tree::NAME,
         }
     }
 
@@ -164,6 +171,7 @@ impl ReleaseScenario {
             Self::TableKeyboardAndTidy,
             Self::EmptyHeadingSurvives,
             Self::FormUndoRedo,
+            Self::A11yTree,
         ]
         .into_iter()
         .find(|scenario| scenario.name() == name)
@@ -176,7 +184,7 @@ impl ReleaseScenario {
                  form_field_commits_before_mode_switch, \
                  keyboard_mode_switch_commits_pending_field, ctrl_b_toggles_explorer or \
                  table_row_insert_and_delete, table_column_operations or \
-                 table_keyboard_and_tidy, empty_heading_survives or form_undo_redo"
+                 table_keyboard_and_tidy, empty_heading_survives, form_undo_redo or a11y_tree"
             )
         })
     }
@@ -283,6 +291,7 @@ pub fn WebViewReleaseChecksDriver() -> Element {
                     empty_heading_survives::run(&terminal, &desktop).await
                 }
                 ReleaseScenario::FormUndoRedo => form_undo_redo::run(&terminal, &desktop).await,
+                ReleaseScenario::A11yTree => a11y_tree::run(&terminal, &desktop).await,
                 _ => launch::run(&terminal, state, toasts, lang).await,
             };
             // Task 052 §2.3: the focus-claim path's own trace, on every

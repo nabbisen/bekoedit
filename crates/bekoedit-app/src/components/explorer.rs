@@ -29,6 +29,8 @@ use crate::state::{
 
 use dioxus_swdir_tree::TreeNode;
 
+#[cfg(test)]
+mod a11y_rows;
 mod tree_nav;
 mod tree_row;
 use tree_row::TreeRowItem;
@@ -261,7 +263,10 @@ pub fn Explorer() -> Element {
             }
 
             // ── Tree rows (custom renderer, no drag) ───────────────────────
-            div { class: "tree-rows", role: "tree",
+            div {
+                class: "tree-rows",
+                role: "tree",
+                aria_label: tr(ui_lang, "explorer.tree_label"),
                 for (index , (node , depth)) in rows.into_iter().enumerate() {
                     TreeRowItem {
                         key: "{node.path.display()}",

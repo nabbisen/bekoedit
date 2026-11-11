@@ -38,6 +38,7 @@ pub fn FormBlockView(
             rsx! {
                 div { class: "block-row",
                     select {
+                        aria_label: tr(lang, "block.heading_level"),
                         disabled: !level_editable,
                         onchange: move |evt| {
                             if let Ok(l) = evt.value().parse::<u8>() {
@@ -51,6 +52,7 @@ pub fn FormBlockView(
                     }
                     input {
                         id: "{field_id}",
+                        aria_label: tr(lang, "block.kind.heading"),
                         class: "heading-input level-{level}",
                         r#type: "text",
                         value: "{text}",
@@ -68,6 +70,7 @@ pub fn FormBlockView(
                 InlineToolbar { field_id: field_id.clone(), block_id, revision, lang }
                 textarea {
                     id: "{field_id}",
+                    aria_label: tr(lang, "block.kind.paragraph"),
                     class: "paragraph-input",
                     value: "{text}",
                     onchange: move |evt| dispatch(state, revision, block_id, toasts, lang,
@@ -83,6 +86,7 @@ pub fn FormBlockView(
                 InlineToolbar { field_id: field_id.clone(), block_id, revision, lang }
                 textarea {
                     id: "{field_id}",
+                    aria_label: tr(lang, "block.kind.blockquote"),
                     class: "paragraph-input blockquote-input",
                     value: "{text}",
                     onchange: move |evt| dispatch(state, revision, block_id, toasts, lang,
@@ -101,6 +105,7 @@ pub fn FormBlockView(
                             if let Some(checked) = item.task_checked {
                                 input {
                                     r#type: "checkbox",
+                                    aria_label: tr(lang, "block.task_item"),
                                     checked,
                                     onchange: {
                                         let ord = item.ordinal;
@@ -114,6 +119,7 @@ pub fn FormBlockView(
                             }
                             input {
                                 r#type: "text",
+                                aria_label: tr(lang, "block.list_item"),
                                 value: "{item.text}",
                                 onchange: {
                                     let ord = item.ordinal;
@@ -154,6 +160,7 @@ pub fn FormBlockView(
                             }
                         }
                         textarea {
+                            aria_label: tr(lang, "block.kind.code"),
                             class: "code-input",
                             spellcheck: "false",
                             value: "{code}",
@@ -258,6 +265,7 @@ pub fn FormBlockView(
                             span { class: "island-hint",  {tr(lang, "island.hint")} }
                         }
                         textarea {
+                            aria_label: tr(lang, &label_key),
                             class: "island-input",
                             spellcheck: "false",
                             readonly: !editable,
@@ -279,6 +287,7 @@ pub fn FormBlockView(
             {body}
             button {
                 class: "block-delete",
+                aria_label: tr(lang, "block.delete"),
                 title: tr(lang, "block.delete"),
                 onclick: move |_| dispatch(state, revision, block_id, toasts, lang, FormBlockEdit::DeleteBlock),
                 "×"

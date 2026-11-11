@@ -215,7 +215,7 @@ pub(super) fn TreeRowItem(props: TreeRowItemProps) -> Element {
                     }
                 }
             },
-            span { class: "tree-icon", "{icon} " }
+            span { class: "tree-icon", aria_hidden: "true", "{icon} " }
             span { class: "tree-name", "{name}" }
         }
     }

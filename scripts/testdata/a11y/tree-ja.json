@@ -1,0 +1,177 @@
+{
+ "role": "application",
+ "name": "bekoedit",
+ "states": [],
+ "actions": [],
+ "attrs": {},
+ "text": null,
+ "children": [
+  {
+   "role": "frame",
+   "name": "bekoedit",
+   "states": [],
+   "actions": [],
+   "attrs": {},
+   "text": null,
+   "children": [
+    {
+     "role": "landmark",
+     "name": "ワークスペースエクスプローラ",
+     "states": [],
+     "actions": [],
+     "attrs": {},
+     "text": null,
+     "children": [
+      {
+       "role": "push button",
+       "name": "新規ファイル",
+       "states": [],
+       "actions": [
+        "click"
+       ],
+       "attrs": {},
+       "text": null,
+       "children": []
+      },
+      {
+       "role": "tree",
+       "name": "ファイル",
+       "states": [],
+       "actions": [],
+       "attrs": {},
+       "text": null,
+       "children": [
+        {
+         "role": "tree item",
+         "name": "note.md",
+         "states": [
+          "selectable"
+         ],
+         "actions": [
+          "click"
+         ],
+         "attrs": {},
+         "text": null,
+         "children": []
+        },
+        {
+         "role": "tree item",
+         "name": "other.md",
+         "states": [
+          "selectable"
+         ],
+         "actions": [
+          "click"
+         ],
+         "attrs": {},
+         "text": null,
+         "children": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "role": "page tab list",
+     "name": "編集モード",
+     "states": [],
+     "actions": [],
+     "attrs": {},
+     "text": null,
+     "children": [
+      {
+       "role": "page tab",
+       "name": "テキスト",
+       "states": [
+        "selected"
+       ],
+       "actions": [
+        "click"
+       ],
+       "attrs": {},
+       "text": null,
+       "children": []
+      },
+      {
+       "role": "page tab",
+       "name": "フォーム",
+       "states": [],
+       "actions": [
+        "click"
+       ],
+       "attrs": {},
+       "text": null,
+       "children": []
+      },
+      {
+       "role": "page tab",
+       "name": "プレビュー",
+       "states": [],
+       "actions": [
+        "click"
+       ],
+       "attrs": {},
+       "text": null,
+       "children": []
+      }
+     ]
+    },
+    {
+     "role": "push button",
+     "name": "保存",
+     "states": [],
+     "actions": [
+      "click"
+     ],
+     "attrs": {},
+     "text": null,
+     "children": []
+    },
+    {
+     "role": "push button",
+     "name": "アプリケーションメニュー",
+     "states": [],
+     "actions": [
+      "click"
+     ],
+     "attrs": {},
+     "text": null,
+     "children": []
+    },
+    {
+     "role": "entry",
+     "name": "",
+     "states": [
+      "editable",
+      "multi line"
+     ],
+     "actions": [],
+     "attrs": {},
+     "text": "# Title\n\nA paragraph.\n",
+     "children": []
+    },
+    {
+     "role": "status bar",
+     "name": "",
+     "states": [],
+     "actions": [],
+     "attrs": {},
+     "text": "すべての変更を保存済み",
+     "children": []
+    },
+    {
+     "role": "section",
+     "name": "",
+     "states": [],
+     "actions": [],
+     "attrs": {
+      "container-live": "polite"
+     },
+     "text": null,
+     "children": []
+    }
+   ]
+  }
+ ],
+ "pid": 4242
+}

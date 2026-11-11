@@ -87,6 +87,30 @@ every newer compiler is separately certified.
 | Build and smoke job | `________` |
 | Audit warning decision | `accept / defer / deny`: `________` |
 
+## Accessibility evidence (RFC-050)
+
+Each property is checked at the cheapest level that can prove it.
+
+| Level | What it proves | Where it runs | Where the evidence is |
+|-------|----------------|---------------|-----------------------|
+| 1 | every label key has text in English and Japanese | `cargo test`, every CI run | the test output |
+| 2 | the rendered markup gives each main control an accessible name and role, in both languages and every mode; the notices area is a live region | `cargo test` (headless, `dioxus-ssr`), every CI run | the test output, `app::a11y_markup` |
+| 3 | WebKit exposes that markup in the AT-SPI tree, the observer's actions work, and one file edited and saved through accessibility actions alone holds the expected bytes on disk | `.github/workflows/a11y-tree.yml` (Xvfb, X11, a private session bus), by hand until its push trigger is turned on | the run's artifact `a11y-tree-verdict`: `a11y-observer-report.json` |
+
+Level 3 is never run on a developer machine. The observer
+(`scripts/a11y-observer.py`) acts only through AT-SPI actions and the
+EditableText interface, never by a click or a keystroke. The app, started with
+`--webview-release-checks ... a11y_tree`, writes every expected name from its
+own translation table and compares `note.md` byte for byte after the Save.
+
+**Reading a failure.** The run stops at the first anomaly. The log prints the
+step, what was required and what was found; the report holds the same, the
+steps done before it, and a depth- and breadth-bounded copy of the tree
+(`"truncated"` marks every cut). A level 2 failure names the control and the
+language in the test output. A control that is present but has no action is a
+finding about the page's markup or WebKit's exposure, not something to work
+around with a click.
+
 ## Release workflow artifacts
 
 Record the tag workflow run and every generated artifact.

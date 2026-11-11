@@ -270,7 +270,8 @@ pub fn AppBar() -> Element {
                                     SourceCommand::OpenSettings,
                                 );
                             },
-                            "⚙  " {tr(ui_lang, "settings.title")}
+                            span { aria_hidden: "true", "⚙  " }
+                            {tr(ui_lang, "settings.title")}
                         }
                     }
                 }

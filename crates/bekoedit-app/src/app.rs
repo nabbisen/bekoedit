@@ -441,4 +441,6 @@ fn MainShell() -> Element {
 }
 
 #[cfg(test)]
+pub(crate) mod a11y_markup;
+#[cfg(test)]
 mod tests;

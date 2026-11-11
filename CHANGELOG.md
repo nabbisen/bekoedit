@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `bekoedit-<version>-x86_64-unknown-linux-gnu-arch.tar.gz`, for Arch and
   Arch-based distributions, where the default Linux binary does not start.
 
+### Fixed
+- A screen reader now announces the file tree, the Form Mode fields, the
+  task-list checkboxes in Preview, the Settings menu item and the autosave
+  field by name, instead of by their icons or not at all, and the notices area
+  is a live region that is present before the first notice appears.
+
 ### Security
 - Updated rustls-webpki from 0.103.15 to 0.103.16 for RUSTSEC-2026-0382.
 

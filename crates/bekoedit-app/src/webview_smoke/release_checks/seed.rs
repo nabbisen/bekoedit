@@ -201,6 +201,19 @@ pub(in crate::webview_smoke) fn prepare(
             let file = workspace.join(SAVE_FILE);
             (workspace, "Save Project".to_string(), original, Some(file))
         }
+        ReleaseScenario::A11yTree => {
+            let original = super::a11y_tree::A11Y_NOTE.as_bytes().to_vec();
+            let workspace = make_workspace(
+                &root,
+                "save-project",
+                &[
+                    (SAVE_FILE, &original),
+                    (super::a11y_tree::SECOND_FILE, b"# Other\n"),
+                ],
+            )?;
+            let file = workspace.join(SAVE_FILE);
+            (workspace, "Save Project".to_string(), original, Some(file))
+        }
         ReleaseScenario::FormUndoRedo => {
             let original = original_undo_note();
             let workspace = make_workspace(&root, "save-project", &[(SAVE_FILE, &original)])?;
@@ -251,6 +264,12 @@ pub(in crate::webview_smoke) fn prepare(
             EditorMode::Form
         } else {
             EditorMode::Text
+        },
+        // The accessibility run is in Japanese (RFC-050 §5.1).
+        lang: if scenario == ReleaseScenario::A11yTree {
+            crate::i18n::Lang::Ja
+        } else {
+            crate::i18n::Lang::En
         },
         ..Default::default()
     };

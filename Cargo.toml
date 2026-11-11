@@ -33,6 +33,7 @@ bekoedit-paste              = { version = "0.18.1", path = "crates/bekoedit-past
 bekoedit-ui-contract        = { version = "0.18.1", path = "crates/bekoedit-ui-contract" }
 
 dioxus                      = "0.7"
+dioxus-ssr                  = "0.7"
 dioxus-swdir-tree           = "0.7"
 dirs                        = "6"
 notify                      = "8"

@@ -10,7 +10,7 @@ pub(super) fn en(key: &str) -> &'static str {
         "form.history.label" => "Undo and redo",
         "form.undo" => "Undo",
         "form.redo" => "Redo",
-        _ => "",
+        _ => super::accessibility::en(key),
     }
 }
 
@@ -22,6 +22,6 @@ pub(super) fn ja(key: &str) -> &'static str {
         "form.history.label" => "元に戻す・やり直し",
         "form.undo" => "元に戻す",
         "form.redo" => "やり直し",
-        _ => "",
+        _ => super::accessibility::ja(key),
     }
 }

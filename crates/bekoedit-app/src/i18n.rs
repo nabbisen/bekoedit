@@ -25,6 +25,7 @@ impl Lang {
 
 /// Resolves a label key for `lang`. Unknown keys return an empty string;
 /// inventory tests keep all user-visible call sites translated.
+mod accessibility;
 mod form_history;
 
 pub fn tr(lang: Lang, key: &str) -> &'static str {

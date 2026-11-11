@@ -41,9 +41,9 @@ pub fn dismiss_toast(toasts: &mut Signal<Vec<Toast>>, id: u64) {
 pub fn ToastLayer() -> Element {
     let toasts = use_context::<Signal<Vec<Toast>>>();
     let items = toasts.read().clone();
-    if items.is_empty() {
-        return rsx! {};
-    }
+    // Always rendered, empty or not (RFC-050 slice 1): a live region that appears
+    // together with its first message is often not announced, because a screen
+    // reader only watches regions that were already there.
     rsx! {
         div {
             class: "toast-layer",

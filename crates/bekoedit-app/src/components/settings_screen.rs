@@ -95,8 +95,11 @@ pub fn SettingsScreen() -> Element {
                 section { class: "settings-group",
                     h2 { {tr(lang, "settings.editor")} }
                     label { class: "settings-row",
-                        span { {tr(lang, "settings.autosave_ms")} }
+                        span { id: "settings-autosave-label", {tr(lang, "settings.autosave_ms")} }
                         input {
+                            // Named by the text alone; the unit is its description.
+                            aria_labelledby: "settings-autosave-label",
+                            aria_describedby: "settings-autosave-unit",
                             r#type: "number", min: "300", max: "10000", step: "100",
                             value: "{settings.read().core.autosave_debounce_ms}",
                             onchange: move |evt| {
@@ -105,7 +108,7 @@ pub fn SettingsScreen() -> Element {
                                 }
                             },
                         }
-                        span { class: "muted", "ms" }
+                        span { id: "settings-autosave-unit", class: "muted", "ms" }
                     }
                     label { class: "settings-row checkbox",
                         input {

@@ -56,6 +56,18 @@ jobs:
       - name: AUR workflows and pinned host keys (RFC-045 slice 3b)
         shell: bash
         run: python3 scripts/test-aur-workflows.py
+      - name: Accessibility observer tests (RFC-050 slice 1)
+        # The observer's logic on recorded trees, its step sequence against a
+        # fake backend, and the level 3 workflow's structure. No display, no
+        # gi: the AT-SPI driver itself runs only in a11y-tree.yml, so here it
+        # is parsed and no more.
+        shell: bash
+        run: |
+          python3 scripts/test-a11y-observer.py
+          python3 scripts/test-a11y-steps.py
+          python3 scripts/test-a11y-workflow.py
+          python3 -c "import ast; ast.parse(open('scripts/a11y-observer.py').read())"
+          bash -n scripts/a11y-tree-run.sh
       - name: Release notes self-test (task 043)
         shell: bash
         run: bash scripts/test-release-notes.sh

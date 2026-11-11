@@ -30,3 +30,8 @@ serde                       = { workspace = true }
 serde_json                  = { workspace = true }
 tempfile                    = { workspace = true }
 tokio                       = { workspace = true, features = ["time", "process"] }
+
+[dev-dependencies]
+# RFC-050 slice 1, level 2: renders the shell headless, to check the accessibility
+# markup in both languages on every CI run. Test-only: never in the shipped binary.
+dioxus-ssr                  = { workspace = true }

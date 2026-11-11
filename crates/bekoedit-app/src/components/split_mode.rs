@@ -23,7 +23,12 @@ pub fn SplitMode() -> Element {
         .read()
         .session
         .as_ref()
-        .map(|session| session.preview_html())
+        .map(|session| {
+            super::preview_mode::name_task_checkboxes(
+                &session.preview_html(),
+                tr(lang, "block.task_item"),
+            )
+        })
         .unwrap_or_default();
 
     rsx! {

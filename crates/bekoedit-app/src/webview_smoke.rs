@@ -21,6 +21,8 @@ mod shell_behaviour;
 mod transport;
 mod trusted_click;
 
+#[cfg(test)]
+pub(crate) use release_checks::A11Y_NOTE;
 pub use release_checks::WebViewReleaseChecksDriver;
 pub use shell_behaviour::WebViewShellBehaviourDriver;
 pub use trusted_click::WebViewTrustedClickDriver;
@@ -32,7 +34,11 @@ pub use trusted_click::WebViewTrustedClickDriver;
 static START_SCREEN_MOUNTS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 pub fn note_start_screen_mounted() {
-    if launch_config().release_checks.is_some() {
+    // `in_release_checks_run`, not `launch_config()`: the same answer in a real
+    // launch, where `main` always installs the configuration first, and no panic
+    // where none is installed, as when the Start Screen is rendered headless
+    // (RFC-050 slice 1, level 2).
+    if in_release_checks_run() {
         START_SCREEN_MOUNTS.fetch_add(1, Ordering::SeqCst);
     }
 }
